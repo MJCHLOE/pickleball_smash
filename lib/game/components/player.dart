@@ -1,5 +1,7 @@
 import 'package:flame/components.dart';
+import 'package:flame/collisions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'paddle.dart';
 
 import '../pickleball_game.dart';
@@ -7,7 +9,7 @@ import '../pickleball_game.dart';
 enum PlayerDirection { front, behind, left, right }
 enum PlayerState { idle, run, slash }
 
-class PlayerComponent extends SpriteAnimationComponent with HasGameReference<PickleballGame> {
+class PlayerComponent extends SpriteAnimationComponent with HasGameReference<PickleballGame>, KeyboardHandler {
   late SpriteAnimation frontRun;
   late SpriteAnimation behindRun;
   late SpriteAnimation leftRun;
@@ -26,13 +28,47 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   final JoystickComponent? joystick;
   late PaddleComponent paddle;
   
-  final double speed = 250.0;
+  final double speed = 350.0;
+  final double aiSpeed = 400.0; // AI needs to be fast enough to hit the ball
+
+  int hAxis = 0;
+  int vAxis = 0;
 
   PlayerComponent({this.isPlayerOne = true, this.joystick}) 
       : currentDirection = isPlayerOne ? PlayerDirection.front : PlayerDirection.behind;
 
   @override
+  bool onKeyEvent(KeyEvent event, Set<LogicalKeyboardKey> keysPressed) {
+    if (!isPlayerOne) return super.onKeyEvent(event, keysPressed);
+
+    hAxis = 0;
+    vAxis = 0;
+
+    if (keysPressed.contains(LogicalKeyboardKey.arrowLeft) || keysPressed.contains(LogicalKeyboardKey.keyA)) {
+      hAxis -= 1;
+    }
+    if (keysPressed.contains(LogicalKeyboardKey.arrowRight) || keysPressed.contains(LogicalKeyboardKey.keyD)) {
+      hAxis += 1;
+    }
+    if (keysPressed.contains(LogicalKeyboardKey.arrowUp) || keysPressed.contains(LogicalKeyboardKey.keyW)) {
+      vAxis -= 1;
+    }
+    if (keysPressed.contains(LogicalKeyboardKey.arrowDown) || keysPressed.contains(LogicalKeyboardKey.keyS)) {
+      vAxis += 1;
+    }
+
+    if (keysPressed.contains(LogicalKeyboardKey.space)) {
+      strike();
+    }
+
+    return super.onKeyEvent(event, keysPressed);
+  }
+
+  @override
   Future<void> onLoad() async {
+    // Add hitbox for ball collisions
+    add(RectangleHitbox());
+    
     // Slash animations have 6 frames (384 / 64)
     frontSlash = await _loadAnimation('male1_sprite/male_frontslash.png', amount: 6, loop: false, stepTime: 0.08);
     behindSlash = await _loadAnimation('male1_sprite/male_behindslash.png', amount: 6, loop: false, stepTime: 0.08);
@@ -68,35 +104,79 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     
     if (currentState == PlayerState.slash) return; // Don't move while slashing
 
-    if (joystick != null && !joystick!.delta.isZero()) {
-      // Move the player
-      position.add(joystick!.relativeDelta * speed * dt);
-      
-      // Keep player inside the court vertically (example boundary, can be tweaked)
+    if (isPlayerOne) {
+      bool isMoving = false;
+      Vector2 moveDelta = Vector2.zero();
+      PlayerDirection newDirection = currentDirection;
+
+      // 1. Check Joystick
+      if (joystick != null && !joystick!.delta.isZero()) {
+        isMoving = true;
+        moveDelta = joystick!.relativeDelta;
+
+        if (joystick!.direction == JoystickDirection.up || 
+            joystick!.direction == JoystickDirection.upLeft || 
+            joystick!.direction == JoystickDirection.upRight) {
+          newDirection = PlayerDirection.front; // Swapped as requested
+        } else if (joystick!.direction == JoystickDirection.down || 
+                   joystick!.direction == JoystickDirection.downLeft || 
+                   joystick!.direction == JoystickDirection.downRight) {
+          newDirection = PlayerDirection.behind; // Swapped as requested
+        } else if (joystick!.direction == JoystickDirection.left) {
+          newDirection = PlayerDirection.left;
+        } else if (joystick!.direction == JoystickDirection.right) {
+          newDirection = PlayerDirection.right;
+        }
+      } 
+      // 2. Check Keyboard
+      else if (hAxis != 0 || vAxis != 0) {
+        isMoving = true;
+        moveDelta = Vector2(hAxis.toDouble(), vAxis.toDouble()).normalized();
+
+        if (vAxis < 0) {
+          newDirection = PlayerDirection.front;
+        } else if (vAxis > 0) {
+          newDirection = PlayerDirection.behind;
+        } else if (hAxis < 0) {
+          newDirection = PlayerDirection.left;
+        } else if (hAxis > 0) {
+          newDirection = PlayerDirection.right;
+        }
+      }
+
+      if (isMoving) {
+        position.add(moveDelta * speed * dt);
+        changeDirection(newDirection);
+      } else {
+        if (currentState == PlayerState.run) {
+          stopRunning();
+        }
+      }
+
       position.y = position.y.clamp(0.0, 720.0);
       position.x = position.x.clamp(0.0, 1280.0);
-
-      // Determine animation direction based on joystick angle
-      PlayerDirection newDirection = currentDirection;
       
-      if (joystick!.direction == JoystickDirection.up || 
-          joystick!.direction == JoystickDirection.upLeft || 
-          joystick!.direction == JoystickDirection.upRight) {
-        newDirection = PlayerDirection.front; // Swapped as requested
-      } else if (joystick!.direction == JoystickDirection.down || 
-                 joystick!.direction == JoystickDirection.downLeft || 
-                 joystick!.direction == JoystickDirection.downRight) {
-        newDirection = PlayerDirection.behind; // Swapped as requested
-      } else if (joystick!.direction == JoystickDirection.left) {
-        newDirection = PlayerDirection.left;
-      } else if (joystick!.direction == JoystickDirection.right) {
-        newDirection = PlayerDirection.right;
+    } else {
+      // AI Logic for Player 2
+      final ball = game.ball;
+      
+      // Move towards the ball's X position
+      if (ball.position.x < position.x - 10) {
+        position.x -= aiSpeed * dt;
+        changeDirection(PlayerDirection.left);
+      } else if (ball.position.x > position.x + 10) {
+        position.x += aiSpeed * dt;
+        changeDirection(PlayerDirection.right);
+      } else {
+        stopRunning();
       }
       
-      changeDirection(newDirection);
-    } else {
-      if (currentState == PlayerState.run) {
-        stopRunning();
+      position.x = position.x.clamp(0.0, 1280.0);
+      
+      // Strike if ball is close and coming towards Player 2 (moving UP)
+      // Since Player 2 is at Y = 180 (720 * 0.25), wait for ball to be close
+      if (ball.velocity.y < 0 && (ball.position.y - position.y).abs() < 120) {
+        strike();
       }
     }
   }

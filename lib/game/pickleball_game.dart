@@ -5,8 +5,9 @@ import 'package:flame/palette.dart';
 import 'package:flutter/painting.dart';
 import 'components/background.dart';
 import 'components/player.dart';
+import 'components/ball.dart';
 
-class PickleballGame extends FlameGame {
+class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHandlerComponents {
   PickleballGame()
       : super(
           camera: CameraComponent.withFixedResolution(
@@ -19,6 +20,7 @@ class PickleballGame extends FlameGame {
   late PlayerComponent player1;
   late PlayerComponent player2;
   late JoystickComponent joystick;
+  late BallComponent ball;
 
   @override
   Future<void> onLoad() async {
@@ -53,14 +55,18 @@ class PickleballGame extends FlameGame {
     camera.viewport.add(strikeButton);
 
     // Player 1 (bottom) - uses front slash
-    player1 = PlayerComponent(isPlayerOne: true, joystick:strikeButton);
+    player1 = PlayerComponent(isPlayerOne: true, joystick: joystick);
     player1.position = Vector2(1280 / 2, 720 * 0.75); // Bottom half
     world.add(player1);
 
     // Player 2 (top) - uses behind slash
-    player2 = PlayerComponent(isPlayerOne: false);
+    player2 = PlayerComponent(isPlayerOne: false, joystick: null);
     player2.position = Vector2(1280 / 2, 720 * 0.25); // Top half
     world.add(player2);
+
+    // The Ball!
+    ball = BallComponent();
+    world.add(ball);
   }
 }
 
