@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flame/game.dart';
-import 'pickleball_game.dart';
+import 'package:flame/flame.dart';
+import 'game/pickleball_game.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  
+  // Configure for a landscape screen environment
+  await Flame.device.fullScreen();
+  await Flame.device.setLandscape(); // Game is 1280x720 landscape
 
+  final game = PickleballGame();
+  
   runApp(
     GameWidget(
-      game: PickleballGame(),
+      game: game,
     ),
   );
 }
