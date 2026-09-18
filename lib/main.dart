@@ -49,7 +49,7 @@ void main() async {
     }
   } catch (e) {
     debugPrint('Session check error: $e');
-    GameStateManager.instance.loginAsGuest();
+                    GameStateManager.instance.loginAsGuest();
   }
 
   runApp(PickleballApp(initialScreen: initialScreen));
