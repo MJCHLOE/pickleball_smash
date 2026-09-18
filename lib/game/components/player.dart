@@ -142,6 +142,13 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     add(paddle);
   }
 
+  double get horizontalMovement {
+    if (joystick != null && !joystick!.delta.isZero()) {
+      return joystick!.relativeDelta.x;
+    }
+    return hAxis.toDouble();
+  }
+
   @override
   void update(double dt) {
     super.update(dt);
@@ -198,8 +205,20 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
         }
       }
 
-      position.y = position.y.clamp(0.0, 720.0);
-      position.x = position.x.clamp(0.0, 1280.0);
+      // Screen bounds and sprite size
+      final halfW = (size.x * scale.x) / 2;
+      final halfH = (size.y * scale.y) / 2;
+      
+      // Strict court bounds to prevent walking into the bleachers or grass
+      final courtLeftX = 340.0;
+      final courtRightX = 940.0;
+      
+      // Keep players from walking too far to the center (prevent them from entering the kitchen / hitting the net)
+      final p1CenterLimitY = 450.0;
+      final bottomEdgeY = 700.0;
+      
+      position.y = position.y.clamp(p1CenterLimitY + halfH, bottomEdgeY - halfH);
+      position.x = position.x.clamp(courtLeftX + halfW, courtRightX - halfW);
       
     } else {
       // AI Logic for Player 2
@@ -216,7 +235,10 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
         stopRunning();
       }
       
-      position.x = position.x.clamp(0.0, 1280.0);
+      final halfW = (size.x * scale.x) / 2;
+      final courtLeftX = 340.0;
+      final courtRightX = 940.0;
+      position.x = position.x.clamp(courtLeftX + halfW, courtRightX - halfW);
       
       // Strike if ball is close and coming towards Player 2 (moving UP)
       // Since Player 2 is at Y = 180 (720 * 0.25), wait for ball to be close
