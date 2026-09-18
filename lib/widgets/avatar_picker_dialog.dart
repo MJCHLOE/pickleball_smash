@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/player_avatar.dart';
 import '../services/audio_service.dart';
 import '../services/game_state_manager.dart';
@@ -64,7 +66,16 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
     if (_selectedAvatarId.startsWith('http://') ||
         _selectedAvatarId.startsWith('https://') ||
         _selectedAvatarId.contains(':\\') ||
-        _selectedAvatarId.startsWith('file://')) {
+        _selectedAvatarId.contains(':/') ||
+        _selectedAvatarId.startsWith('file://') ||
+        _selectedAvatarId.startsWith('/') ||
+        _selectedAvatarId.startsWith('blob:') ||
+        _selectedAvatarId.toLowerCase().endsWith('.jpg') ||
+        _selectedAvatarId.toLowerCase().endsWith('.jpeg') ||
+        _selectedAvatarId.toLowerCase().endsWith('.png') ||
+        _selectedAvatarId.toLowerCase().endsWith('.webp') ||
+        _selectedAvatarId.contains('image_picker') ||
+        _selectedAvatarId.contains('file_picker')) {
       _activeTab = 1;
       _urlController.text = _selectedAvatarId;
       _previewUrl = _selectedAvatarId;
@@ -222,7 +233,7 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
   Widget _buildTabs() {
     final tabs = [
       {'id': 0, 'label': 'CHAMPIONS', 'icon': Icons.stars_rounded},
-      {'id': 1, 'label': 'MY PHOTO / URL', 'icon': Icons.add_a_photo_rounded},
+      {'id': 1, 'label': 'PHOTO / GALLERY', 'icon': Icons.photo_library_rounded},
       {'id': 2, 'label': 'AVATAR STUDIO', 'icon': Icons.palette_rounded},
     ];
 
@@ -387,10 +398,100 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
     );
   }
 
+  Future<void> _pickFromGallery() async {
+    try {
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+      if (image != null && mounted) {
+        final path = image.path;
+        _urlController.text = path;
+        setState(() {
+          _previewUrl = path;
+        });
+        _applyAvatar(path);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: AppTheme.neonLime,
+              content: Text(
+                'Gallery picture selected and saved for ${GameStateManager.instance.playerName}!',
+                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+              ),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error picking image from gallery: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Text(
+              'Could not load gallery photo: $e',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickFromFile() async {
+    try {
+      final files = await FilePicker.pickFiles(
+        type: FileType.image,
+      );
+      if (files.isNotEmpty && mounted) {
+        final path = files.first.path;
+        if (path != null && path.isNotEmpty) {
+          _urlController.text = path;
+          setState(() {
+            _previewUrl = path;
+          });
+          _applyAvatar(path);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: AppTheme.neonLime,
+                content: Text(
+                  'File picture selected and saved for ${GameStateManager.instance.playerName}!',
+                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                ),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error picking file: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Text(
+              'Could not load selected file: $e',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // TAB 2: MY PHOTO / IMAGE URL / LOCAL FILE
   // ---------------------------------------------------------------------------
   Widget _buildCustomPhotoTab() {
+    final playerName = GameStateManager.instance.playerName;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -403,9 +504,9 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
           ),
         ),
         const SizedBox(height: 4),
-        const Text(
-          'Paste an image URL from the web or enter a local image file path',
-          style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+        Text(
+          'Choose a photo from your gallery, browse local files, or enter an image URL. Saved automatically to database for $playerName.',
+          style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
         ),
         const SizedBox(height: 16),
 
@@ -415,20 +516,116 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
             children: [
               PlayerAvatarWidget(
                 avatarId: _previewUrl.isNotEmpty ? _previewUrl : _selectedAvatarId,
-                size: 72,
+                size: 76,
                 showBadge: true,
                 showBorder: true,
                 isSelected: true,
               ),
               const SizedBox(height: 8),
-              Text(
-                _previewUrl.isNotEmpty ? 'Previewing Custom Picture' : 'Current Picture',
-                style: const TextStyle(color: AppTheme.neonLime, fontSize: 11, fontWeight: FontWeight.bold),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceLight,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.surfaceBorder),
+                ),
+                child: Text(
+                  'Profile Picture for: $playerName',
+                  style: const TextStyle(color: AppTheme.neonLime, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 16),
+
+        // Choose From Gallery and Browse Files 2D Buttons
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 360;
+            if (isNarrow) {
+              return Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: Game2DButton(
+                      key: const ValueKey('picker_gallery_btn'),
+                      onPressed: _pickFromGallery,
+                      text: 'CHOOSE FROM GALLERY',
+                      icon: Icons.photo_library_rounded,
+                      variant: GameButtonVariant.cyan,
+                      size: GameButtonSize.small,
+                      isFullWidth: true,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: Game2DButton(
+                      key: const ValueKey('picker_files_btn'),
+                      onPressed: _pickFromFile,
+                      text: 'BROWSE FILES',
+                      icon: Icons.folder_open_rounded,
+                      variant: GameButtonVariant.primary,
+                      size: GameButtonSize.small,
+                      isFullWidth: true,
+                    ),
+                  ),
+                ],
+              );
+            } else {
+              return Row(
+                children: [
+                  Expanded(
+                    child: Game2DButton(
+                      key: const ValueKey('picker_gallery_btn'),
+                      onPressed: _pickFromGallery,
+                      text: 'CHOOSE FROM GALLERY',
+                      icon: Icons.photo_library_rounded,
+                      variant: GameButtonVariant.cyan,
+                      size: GameButtonSize.small,
+                      isFullWidth: true,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Game2DButton(
+                      key: const ValueKey('picker_files_btn'),
+                      onPressed: _pickFromFile,
+                      text: 'BROWSE FILES',
+                      icon: Icons.folder_open_rounded,
+                      variant: GameButtonVariant.primary,
+                      size: GameButtonSize.small,
+                      isFullWidth: true,
+                    ),
+                  ),
+                ],
+              );
+            }
+          },
+        ),
+        const SizedBox(height: 16),
+
+        // Divider with OR ENTER IMAGE URL
+        Row(
+          children: [
+            const Expanded(child: Divider(color: AppTheme.surfaceBorder)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text(
+                'OR PASTE WEB URL / PATH',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+            const Expanded(child: Divider(color: AppTheme.surfaceBorder)),
+          ],
+        ),
+        const SizedBox(height: 14),
 
         // Input Field
         TextField(
@@ -472,16 +669,17 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
         SizedBox(
           width: double.infinity,
           child: Game2DButton(
+            key: const ValueKey('save_custom_photo_btn'),
             onPressed: () {
               final val = _urlController.text.trim();
               if (val.isNotEmpty) {
                 _applyAvatar(val);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
+                  SnackBar(
                     backgroundColor: AppTheme.neonLime,
                     content: Text(
-                      'Custom profile picture saved to database!',
-                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                      'Custom profile picture saved to database for $playerName!',
+                      style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
                     ),
                   ),
                 );

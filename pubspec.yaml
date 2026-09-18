@@ -41,6 +41,8 @@ dependencies:
   crypto: ^3.0.6
   sqlite3_flutter_libs: ^0.6.0+eol
   sqflite_common_ffi_web: ^1.2.0
+  image_picker: ^1.2.3
+  file_picker: ^13.1.0
 
 dev_dependencies:
   flutter_test:

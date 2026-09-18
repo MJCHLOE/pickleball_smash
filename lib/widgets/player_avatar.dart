@@ -111,7 +111,7 @@ class PlayerAvatarWidget extends StatelessWidget {
     // 1. Custom photo URL or local file path
     if (av.customImageUrl != null && av.customImageUrl!.isNotEmpty) {
       final url = av.customImageUrl!;
-      if (url.startsWith('http://') || url.startsWith('https://')) {
+      if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:')) {
         return Image.network(
           url,
           fit: BoxFit.cover,
@@ -119,17 +119,21 @@ class PlayerAvatarWidget extends StatelessWidget {
           height: size,
           errorBuilder: (context, error, stackTrace) => _fallbackInitialsOrIcon(av),
         );
-      } else if (!kIsWeb && (url.startsWith('file://') || url.contains(':\\') || url.contains(':/') || url.startsWith('/'))) {
+      } else if (!kIsWeb) {
         try {
           final filePath = url.replaceFirst('file://', '');
           final file = File(filePath);
-          return Image.file(
-            file,
-            fit: BoxFit.cover,
-            width: size,
-            height: size,
-            errorBuilder: (context, error, stackTrace) => _fallbackInitialsOrIcon(av),
-          );
+          if (file.existsSync()) {
+            return Image.file(
+              file,
+              fit: BoxFit.cover,
+              width: size,
+              height: size,
+              errorBuilder: (context, error, stackTrace) => _fallbackInitialsOrIcon(av),
+            );
+          } else {
+            return _fallbackInitialsOrIcon(av);
+          }
         } catch (_) {
           return _fallbackInitialsOrIcon(av);
         }

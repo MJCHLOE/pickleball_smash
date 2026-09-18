@@ -909,8 +909,62 @@ void main() {
       expect(me['avatar_id'], 'custom:WIN:1:2');
     });
 
-    testWidgets('AvatarPickerDialog allows picking champions, saving custom photo URLs, and creating studio avatars', (WidgetTester tester) async {
+    test('Every player saves and loads their own distinct profile picture in SQLite', () async {
+      final db = DatabaseService.instance;
       final state = GameStateManager.instance;
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+
+      // 1. Register Player Alpha
+      final userAlphaName = 'AlphaPlayer_$timestamp';
+      final regAlpha = await db.registerUser(username: userAlphaName, password: 'password123');
+      final userAlphaId = regAlpha['userId'] as int;
+
+      // 2. Register Player Beta
+      final userBetaName = 'BetaPlayer_$timestamp';
+      final regBeta = await db.registerUser(username: userBetaName, password: 'password123');
+      final userBetaId = regBeta['userId'] as int;
+
+      // 3. Login as Player Alpha, set custom gallery/file photo, and save
+      await state.loginWithUser(userAlphaId, userAlphaName);
+      state.updatePlayerAvatar('C:/photos/alpha_gallery_pic.png');
+      expect(state.playerAvatarId, 'C:/photos/alpha_gallery_pic.png');
+
+      // 4. Login as Player Beta, set different custom gallery/file photo, and save
+      await state.loginWithUser(userBetaId, userBetaName);
+      state.updatePlayerAvatar('/storage/emulated/0/DCIM/beta_camera.jpg');
+      expect(state.playerAvatarId, '/storage/emulated/0/DCIM/beta_camera.jpg');
+
+      // 5. Verify direct database records
+      final dataAlpha = await db.loadPlayerData(userAlphaId);
+      final dataBeta = await db.loadPlayerData(userBetaId);
+      expect(dataAlpha!['avatarId'], 'C:/photos/alpha_gallery_pic.png');
+      expect(dataBeta!['avatarId'], '/storage/emulated/0/DCIM/beta_camera.jpg');
+
+      // 6. Switch back to Player Alpha - their specific profile picture is restored
+      await state.loginWithUser(userAlphaId, userAlphaName);
+      expect(state.playerAvatarId, 'C:/photos/alpha_gallery_pic.png');
+
+      // 7. Switch back to Player Beta - their specific profile picture is restored
+      await state.loginWithUser(userBetaId, userBetaName);
+      expect(state.playerAvatarId, '/storage/emulated/0/DCIM/beta_camera.jpg');
+
+      // 8. Verify Leaderboard reflects both distinct avatars
+      final leaderboard = await db.getAllPlayersLeaderboard(limit: 500);
+      final alphaInBoard = leaderboard.firstWhere((p) => p['user_id'] == userAlphaId);
+      final betaInBoard = leaderboard.firstWhere((p) => p['user_id'] == userBetaId);
+      expect(alphaInBoard['avatar_id'], 'C:/photos/alpha_gallery_pic.png');
+      expect(betaInBoard['avatar_id'], '/storage/emulated/0/DCIM/beta_camera.jpg');
+
+      state.loginAsGuest();
+    });
+
+    testWidgets('AvatarPickerDialog allows picking champions, saving custom photo URLs, and creating studio avatars', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final state = GameStateManager.instance;
+      state.loginAsGuest();
       state.playerAvatarId = 'alex_classic';
 
       await tester.pumpWidget(
@@ -925,7 +979,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('PLAYER PROFILE PICTURE'), findsOneWidget);
       expect(find.text('CHAMPIONS'), findsOneWidget);
-      expect(find.text('MY PHOTO / URL'), findsOneWidget);
+      expect(find.text('PHOTO / GALLERY'), findsOneWidget);
       expect(find.text('AVATAR STUDIO'), findsOneWidget);
 
       // Tap Maya Swift champion
@@ -934,18 +988,23 @@ void main() {
       await tester.pumpAndSettle();
       expect(state.playerAvatarId, 'maya_speed');
 
-      // Switch to MY PHOTO / URL tab
-      await tester.tap(find.text('MY PHOTO / URL'));
+      // Switch to PHOTO / GALLERY tab
+      await tester.tap(find.text('PHOTO / GALLERY'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.text('Add Your Own Custom Profile Picture'), findsOneWidget);
+      expect(find.byKey(const ValueKey('picker_gallery_btn')), findsOneWidget);
+      expect(find.byKey(const ValueKey('picker_files_btn')), findsOneWidget);
+      expect(find.text('CHOOSE FROM GALLERY'), findsOneWidget);
+      expect(find.text('BROWSE FILES'), findsOneWidget);
       expect(find.text('SAVE THIS PROFILE PICTURE'), findsOneWidget);
 
-      // Enter custom photo URL
+      // Enter custom photo URL or file path
       final urlField = find.byType(TextField).first;
       await tester.enterText(urlField, 'https://mysite.com/my_pickleball_pic.jpg');
       await tester.pumpAndSettle();
-      await tester.tap(find.text('SAVE THIS PROFILE PICTURE'));
+      await tester.ensureVisible(find.byKey(const ValueKey('save_custom_photo_btn')));
+      await tester.tap(find.byKey(const ValueKey('save_custom_photo_btn')));
       await tester.pumpAndSettle();
       expect(state.playerAvatarId, 'https://mysite.com/my_pickleball_pic.jpg');
 
@@ -960,6 +1019,7 @@ void main() {
       final initialsField = find.byType(TextField).first;
       await tester.enterText(initialsField, 'ACE');
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('SAVE CUSTOM AVATAR'));
       await tester.tap(find.text('SAVE CUSTOM AVATAR'));
       await tester.pumpAndSettle();
       expect(state.playerAvatarId.startsWith('custom:ACE:'), true);

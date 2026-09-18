@@ -206,8 +206,16 @@ class PlayerAvatar {
         id.startsWith('https://') ||
         id.startsWith('file://') ||
         id.startsWith('data:image') ||
+        id.startsWith('blob:') ||
         id.contains(':\\') ||
-        id.contains(':/')) {
+        id.contains(':/') ||
+        id.startsWith('/') ||
+        id.toLowerCase().endsWith('.jpg') ||
+        id.toLowerCase().endsWith('.jpeg') ||
+        id.toLowerCase().endsWith('.png') ||
+        id.toLowerCase().endsWith('.webp') ||
+        id.contains('image_picker') ||
+        id.contains('file_picker')) {
       return PlayerAvatar(
         id: id,
         name: 'Custom Photo',
