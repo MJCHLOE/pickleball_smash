@@ -28,8 +28,6 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
   int _activeTab = 0; // 0: Champions, 1: My Photo URL, 2: Avatar Studio
   late String _selectedAvatarId;
 
-  // Custom photo tab controller
-  final TextEditingController _urlController = TextEditingController();
   String _previewUrl = '';
 
   // Avatar Studio state
@@ -77,7 +75,6 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
         _selectedAvatarId.contains('image_picker') ||
         _selectedAvatarId.contains('file_picker')) {
       _activeTab = 1;
-      _urlController.text = _selectedAvatarId;
       _previewUrl = _selectedAvatarId;
     } else if (_selectedAvatarId.startsWith('custom:')) {
       _activeTab = 2;
@@ -90,7 +87,6 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
 
   @override
   void dispose() {
-    _urlController.dispose();
     _initialsController.dispose();
     super.dispose();
   }
@@ -233,7 +229,7 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
   Widget _buildTabs() {
     final tabs = [
       {'id': 0, 'label': 'CHAMPIONS', 'icon': Icons.stars_rounded},
-      {'id': 1, 'label': 'PHOTO / GALLERY', 'icon': Icons.photo_library_rounded},
+      {'id': 1, 'label': 'GALLERY / FILES', 'icon': Icons.photo_library_rounded},
       {'id': 2, 'label': 'AVATAR STUDIO', 'icon': Icons.palette_rounded},
     ];
 
@@ -409,7 +405,6 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
       );
       if (image != null && mounted) {
         final path = image.path;
-        _urlController.text = path;
         setState(() {
           _previewUrl = path;
         });
@@ -451,7 +446,6 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
       if (files.isNotEmpty && mounted) {
         final path = files.first.path;
         if (path != null && path.isNotEmpty) {
-          _urlController.text = path;
           setState(() {
             _previewUrl = path;
           });
@@ -487,7 +481,7 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
   }
 
   // ---------------------------------------------------------------------------
-  // TAB 2: MY PHOTO / IMAGE URL / LOCAL FILE
+  // TAB 2: GALLERY / LOCAL FILES
   // ---------------------------------------------------------------------------
   Widget _buildCustomPhotoTab() {
     final playerName = GameStateManager.instance.playerName;
@@ -505,7 +499,7 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
         ),
         const SizedBox(height: 4),
         Text(
-          'Choose a photo from your gallery, browse local files, or enter an image URL. Saved automatically to database for $playerName.',
+          'Choose a photo from your gallery or browse your local files. Saved automatically to database for $playerName.',
           style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
         ),
         const SizedBox(height: 16),
@@ -604,110 +598,31 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
             }
           },
         ),
-        const SizedBox(height: 16),
-
-        // Divider with OR ENTER IMAGE URL
-        Row(
-          children: [
-            const Expanded(child: Divider(color: AppTheme.surfaceBorder)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Text(
-                'OR PASTE WEB URL / PATH',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
-                ),
+        if (_selectedAvatarId != 'alex_classic' && !PlayerAvatar.presetAvatars.any((a) => a.id == _selectedAvatarId)) ...[
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.white70),
+              label: const Text(
+                'REVERT TO DEFAULT AVATAR',
+                style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+              onPressed: () {
+                _applyAvatar('alex_classic');
+                setState(() {
+                  _previewUrl = 'alex_classic';
+                });
+              },
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppTheme.surfaceBorder),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
               ),
             ),
-            const Expanded(child: Divider(color: AppTheme.surfaceBorder)),
-          ],
-        ),
-        const SizedBox(height: 14),
-
-        // Input Field
-        TextField(
-          controller: _urlController,
-          style: const TextStyle(color: Colors.white, fontSize: 13),
-          decoration: InputDecoration(
-            labelText: 'Image Web URL or File Path',
-            hintText: 'https://example.com/my-photo.jpg or C:/images/me.png',
-            labelStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 11),
-            prefixIcon: const Icon(Icons.link_rounded, color: AppTheme.electricCyan, size: 20),
-            filled: true,
-            fillColor: AppTheme.surfaceLight,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppTheme.neonLime, width: 2),
-            ),
           ),
-          onChanged: (val) {
-            setState(() {
-              _previewUrl = val.trim();
-            });
-          },
-        ),
-        const SizedBox(height: 12),
-
-        // Example shortcuts
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          children: [
-            _buildSampleChip('Pro Paddle', 'https://images.unsplash.com/photo-1599474924187-334a4ae5bd3c?w=150'),
-            _buildSampleChip('Champion Gold', 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=150'),
-            _buildSampleChip('Cyber Gamer', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-        // Save Button
-        SizedBox(
-          width: double.infinity,
-          child: Game2DButton(
-            key: const ValueKey('save_custom_photo_btn'),
-            onPressed: () {
-              final val = _urlController.text.trim();
-              if (val.isNotEmpty) {
-                _applyAvatar(val);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: AppTheme.neonLime,
-                    content: Text(
-                      'Custom profile picture saved to database for $playerName!',
-                      style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                );
-              }
-            },
-            text: 'SAVE THIS PROFILE PICTURE',
-            icon: Icons.check_circle_rounded,
-            variant: GameButtonVariant.primary,
-            size: GameButtonSize.medium,
-            isFullWidth: true,
-          ),
-        ),
+        ],
       ],
-    );
-  }
-
-  Widget _buildSampleChip(String label, String sampleUrl) {
-    return ActionChip(
-      avatar: const Icon(Icons.auto_awesome, size: 14, color: AppTheme.electricCyan),
-      label: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11)),
-      backgroundColor: AppTheme.surfaceLight,
-      side: const BorderSide(color: AppTheme.surfaceBorder),
-      onPressed: () {
-        _urlController.text = sampleUrl;
-        setState(() {
-          _previewUrl = sampleUrl;
-        });
-      },
     );
   }
 

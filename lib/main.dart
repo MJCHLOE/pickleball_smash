@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flame/flame.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/dashboard_screen.dart';
@@ -17,6 +18,16 @@ void main() async {
     }
   } catch (e) {
     debugPrint('Fullscreen initialization skipped: $e');
+  }
+
+  // Lock portrait orientation initially for dashboard & menus
+  try {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+  } catch (e) {
+    debugPrint('Orientation lock skipped: $e');
   }
 
   // Pre-initialize Database Service safely with timeout

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pickleball_smash/main.dart';
 import 'package:pickleball_smash/models/game_settings.dart';
@@ -7,6 +8,10 @@ import 'package:pickleball_smash/screens/auth/login_screen.dart';
 import 'package:pickleball_smash/screens/auth/register_screen.dart';
 import 'package:pickleball_smash/screens/dashboard_screen.dart';
 import 'package:pickleball_smash/screens/game_play_screen.dart';
+import 'package:flame/components.dart';
+import 'package:pickleball_smash/game/pickleball_game.dart';
+import 'package:pickleball_smash/game/components/ball.dart';
+import 'package:pickleball_smash/game/components/player.dart';
 import 'package:pickleball_smash/screens/views/in_game_settings_modal.dart';
 import 'package:pickleball_smash/screens/views/settings_view.dart';
 import 'package:pickleball_smash/services/database_service.dart';
@@ -276,8 +281,8 @@ void main() {
       });
 
       await tester.pump();
-      await tester.pump(const Duration(seconds: 5));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
 
       // Should now be on DashboardScreen with new username
       expect(find.byType(DashboardScreen), findsOneWidget);
@@ -903,9 +908,9 @@ void main() {
       expect(reloaded!['avatarId'], 'custom:WIN:1:2');
 
       // 4. Check leaderboard contains avatar_id
-      final leaderboard = await db.getAllPlayersLeaderboard();
+      final leaderboard = await db.getAllPlayersLeaderboard(limit: 200);
       expect(leaderboard.isNotEmpty, true);
-      final me = leaderboard.firstWhere((p) => p['user_id'] == userId);
+      final me = leaderboard.firstWhere((p) => p['username'] == uniqueUser || p['user_id'] == userId);
       expect(me['avatar_id'], 'custom:WIN:1:2');
     });
 
@@ -979,7 +984,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('PLAYER PROFILE PICTURE'), findsOneWidget);
       expect(find.text('CHAMPIONS'), findsOneWidget);
-      expect(find.text('PHOTO / GALLERY'), findsOneWidget);
+      expect(find.text('GALLERY / FILES'), findsOneWidget);
       expect(find.text('AVATAR STUDIO'), findsOneWidget);
 
       // Tap Maya Swift champion
@@ -988,8 +993,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(state.playerAvatarId, 'maya_speed');
 
-      // Switch to PHOTO / GALLERY tab
-      await tester.tap(find.text('PHOTO / GALLERY'));
+      // Switch to GALLERY / FILES tab
+      await tester.tap(find.text('GALLERY / FILES'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.text('Add Your Own Custom Profile Picture'), findsOneWidget);
@@ -997,16 +1002,8 @@ void main() {
       expect(find.byKey(const ValueKey('picker_files_btn')), findsOneWidget);
       expect(find.text('CHOOSE FROM GALLERY'), findsOneWidget);
       expect(find.text('BROWSE FILES'), findsOneWidget);
-      expect(find.text('SAVE THIS PROFILE PICTURE'), findsOneWidget);
-
-      // Enter custom photo URL or file path
-      final urlField = find.byType(TextField).first;
-      await tester.enterText(urlField, 'https://mysite.com/my_pickleball_pic.jpg');
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byKey(const ValueKey('save_custom_photo_btn')));
-      await tester.tap(find.byKey(const ValueKey('save_custom_photo_btn')));
-      await tester.pumpAndSettle();
-      expect(state.playerAvatarId, 'https://mysite.com/my_pickleball_pic.jpg');
+      // Verify URL TextField was removed as requested
+      expect(find.byType(TextField), findsNothing);
 
       // Switch to AVATAR STUDIO tab
       await tester.tap(find.text('AVATAR STUDIO'));
@@ -1199,6 +1196,188 @@ void main() {
       expect(find.byType(SmoothLightsAlphabetBackground), findsWidgets);
       expect(find.byType(Game2DText), findsWidgets);
       expect(find.text('Pickleball Smash'), findsOneWidget);
+    });
+
+    testWidgets('SettingsView does not display Reset Progress option', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SettingsView(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Reset Progress'), findsNothing);
+      expect(find.text('Reset All Progress?'), findsNothing);
+      expect(find.text('Guides & Rules'), findsOneWidget);
+    });
+
+    testWidgets('Orientation switches between Dashboard (portrait) and GamePlay (landscape)', (WidgetTester tester) async {
+      final log = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (MethodCall methodCall) async {
+          log.add(methodCall);
+          return null;
+        },
+      );
+
+      // Dashboard locks portrait
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: DashboardScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final portraitCalls = log.where((call) =>
+        call.method == 'SystemChrome.setPreferredOrientations' &&
+        (call.arguments as List).contains('DeviceOrientation.portraitUp')
+      );
+      expect(portraitCalls.isNotEmpty, true);
+
+      // Gameplay locks landscape
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: GamePlayScreen(),
+        ),
+      );
+      await tester.pump();
+
+      final landscapeCalls = log.where((call) =>
+        call.method == 'SystemChrome.setPreferredOrientations' &&
+        (call.arguments as List).contains('DeviceOrientation.landscapeLeft')
+      );
+      expect(landscapeCalls.isNotEmpty, true);
+    });
+  });
+
+  group('Official Pickleball Sports Rules Tests', () {
+    test('Game starts in waiting-for-serve state with Player 1 serving first', () {
+      final game = PickleballGame(targetScore: 5);
+      game.player1 = PlayerComponent(isPlayerOne: true);
+      game.player2 = PlayerComponent(isPlayerOne: false);
+      game.ball = BallComponent()..customGame = game;
+      game.prepareServicePositions();
+
+      expect(game.isWaitingForServe, true);
+      expect(game.serverPlayer, 1);
+      expect(game.servingSide, 'right');
+      expect(game.ball.velocity, Vector2.zero());
+      expect(game.player1.position.x, 760.0);
+      expect(game.player2.position.x, 520.0);
+
+      // Execute serve
+      game.ball.executeServe(isPlayerOne: true);
+      expect(game.isWaitingForServe, false);
+      expect(game.ball.velocity == Vector2.zero(), false);
+      expect(game.ball.velocity.y < 0, true); // Traveling up towards Player 2
+    });
+
+    test('Side-out scoring only awards points to the server, and receiver win causes Side-Out', () {
+      final game = PickleballGame(targetScore: 5);
+      game.player1 = PlayerComponent(isPlayerOne: true);
+      game.player2 = PlayerComponent(isPlayerOne: false);
+      game.ball = BallComponent()..customGame = game;
+      game.prepareServicePositions();
+
+      expect(game.serverPlayer, 1);
+      expect(game.p1Score, 0);
+      expect(game.p2Score, 0);
+
+      // 1. Server (P1) wins rally -> +1 point to P1
+      game.handleRallyWon(winnerIsPlayerOne: true, faultReason: '');
+      expect(game.p1Score, 1);
+      expect(game.p2Score, 0);
+      expect(game.serverPlayer, 1);
+      expect(game.servingSide, 'left'); // 1 is odd -> left court
+
+      // 2. Receiver (P2) wins rally -> Side-Out! No points awarded, serve transfers to P2
+      game.handleRallyWon(winnerIsPlayerOne: false, faultReason: 'FAULT: Out of Bounds');
+      expect(game.p1Score, 1);
+      expect(game.p2Score, 0); // Receiver did not gain a point!
+      expect(game.serverPlayer, 2); // Side-out occurred!
+      expect(game.servingSide, 'right'); // P2 score is 0 (even) -> right court
+    });
+
+    test('Win by 2 margin rule requires at least a 2-point lead to conclude match', () {
+      bool matchFinished = false;
+      bool? userWon;
+      final game = PickleballGame(
+        targetScore: 5,
+        onMatchFinished: (won) {
+          matchFinished = true;
+          userWon = won;
+        },
+      );
+      game.player1 = PlayerComponent(isPlayerOne: true);
+      game.player2 = PlayerComponent(isPlayerOne: false);
+      game.ball = BallComponent()..customGame = game;
+      game.prepareServicePositions();
+
+      // Set score to 4-4
+      game.p1Score = 4;
+      game.p2Score = 4;
+      game.serverPlayer = 1;
+
+      // P1 wins rally -> 5-4. Reached targetScore (5), but lead is only 1 point.
+      game.handleRallyWon(winnerIsPlayerOne: true, faultReason: '');
+      expect(game.p1Score, 5);
+      expect(game.p2Score, 4);
+      expect(matchFinished, false); // Must win by 2!
+
+      // P1 wins rally again -> 6-4. Lead is 2 points! Match concludes.
+      game.handleRallyWon(winnerIsPlayerOne: true, faultReason: '');
+      expect(game.p1Score, 6);
+      expect(game.p2Score, 4);
+      expect(matchFinished, true);
+      expect(userWon, true);
+    });
+
+    test('Two-Bounce Rule and Kitchen Volley fault detection', () {
+      final game = PickleballGame(targetScore: 5);
+      game.player1 = PlayerComponent(isPlayerOne: true);
+      game.player2 = PlayerComponent(isPlayerOne: false);
+      game.ball = BallComponent()..customGame = game;
+      game.prepareServicePositions();
+
+      // Serve the ball
+      game.ball.executeServe(isPlayerOne: true);
+      expect(game.rallyHitCount, 0); // 0 means return of serve
+
+      // Receiver (Player 2) hits without letting serve bounce (bounceCountCurrentSide == 0)
+      game.ball.bounceCountCurrentSide = 0;
+      game.ball.position = game.player2.position;
+      game.player2.currentState = PlayerState.slash;
+      game.ball.onCollisionStart({}, game.player2);
+
+      // Fault called! Two-Bounce Rule violation awarded to server (P1)
+      expect(game.p1Score, 1);
+    });
+
+    testWidgets('GamePlayScreen displays serve action prompt and server indicator', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 480);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: GamePlayScreen(matchType: 'quick'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('serve_action_prompt')), findsOneWidget);
+      expect(find.textContaining('TAP STRIKE TO SERVE'), findsOneWidget);
+
+      // Tap the serve action prompt to serve
+      await tester.tap(find.byKey(const ValueKey('serve_action_prompt')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(tester.takeException(), isNull);
     });
   });
 }

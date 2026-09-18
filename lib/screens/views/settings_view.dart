@@ -1142,8 +1142,8 @@ class _SettingsViewState extends State<SettingsView> {
   Widget _buildHelpAndAboutCard(BuildContext context, GameStateManager state) {
     return _buildCardWrapper(
       icon: Icons.help_outline_rounded,
-      title: 'Guides & Game Data',
-      subtitle: 'Pickleball rules and data controls',
+      title: 'Guides & Rules',
+      subtitle: 'Pickleball rules and game information',
       accentColor: Colors.white,
       child: Column(
         children: [
@@ -1154,14 +1154,6 @@ class _SettingsViewState extends State<SettingsView> {
             trailing: const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textMuted, size: 14),
             contentPadding: EdgeInsets.zero,
             onTap: () => _showHowToPlayDialog(context),
-          ),
-          const Divider(color: AppTheme.surfaceBorder, height: 16),
-          ListTile(
-            leading: const Icon(Icons.restart_alt_rounded, color: AppTheme.fireOrange),
-            title: const Text('Reset Progress', style: TextStyle(color: AppTheme.fireOrange, fontSize: 13)),
-            subtitle: const Text('Clear career stats, coins, and levels', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-            contentPadding: EdgeInsets.zero,
-            onTap: () => _showResetDialog(context, state),
           ),
           const SizedBox(height: 12),
           const Center(
@@ -1321,47 +1313,6 @@ class _SettingsViewState extends State<SettingsView> {
     );
   }
 
-  void _showResetDialog(BuildContext context, GameStateManager state) {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: AppTheme.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: AppTheme.fireOrange),
-          ),
-          title: const Text('Reset All Progress?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          content: const Text(
-            'This will reset your level, coins, tournament progress, and challenges back to initial default values. This action cannot be undone.',
-            style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('CANCEL', style: TextStyle(color: Colors.white70)),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                state.resetAllData();
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Game progress reset to default.'),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.fireOrange,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('RESET ALL', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   void _showLogoutDialog(BuildContext context, GameStateManager state) {
     showDialog(

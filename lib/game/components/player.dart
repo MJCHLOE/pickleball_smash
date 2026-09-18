@@ -34,6 +34,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
 
   int hAxis = 0;
   int vAxis = 0;
+  bool _animationsLoaded = false;
 
   void updateJoystick(JoystickComponent newJoystick) {
     joystick = newJoystick;
@@ -140,6 +141,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
 
     paddle = PaddleComponent(isPlayerOne: isPlayerOne);
     add(paddle);
+    _animationsLoaded = true;
   }
 
   double get horizontalMovement {
@@ -209,26 +211,34 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       final halfW = (size.x * scale.x) / 2;
       final halfH = (size.y * scale.y) / 2;
       
-      // Strict court bounds to prevent walking into the bleachers or grass
+      // Strict court bounds
       final courtLeftX = 340.0;
       final courtRightX = 940.0;
       
-      // Keep players from walking too far to the center (prevent them from entering the kitchen / hitting the net)
-      final p1CenterLimitY = 450.0;
+      // Allow entering the Kitchen (net is at 360), stopping just before touching the net
+      final p1NetLimitY = 380.0;
       final bottomEdgeY = 700.0;
       
-      position.y = position.y.clamp(p1CenterLimitY + halfH, bottomEdgeY - halfH);
+      position.y = position.y.clamp(p1NetLimitY + halfH, bottomEdgeY - halfH);
       position.x = position.x.clamp(courtLeftX + halfW, courtRightX - halfW);
       
     } else {
-      // AI Logic for Player 2
+      // AI Logic for Player 2 (CPU)
+      if (game.isWaitingForServe) {
+        if (game.serverPlayer == 1) {
+          // Waiting for Player 1 to serve: remain in ready position in diagonal receiving court
+          stopRunning();
+          return;
+        }
+      }
+
       final ball = game.ball;
       
       // Move towards the ball's X position
-      if (ball.position.x < position.x - 10) {
+      if (ball.position.x < position.x - 12) {
         position.x -= aiSpeed * dt;
         changeDirection(PlayerDirection.left);
-      } else if (ball.position.x > position.x + 10) {
+      } else if (ball.position.x > position.x + 12) {
         position.x += aiSpeed * dt;
         changeDirection(PlayerDirection.right);
       } else {
@@ -241,9 +251,13 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       position.x = position.x.clamp(courtLeftX + halfW, courtRightX - halfW);
       
       // Strike if ball is close and coming towards Player 2 (moving UP)
-      // Since Player 2 is at Y = 180 (720 * 0.25), wait for ball to be close
+      // Obey Two-Bounce Rule: on serve return (rallyHitCount == 0), wait until ball has bounced!
       if (ball.velocity.y < 0 && (ball.position.y - position.y).abs() < 120) {
-        strike();
+        if (game.rallyHitCount == 0 && ball.bounceCountCurrentSide == 0) {
+          // Waiting for serve to bounce! (Rule 2)
+        } else {
+          strike();
+        }
       }
     }
   }
@@ -269,8 +283,17 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   }
 
   void strike() {
+    // Check if player is serving
+    if (isPlayerOne && game.isWaitingForServe && game.serverPlayer == 1) {
+      game.ball.executeServe(
+        isPlayerOne: true,
+        horizontalAngle: horizontalMovement,
+      );
+    }
+
+    if (!_animationsLoaded) return;
     if (currentState == PlayerState.slash) return; // Already striking
-    
+
     currentState = PlayerState.slash;
     
     // Switch to the slash animation
@@ -305,6 +328,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   }
 
   void _updateAnimation() {
+    if (!_animationsLoaded) return;
     if (currentState == PlayerState.slash) return; // Don't interrupt a slash
     
     if (currentState == PlayerState.idle) {

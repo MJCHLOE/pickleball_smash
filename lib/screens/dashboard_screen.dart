@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/game_state_manager.dart';
 import '../theme/app_theme.dart';
 import '../widgets/avatar_picker_dialog.dart';
@@ -22,13 +23,26 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedTabIndex = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    _lockPortraitOrientation();
+  }
+
+  void _lockPortraitOrientation() {
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+  }
+
   void _navigateToGame({
     String matchType = 'quick',
     String? tournamentId,
     String? opponentName,
     String? matchTitle,
-  }) {
-    Navigator.of(context).push(
+  }) async {
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => GamePlayScreen(
           matchType: matchType,
@@ -38,6 +52,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
     );
+    // When returning to dashboard, restore portrait orientation
+    if (mounted) {
+      _lockPortraitOrientation();
+    }
   }
 
   @override
