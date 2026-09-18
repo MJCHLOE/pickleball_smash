@@ -60,7 +60,7 @@ class DatabaseService {
 
       final db = await openDatabase(
         path,
-        version: 2,
+        version: 3,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       );
@@ -78,6 +78,7 @@ class DatabaseService {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
+        avatar_id TEXT DEFAULT 'alex_classic',
         created_at TEXT NOT NULL,
         last_login TEXT NOT NULL
       );
@@ -87,6 +88,7 @@ class DatabaseService {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS player_data (
         user_id INTEGER PRIMARY KEY,
+        avatar_id TEXT DEFAULT 'alex_classic',
         player_level INTEGER NOT NULL,
         player_xp INTEGER NOT NULL,
         xp_to_next_level INTEGER NOT NULL,
@@ -150,6 +152,14 @@ class DatabaseService {
           FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
         );
       ''');
+    }
+    if (oldVersion < 3) {
+      try {
+        await db.execute("ALTER TABLE player_data ADD COLUMN avatar_id TEXT DEFAULT 'alex_classic';");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE users ADD COLUMN avatar_id TEXT DEFAULT 'alex_classic';");
+      } catch (_) {}
     }
   }
 
@@ -343,6 +353,7 @@ class DatabaseService {
 
   Future<void> savePlayerData({
     required int userId,
+    String avatarId = 'alex_classic',
     required int playerLevel,
     required int playerXp,
     required int xpToNextLevel,
@@ -359,6 +370,7 @@ class DatabaseService {
   }) async {
     // Cache in fallback store
     _fallbackPlayerData[userId] = {
+      'avatarId': avatarId,
       'playerLevel': playerLevel,
       'playerXp': playerXp,
       'xpToNextLevel': xpToNextLevel,
@@ -385,6 +397,7 @@ class DatabaseService {
           'player_data',
           {
             'user_id': userId,
+            'avatar_id': avatarId,
             'player_level': playerLevel,
             'player_xp': playerXp,
             'xp_to_next_level': xpToNextLevel,
@@ -404,6 +417,25 @@ class DatabaseService {
         );
       } catch (e) {
         debugPrint('SQLite savePlayerData error: $e');
+      }
+    }
+  }
+
+  Future<void> updateUserAvatar(int userId, String avatarId) async {
+    if (_fallbackPlayerData.containsKey(userId)) {
+      _fallbackPlayerData[userId]!['avatarId'] = avatarId;
+    }
+    if (_fallbackUsers.containsKey(userId)) {
+      _fallbackUsers[userId]!['avatar_id'] = avatarId;
+    }
+
+    final db = await database;
+    if (db != null) {
+      try {
+        await db.update('player_data', {'avatar_id': avatarId}, where: 'user_id = ?', whereArgs: [userId]);
+        await db.update('users', {'avatar_id': avatarId}, where: 'id = ?', whereArgs: [userId]);
+      } catch (e) {
+        debugPrint('SQLite updateUserAvatar error: $e');
       }
     }
   }
@@ -444,6 +476,7 @@ class DatabaseService {
           } catch (_) {}
 
           return {
+            'avatarId': row['avatar_id'] as String? ?? 'alex_classic',
             'playerLevel': row['player_level'] as int,
             'playerXp': row['player_xp'] as int,
             'xpToNextLevel': row['xp_to_next_level'] as int,
@@ -542,6 +575,7 @@ class DatabaseService {
             u.id as user_id, 
             u.username, 
             u.created_at,
+            COALESCE(p.avatar_id, 'alex_classic') as avatar_id,
             COALESCE(p.player_level, 1) as player_level,
             COALESCE(p.player_xp, 0) as player_xp,
             COALESCE(p.coins, 500) as coins,
@@ -564,6 +598,7 @@ class DatabaseService {
             final winRate = played > 0 ? ((won / played) * 100).round() : 0;
             return {
               ...row,
+              'avatar_id': row['avatar_id'] as String? ?? 'alex_classic',
               'win_rate': winRate,
               'matches_lost': played - won,
             };
@@ -586,6 +621,7 @@ class DatabaseService {
         'user_id': userId,
         'username': u['username'] as String,
         'created_at': u['created_at'] as String,
+        'avatar_id': (data['avatarId'] as String?) ?? (u['avatar_id'] as String?) ?? 'alex_classic',
         'player_level': (data['playerLevel'] as num?)?.toInt() ?? 1,
         'player_xp': (data['playerXp'] as num?)?.toInt() ?? 0,
         'coins': (data['coins'] as num?)?.toInt() ?? 500,

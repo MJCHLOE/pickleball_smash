@@ -91,23 +91,21 @@ class _Game2DButtonState extends State<Game2DButton> {
             : 24.0;
 
     final EdgeInsets defaultPadding = widget.size == GameButtonSize.small
-        ? const EdgeInsets.symmetric(horizontal: 12, vertical: 6)
+        ? const EdgeInsets.symmetric(horizontal: 10, vertical: 6)
         : widget.size == GameButtonSize.medium
-            ? const EdgeInsets.symmetric(horizontal: 20, vertical: 11)
-            : const EdgeInsets.symmetric(horizontal: 26, vertical: 14);
+            ? const EdgeInsets.symmetric(horizontal: 14, vertical: 9)
+            : const EdgeInsets.symmetric(horizontal: 16, vertical: 12);
 
     // Color Palette Setup
     late final Color topFaceColor;
     late final Color bottomBevelColor;
     late final Color textColor;
-    late final Color specularHighlightColor;
     late final Color borderColor;
 
     if (!isEnabled) {
       topFaceColor = const Color(0xFF334155);
       bottomBevelColor = const Color(0xFF1E293B);
       textColor = const Color(0xFF64748B);
-      specularHighlightColor = Colors.white.withValues(alpha: 0.05);
       borderColor = const Color(0xFF0F172A);
     } else {
       borderColor = const Color(0xFF090D16);
@@ -116,31 +114,26 @@ class _Game2DButtonState extends State<Game2DButton> {
           topFaceColor = const Color(0xFF76FF03);
           bottomBevelColor = const Color(0xFF1B5E20);
           textColor = Colors.black;
-          specularHighlightColor = Colors.white.withValues(alpha: 0.45);
           break;
         case GameButtonVariant.cyan:
           topFaceColor = const Color(0xFF00E5FF);
           bottomBevelColor = const Color(0xFF006064);
           textColor = Colors.black;
-          specularHighlightColor = Colors.white.withValues(alpha: 0.45);
           break;
         case GameButtonVariant.amber:
           topFaceColor = const Color(0xFFFFD54F);
           bottomBevelColor = const Color(0xFFE65100);
           textColor = Colors.black;
-          specularHighlightColor = Colors.white.withValues(alpha: 0.45);
           break;
         case GameButtonVariant.fire:
           topFaceColor = const Color(0xFFFF5722);
           bottomBevelColor = const Color(0xFFB71C1C);
           textColor = Colors.white;
-          specularHighlightColor = Colors.white.withValues(alpha: 0.35);
           break;
         case GameButtonVariant.dark:
           topFaceColor = const Color(0xFF1E293B);
           bottomBevelColor = const Color(0xFF0B0F19);
           textColor = Colors.white;
-          specularHighlightColor = const Color(0xFF00E5FF).withValues(alpha: 0.4);
           break;
       }
     }
@@ -239,18 +232,24 @@ class _Game2DButtonState extends State<Game2DButton> {
           child: Container(
             margin: EdgeInsets.only(bottom: currentBevel),
             decoration: BoxDecoration(
-              color: topFaceColor,
-              borderRadius: BorderRadius.circular(borderRadius - 2.0),
-              // Top specular glossy highlight edge
-              border: Border(
-                top: BorderSide(color: specularHighlightColor, width: 2.0),
-                bottom: BorderSide(color: Colors.black.withValues(alpha: 0.15), width: 1.0),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color.lerp(topFaceColor, Colors.white, 0.25)!,
+                  topFaceColor,
+                ],
               ),
+              borderRadius: BorderRadius.circular(borderRadius - 2.0),
             ),
             padding: widget.padding ?? defaultPadding,
             child: Center(
               widthFactor: widget.isFullWidth ? null : 1.0,
-              child: content,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.center,
+                child: content,
+              ),
             ),
           ),
         ),

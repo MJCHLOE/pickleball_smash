@@ -26,7 +26,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   
   final bool isPlayerOne;
   final bool isFemale;
-  final JoystickComponent? joystick;
+  JoystickComponent? joystick;
   late PaddleComponent paddle;
   
   final double speed = 350.0;
@@ -34,6 +34,10 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
 
   int hAxis = 0;
   int vAxis = 0;
+
+  void updateJoystick(JoystickComponent newJoystick) {
+    joystick = newJoystick;
+  }
 
   PlayerComponent({
     this.isPlayerOne = true, 
@@ -185,7 +189,8 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       }
 
       if (isMoving) {
-        position.add(moveDelta * speed * dt);
+        final sensitivity = game.settings?.joystickSensitivity ?? 1.0;
+        position.add(moveDelta * speed * sensitivity * dt);
         changeDirection(newDirection);
       } else {
         if (currentState == PlayerState.run) {

@@ -3,6 +3,8 @@ import '../../services/database_service.dart';
 import '../../services/game_state_manager.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/game_2d_button.dart';
+import '../../widgets/game_2d_text.dart';
+import '../../widgets/smooth_lights_background.dart';
 import '../dashboard_screen.dart';
 import 'register_screen.dart';
 
@@ -79,70 +81,70 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Container(
-                padding: const EdgeInsets.all(28.0),
-                decoration: BoxDecoration(
-                  color: AppTheme.surface,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: AppTheme.surfaceBorder, width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.4),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Header Logo & Title
-                      Center(
-                        child: Container(
-                          width: 64,
-                          height: 64,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppTheme.neonLime, AppTheme.pickleGreen],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.neonLime.withValues(alpha: 0.35),
-                                blurRadius: 16,
-                                offset: const Offset(0, 4),
+      body: SmoothLightsAlphabetBackground(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Container(
+                  padding: const EdgeInsets.all(28.0),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface.withValues(alpha: 0.95),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: AppTheme.surfaceBorder, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Header Logo & Title
+                        Center(
+                          child: Container(
+                            width: 64,
+                            height: 64,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [AppTheme.neonLime, AppTheme.pickleGreen],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.sports_tennis,
-                            color: Colors.black,
-                            size: 36,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.neonLime.withValues(alpha: 0.35),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.sports_tennis,
+                              color: Colors.black,
+                              size: 36,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'PICKLEBALL SMASH',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
+                        const SizedBox(height: 16),
+                        Game2DText.hero(
+                          'PICKLEBALL SMASH',
                           fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5,
+                          textAlign: TextAlign.center,
+                          gradient: AppTheme.playButtonGradient,
+                          strokeColor: const Color(0xFF070B16),
+                          strokeWidth: 4.0,
+                          shadowOffset: const Offset(0, 3.0),
                         ),
-                      ),
                       const SizedBox(height: 6),
                       const Text(
                         'Sign in to sync progression, challenges, & tournament trophies',
@@ -335,6 +337,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
+            ),
             ),
           ),
         ),

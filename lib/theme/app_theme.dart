@@ -96,5 +96,42 @@ class AppTheme {
       Color(0xFF00E5FF),
     ],
   );
+
+  /// 2D arcade video-game TextStyle with multi-direction outline and 2D extrusion shadow.
+  /// Suitable for widgets where only a TextStyle can be passed.
+  static TextStyle game2DTextStyle({
+    double fontSize = 18.0,
+    FontWeight fontWeight = FontWeight.w900,
+    Color color = Colors.white,
+    Color outlineColor = const Color(0xFF070B16),
+    Color shadowColor = Colors.black87,
+    double outlineWidth = 2.0,
+    double shadowDistance = 2.5,
+    String? fontFamily,
+    double? letterSpacing,
+  }) {
+    return TextStyle(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      fontFamily: fontFamily,
+      letterSpacing: letterSpacing,
+      color: color,
+      shadows: [
+        // 4-directional outline
+        Shadow(offset: Offset(-outlineWidth, -outlineWidth), color: outlineColor),
+        Shadow(offset: Offset(outlineWidth, -outlineWidth), color: outlineColor),
+        Shadow(offset: Offset(-outlineWidth, outlineWidth), color: outlineColor),
+        Shadow(offset: Offset(outlineWidth, outlineWidth), color: outlineColor),
+        // 2D bottom extrusion drop shadow
+        Shadow(offset: Offset(0, shadowDistance), color: shadowColor, blurRadius: 0),
+        Shadow(
+          offset: Offset(0, shadowDistance + 1.0),
+          color: shadowColor.withValues(alpha: 0.65),
+          blurRadius: 2.0,
+        ),
+      ],
+    );
+  }
 }
+
 

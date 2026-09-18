@@ -3,6 +3,8 @@ import '../../services/database_service.dart';
 import '../../services/game_state_manager.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/game_2d_button.dart';
+import '../../widgets/game_2d_text.dart';
+import '../../widgets/smooth_lights_background.dart';
 import '../dashboard_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -107,45 +109,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Container(
-                padding: const EdgeInsets.all(28.0),
-                decoration: BoxDecoration(
-                  color: AppTheme.surface,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: AppTheme.surfaceBorder, width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.4),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Header
-                      const Center(
-                        child: Text(
-                          'CREATE ACCOUNT',
-                          style: TextStyle(
-                            color: Colors.white,
+      body: SmoothLightsAlphabetBackground(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Container(
+                  padding: const EdgeInsets.all(28.0),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface.withValues(alpha: 0.95),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: AppTheme.surfaceBorder, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Header
+                        Center(
+                          child: Game2DText.hero(
+                            'CREATE ACCOUNT',
                             fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.5,
+                            textAlign: TextAlign.center,
+                            gradient: AppTheme.playButtonGradient,
+                            strokeColor: const Color(0xFF070B16),
+                            strokeWidth: 3.5,
+                            shadowOffset: const Offset(0, 3.0),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
+                        const SizedBox(height: 6),
                       const Text(
                         'Save your matches, unlock achievements, and climb tournament rankings',
                         textAlign: TextAlign.center,
@@ -351,7 +354,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Center(
                         child: Game2DButton(
                           onPressed: _handlePlayAsGuest,
-                          text: 'Play as Guest',
+                          text: 'Skip for now, play as Guest',
                           icon: Icons.sports_tennis_rounded,
                           variant: GameButtonVariant.dark,
                           size: GameButtonSize.small,
@@ -361,6 +364,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ),
+            ),
             ),
           ),
         ),

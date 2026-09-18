@@ -471,6 +471,9 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
 
   Widget _buildActionChip(String label, CharacterAction action, {bool isSmash = false}) {
     final isSelected = _action == action;
+    final faceColor = isSmash ? const Color(0xFFFFD600) : const Color(0xFF00E676);
+    final bevelColor = isSmash ? const Color(0xFFE65100) : const Color(0xFF1B5E20);
+
     return GestureDetector(
       onTap: () {
         if (action == CharacterAction.smash) {
@@ -484,22 +487,34 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
         }
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        duration: const Duration(milliseconds: 100),
+        margin: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(
-          color: isSelected
-              ? (isSmash ? const Color(0xFFFFD600) : const Color(0xFF00E676))
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          color: isSelected ? bevelColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: isSelected
-                ? Colors.black
-                : (isSmash ? const Color(0xFFFFD600) : Colors.white70),
+        child: Container(
+          margin: EdgeInsets.only(bottom: isSelected ? 2 : 0),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: isSelected ? faceColor : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: isSelected
+                ? Border(
+                    top: BorderSide(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
+                  )
+                : null,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+              color: isSelected
+                  ? Colors.black
+                  : (isSmash ? const Color(0xFFFFD600) : Colors.white70),
+            ),
           ),
         ),
       ),

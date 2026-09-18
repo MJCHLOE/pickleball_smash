@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flame/game.dart';
 import '../game/pickleball_game.dart';
+import '../models/player_avatar.dart';
 import '../services/game_state_manager.dart';
 import '../theme/app_theme.dart';
+import '../widgets/avatar_picker_dialog.dart';
+import '../widgets/game_2d_button.dart';
+import '../widgets/game_2d_text.dart';
+import '../widgets/player_avatar.dart';
 import 'auth/register_screen.dart';
+import 'views/in_game_settings_modal.dart';
 
 class GamePlayScreen extends StatefulWidget {
   final String matchType; // 'quick' or 'tournament'
@@ -40,6 +46,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
 
     _game = PickleballGame(
       targetScore: targetScore,
+      settings: state.settings,
       joystickOnLeft: state.settings.joystickOnLeft,
       onScoreUpdated: (p1, p2) {
         if (mounted) {
@@ -84,6 +91,28 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
     });
   }
 
+  void _openInGameSettings() {
+    final wasPausedBefore = _isPaused;
+    if (!_isPaused) {
+      _game.pauseEngine();
+      setState(() {
+        _isPaused = true;
+      });
+    }
+
+    InGameSettingsModal.show(
+      context,
+      onSettingsChanged: (newSettings) {
+        _game.applySettings(newSettings);
+      },
+      onResume: () {
+        if (!wasPausedBefore && mounted) {
+          _togglePause();
+        }
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = GameStateManager.instance;
@@ -103,74 +132,145 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
           SafeArea(
             child: Align(
               alignment: Alignment.topCenter,
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.75),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppTheme.surfaceBorder),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Title badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.neonLime.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        title,
-                        style: const TextStyle(
-                          color: AppTheme.neonLime,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppTheme.surfaceBorder),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Title badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.neonLime.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              color: AppTheme.neonLime,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    // Score
-                    Text(
-                      '${state.playerName}  $_p1Score',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8.0),
-                      child: Text('-', style: TextStyle(color: AppTheme.textMuted, fontSize: 16)),
-                    ),
-                    Text(
-                      '$_p2Score  $opponent',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    // Pause button
-                    InkWell(
-                      onTap: _togglePause,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.white12,
+                        const SizedBox(width: 10),
+
+                        // Player 1 Avatar & Name & Score
+                        InkWell(
+                          onTap: () => AvatarPickerDialog.show(context),
                           borderRadius: BorderRadius.circular(8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              PlayerAvatarWidget(
+                                avatarId: state.playerAvatarId,
+                                size: 24,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${state.playerName}  ',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Game2DText.score(
+                                '$_p1Score',
+                                fontSize: 16,
+                                textColor: AppTheme.neonLime,
+                                strokeWidth: 2.2,
+                                shadowOffset: const Offset(0, 1.5),
+                              ),
+                            ],
+                          ),
                         ),
-                        child: Icon(
-                          _isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                          color: Colors.white,
-                          size: 20,
+
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8.0),
+                          child: Text('-', style: TextStyle(color: AppTheme.textMuted, fontSize: 16)),
                         ),
-                      ),
+
+                        // Opponent Score & Avatar & Name
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Game2DText.score(
+                              '$_p2Score',
+                              fontSize: 16,
+                              textColor: AppTheme.electricCyan,
+                              strokeWidth: 2.2,
+                              shadowOffset: const Offset(0, 1.5),
+                            ),
+                            const SizedBox(width: 6),
+                            PlayerAvatarWidget(
+                              avatar: PlayerAvatar.getForOpponent(opponent),
+                              size: 24,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              opponent,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(width: 12),
+                        // In-Game Settings button
+                        InkWell(
+                          key: const ValueKey('ingame_settings_btn'),
+                          onTap: _openInGameSettings,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: AppTheme.neonLime.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppTheme.neonLime.withValues(alpha: 0.3)),
+                            ),
+                            child: const Icon(
+                              Icons.tune_rounded,
+                              color: AppTheme.neonLime,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        // Pause button
+                        InkWell(
+                          key: const ValueKey('ingame_pause_btn'),
+                          onTap: _togglePause,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.white12,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              _isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -181,51 +281,65 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
             Container(
               color: Colors.black87,
               child: Center(
-                child: Container(
-                  width: 340,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surface,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: AppTheme.surfaceBorder, width: 2),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'MATCH PAUSED',
-                        style: TextStyle(
-                          color: Colors.white,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    width: 360,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: AppTheme.surfaceBorder, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Game2DText.hero(
+                          'MATCH PAUSED',
                           fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5,
+                          strokeWidth: 3.5,
+                          shadowOffset: const Offset(0, 3.0),
+                          textAlign: TextAlign.center,
                         ),
-                      ),
-                      const SizedBox(height: 20),
-                      ElevatedButton(
-                        onPressed: _togglePause,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.neonLime,
-                          foregroundColor: Colors.black,
-                          minimumSize: const Size.fromHeight(48),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        const SizedBox(height: 20),
+                        Game2DButton(
+                          onPressed: _togglePause,
+                          text: 'RESUME MATCH',
+                          icon: Icons.play_arrow_rounded,
+                          variant: GameButtonVariant.primary,
+                          size: GameButtonSize.medium,
+                          isFullWidth: true,
                         ),
-                        child: const Text('RESUME MATCH', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: AppTheme.surfaceBorder),
-                          minimumSize: const Size.fromHeight(48),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        const SizedBox(height: 12),
+                        Game2DButton(
+                          key: const ValueKey('pause_menu_settings_btn'),
+                          onPressed: _openInGameSettings,
+                          text: 'MATCH SETTINGS',
+                          icon: Icons.tune_rounded,
+                          variant: GameButtonVariant.cyan,
+                          size: GameButtonSize.medium,
+                          isFullWidth: true,
                         ),
-                        child: const Text('QUIT TO DASHBOARD'),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        Game2DButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                          },
+                          text: 'QUIT TO DASHBOARD',
+                          icon: Icons.exit_to_app_rounded,
+                          variant: GameButtonVariant.dark,
+                          size: GameButtonSize.medium,
+                          isFullWidth: true,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -265,23 +379,24 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
                           size: 56,
                         ),
                         const SizedBox(height: 10),
-                        Text(
+                        Game2DText.hero(
                           _playerWon ? 'VICTORY!' : 'MATCH DEFEAT',
-                          style: TextStyle(
-                            color: _playerWon ? AppTheme.neonLime : AppTheme.fireOrange,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.5,
-                          ),
+                          fontSize: 24,
+                          gradient: _playerWon ? AppTheme.playButtonGradient : null,
+                          textColor: _playerWon ? AppTheme.neonLime : AppTheme.fireOrange,
+                          strokeColor: const Color(0xFF070B16),
+                          strokeWidth: 4.0,
+                          shadowOffset: const Offset(0, 3.5),
+                          textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 6),
-                        Text(
+                        Game2DText.score(
                           'Final Score: $_p1Score - $_p2Score',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          fontSize: 16,
+                          textColor: Colors.white,
+                          strokeWidth: 2.2,
+                          shadowOffset: const Offset(0, 1.5),
+                          textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),
                         // Rewards summary

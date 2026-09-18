@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../models/player_avatar.dart';
 import '../../models/tournament_model.dart';
 import '../../services/game_state_manager.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/game_2d_button.dart';
+import '../../widgets/game_2d_text.dart';
+import '../../widgets/player_avatar.dart';
 
 class TournamentView extends StatefulWidget {
   final Function(Tournament tournament, BracketMatch match) onStartMatch;
@@ -94,19 +98,18 @@ class _TournamentViewState extends State<TournamentView> {
           child: const Icon(Icons.emoji_events, color: AppTheme.trophyAmber, size: 24),
         ),
         const SizedBox(width: 12),
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              Game2DText.title(
                 'Championship Tournaments',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
+                fontSize: 22,
+                textColor: Colors.white,
+                strokeWidth: 3.0,
+                shadowOffset: const Offset(0, 2.5),
               ),
-              Text(
+              const Text(
                 'Climb the knockout brackets and earn prestigious trophies',
                 style: TextStyle(
                   color: AppTheme.textMuted,
@@ -205,13 +208,12 @@ class _TournamentViewState extends State<TournamentView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    Game2DText.title(
                       tournament.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      fontSize: 20,
+                      textColor: Colors.white,
+                      strokeWidth: 2.5,
+                      shadowOffset: const Offset(0, 2),
                     ),
                     const SizedBox(height: 4),
                     _buildDifficultyChip(tournament.difficulty),
@@ -277,48 +279,29 @@ class _TournamentViewState extends State<TournamentView> {
           else if (tournament.isCompleted)
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton.icon(
+              child: Game2DButton(
                 onPressed: () {
                   state.restartTournament(tournament.id);
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.surfaceLight,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    side: const BorderSide(color: AppTheme.neonLime),
-                  ),
-                ),
-                icon: const Icon(Icons.refresh, color: AppTheme.neonLime),
-                label: const Text(
-                  'REPLAY TOURNAMENT',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
+                text: 'REPLAY TOURNAMENT',
+                icon: Icons.refresh_rounded,
+                variant: GameButtonVariant.dark,
+                size: GameButtonSize.medium,
+                isFullWidth: true,
               ),
             )
           else if (tournament.currentMatch != null)
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton.icon(
+              child: Game2DButton(
                 onPressed: () {
                   widget.onStartMatch(tournament, tournament.currentMatch!);
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.trophyAmber,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  elevation: 6,
-                  shadowColor: AppTheme.trophyAmber.withValues(alpha: 0.4),
-                ),
-                icon: const Icon(Icons.sports_tennis_rounded),
-                label: Text(
-                  'PLAY ${tournament.currentMatch!.roundTitle.toUpperCase()}',
-                  style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5),
-                ),
+                text: 'PLAY ${tournament.currentMatch!.roundTitle.toUpperCase()}',
+                icon: Icons.sports_tennis_rounded,
+                variant: GameButtonVariant.amber,
+                size: GameButtonSize.large,
+                isFullWidth: true,
               ),
             ),
         ],
@@ -396,17 +379,16 @@ class _TournamentViewState extends State<TournamentView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.account_tree_rounded, color: AppTheme.electricCyan, size: 20),
-              SizedBox(width: 8),
-              Text(
+              const Icon(Icons.account_tree_rounded, color: AppTheme.electricCyan, size: 20),
+              const SizedBox(width: 8),
+              Game2DText.title(
                 'Knockout Bracket',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                fontSize: 18,
+                textColor: Colors.white,
+                strokeWidth: 2.5,
+                shadowOffset: const Offset(0, 2),
               ),
             ],
           ),
@@ -418,7 +400,7 @@ class _TournamentViewState extends State<TournamentView> {
 
             return Column(
               children: [
-                _buildBracketMatchItem(match, tournament, index),
+                _buildBracketMatchItem(match, tournament, index, state),
                 if (!isLast) ...[
                   const SizedBox(height: 8),
                   Container(
@@ -436,7 +418,7 @@ class _TournamentViewState extends State<TournamentView> {
     );
   }
 
-  Widget _buildBracketMatchItem(BracketMatch match, Tournament tournament, int index) {
+  Widget _buildBracketMatchItem(BracketMatch match, Tournament tournament, int index, GameStateManager state) {
     Color borderColor = AppTheme.surfaceBorder;
     if (match.isCurrentMatch) {
       borderColor = AppTheme.trophyAmber;
@@ -499,6 +481,11 @@ class _TournamentViewState extends State<TournamentView> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
+                    PlayerAvatarWidget(
+                      avatarId: match.player1Name == state.playerName ? state.playerAvatarId : 'alex_classic',
+                      size: 20,
+                    ),
+                    const SizedBox(width: 6),
                     Flexible(
                       child: Text(
                         match.player1Name,
@@ -507,14 +494,19 @@ class _TournamentViewState extends State<TournamentView> {
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                          fontSize: 13,
                         ),
                       ),
                     ),
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 6.0),
-                      child: Text('vs', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                      child: Text('vs', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                     ),
+                    PlayerAvatarWidget(
+                      avatar: PlayerAvatar.getForOpponent(match.player2Name),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 6),
                     Flexible(
                       child: Text(
                         match.player2Name,
@@ -523,7 +515,7 @@ class _TournamentViewState extends State<TournamentView> {
                         style: TextStyle(
                           color: match.isCurrentMatch ? AppTheme.electricCyan : Colors.white70,
                           fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                          fontSize: 13,
                         ),
                       ),
                     ),

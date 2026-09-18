@@ -19,6 +19,7 @@ class GameStateManager extends ChangeNotifier {
 
   // Player Profile State
   String get playerName => isGuest ? 'Guest Player' : currentUsername;
+  String playerAvatarId = 'alex_classic';
   int playerLevel = 1;
   int playerXp = 0;
   int xpToNextLevel = 500;
@@ -250,6 +251,15 @@ class GameStateManager extends ChangeNotifier {
     ];
   }
 
+  void updatePlayerAvatar(String avatarId) {
+    playerAvatarId = avatarId;
+    if (!isGuest && currentUserId != null) {
+      DatabaseService.instance.updateUserAvatar(currentUserId!, avatarId);
+    }
+    saveCurrentProgress();
+    notifyListeners();
+  }
+
   void updateSettings(GameSettings newSettings) {
     settings = newSettings;
     saveCurrentProgress();
@@ -478,6 +488,7 @@ class GameStateManager extends ChangeNotifier {
 
     final saved = await DatabaseService.instance.loadPlayerData(userId);
     if (saved != null) {
+      playerAvatarId = saved['avatarId'] as String? ?? 'alex_classic';
       playerLevel = (saved['playerLevel'] as num?)?.toInt() ?? 1;
       playerXp = (saved['playerXp'] as num?)?.toInt() ?? 0;
       xpToNextLevel = (saved['xpToNextLevel'] as num?)?.toInt() ?? 500;
@@ -507,6 +518,7 @@ class GameStateManager extends ChangeNotifier {
       // New registered user!
       // If user played as guest and wanted to save their progress, preserve it!
       if (!preserveCurrentDataIfNew) {
+        playerAvatarId = 'alex_classic';
         _initDefaultData();
         _guestMatchHistory.clear();
       } else if (_guestMatchHistory.isNotEmpty) {
@@ -542,6 +554,7 @@ class GameStateManager extends ChangeNotifier {
   void loginAsGuest() {
     currentUserId = null;
     currentUsername = 'Guest Player';
+    playerAvatarId = 'alex_classic';
     isGuest = true;
     _guestMatchHistory.clear();
     _initDefaultData();
@@ -557,6 +570,7 @@ class GameStateManager extends ChangeNotifier {
     if (!isGuest && currentUserId != null) {
       await DatabaseService.instance.savePlayerData(
         userId: currentUserId!,
+        avatarId: playerAvatarId,
         playerLevel: playerLevel,
         playerXp: playerXp,
         xpToNextLevel: xpToNextLevel,
@@ -576,6 +590,7 @@ class GameStateManager extends ChangeNotifier {
 
   void resetAllData() {
     _guestMatchHistory.clear();
+    playerAvatarId = 'alex_classic';
     settings = const GameSettings();
     _initDefaultData();
     saveCurrentProgress();

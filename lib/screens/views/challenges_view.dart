@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../models/challenge_model.dart';
 import '../../services/game_state_manager.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/game_2d_button.dart';
+import '../../widgets/game_2d_text.dart';
 
 class ChallengesView extends StatefulWidget {
   final VoidCallback onGoPlay;
@@ -106,13 +108,12 @@ class _ChallengesViewState extends State<ChallengesView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Game2DText.title(
                 'Smash Challenges',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
+                fontSize: 22,
+                textColor: Colors.white,
+                strokeWidth: 3.0,
+                shadowOffset: const Offset(0, 2.5),
               ),
               Text(
                 'Completed $completed of $total challenges',
@@ -253,13 +254,12 @@ class _ChallengesViewState extends State<ChallengesView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    Game2DText.title(
                       challenge.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      fontSize: 16,
+                      textColor: Colors.white,
+                      strokeWidth: 2.2,
+                      shadowOffset: const Offset(0, 1.5),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -373,7 +373,7 @@ class _ChallengesViewState extends State<ChallengesView> {
                   ),
                 )
               else if (isDone)
-                ElevatedButton(
+                Game2DButton(
                   onPressed: () {
                     state.claimChallenge(challenge.id);
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -386,27 +386,18 @@ class _ChallengesViewState extends State<ChallengesView> {
                       ),
                     );
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.neonLime,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text('CLAIM', style: TextStyle(fontWeight: FontWeight.w900)),
+                  text: 'CLAIM',
+                  icon: Icons.check_circle_outline_rounded,
+                  variant: GameButtonVariant.primary,
+                  size: GameButtonSize.small,
                 )
               else
-                OutlinedButton(
+                Game2DButton(
                   onPressed: widget.onGoPlay,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: AppTheme.surfaceBorder),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: const Text('PLAY NOW', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  text: 'PLAY',
+                  icon: Icons.play_arrow_rounded,
+                  variant: GameButtonVariant.dark,
+                  size: GameButtonSize.small,
                 ),
             ],
           ),

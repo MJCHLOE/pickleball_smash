@@ -2,12 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pickleball_smash/main.dart';
 import 'package:pickleball_smash/models/game_settings.dart';
+import 'package:pickleball_smash/models/player_avatar.dart';
 import 'package:pickleball_smash/screens/auth/login_screen.dart';
 import 'package:pickleball_smash/screens/auth/register_screen.dart';
 import 'package:pickleball_smash/screens/dashboard_screen.dart';
+import 'package:pickleball_smash/screens/game_play_screen.dart';
+import 'package:pickleball_smash/screens/views/in_game_settings_modal.dart';
+import 'package:pickleball_smash/screens/views/settings_view.dart';
 import 'package:pickleball_smash/services/database_service.dart';
 import 'package:pickleball_smash/services/game_state_manager.dart';
+import 'package:pickleball_smash/theme/app_theme.dart';
 import 'package:pickleball_smash/widgets/animated_character_display.dart';
+import 'package:pickleball_smash/widgets/avatar_picker_dialog.dart';
+import 'package:pickleball_smash/widgets/game_2d_text.dart';
+import 'package:pickleball_smash/widgets/player_avatar.dart';
+import 'package:pickleball_smash/widgets/smooth_lights_background.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -296,6 +305,10 @@ void main() {
   });
 
   group('Responsive Dashboard Widget Tests', () {
+    setUp(() {
+      GameStateManager.instance.loginAsGuest();
+    });
+
     testWidgets('Renders BottomNavigationBar on compact screen (< 700px)', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1.0;
@@ -506,6 +519,7 @@ void main() {
       final allRecordsBtn = find.text('All Records');
       expect(allRecordsBtn, findsOneWidget);
 
+      await tester.ensureVisible(allRecordsBtn);
       await tester.tap(allRecordsBtn);
       await tester.pumpAndSettle();
 
@@ -635,6 +649,496 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.byType(AnimatedCharacterDisplay), findsOneWidget);
+    });
+  });
+
+  group('Game Settings & Adjusters Tests', () {
+    test('GameSettings model serializes and deserializes all graphics, audio, and controller adjuster fields', () {
+      const original = GameSettings(
+        masterVolume: 0.9,
+        soundVolume: 0.75,
+        musicVolume: 0.5,
+        crowdVolume: 0.65,
+        sfxEnabled: true,
+        musicEnabled: false,
+        crowdEnabled: true,
+        hapticsEnabled: true,
+        soundProfile: 'Stadium Live',
+        controlScheme: 'dpad',
+        joystickOnLeft: false,
+        joystickSensitivity: 1.4,
+        joystickDeadzone: 0.15,
+        buttonSize: 'Large',
+        controllerOpacity: 0.7,
+        hapticOnHit: true,
+        graphicsQuality: 'Ultra',
+        targetFps: 120,
+        particlesEnabled: true,
+        shadowsEnabled: true,
+        screenShakeEnabled: false,
+        showFps: true,
+        courtTheme: 'Electric Blue',
+        courtBrightness: 1.2,
+      );
+
+      final map = original.toMap();
+      final reconstructed = GameSettings.fromMap(map);
+
+      expect(reconstructed.masterVolume, 0.9);
+      expect(reconstructed.soundVolume, 0.75);
+      expect(reconstructed.musicVolume, 0.5);
+      expect(reconstructed.crowdVolume, 0.65);
+      expect(reconstructed.musicEnabled, false);
+      expect(reconstructed.soundProfile, 'Stadium Live');
+      expect(reconstructed.controlScheme, 'dpad');
+      expect(reconstructed.joystickOnLeft, false);
+      expect(reconstructed.joystickSensitivity, 1.4);
+      expect(reconstructed.buttonSize, 'Large');
+      expect(reconstructed.graphicsQuality, 'Ultra');
+      expect(reconstructed.targetFps, 120);
+      expect(reconstructed.screenShakeEnabled, false);
+      expect(reconstructed.showFps, true);
+      expect(reconstructed.courtTheme, 'Electric Blue');
+      expect(reconstructed.courtBrightness, 1.2);
+
+      final copy = original.copyWith(
+        graphicsQuality: 'Low',
+        masterVolume: 0.2,
+        controlScheme: 'drag',
+      );
+      expect(copy.graphicsQuality, 'Low');
+      expect(copy.masterVolume, 0.2);
+      expect(copy.controlScheme, 'drag');
+      expect(copy.courtTheme, 'Electric Blue'); // retained
+    });
+
+    testWidgets('SettingsView renders all Adjuster cards, allows category switching, and triggers test audio', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SettingsView(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Check main headers
+      expect(find.text('Game Settings'), findsOneWidget);
+      expect(find.text('Graphics & Visual Adjuster'), findsOneWidget);
+      expect(find.text('Audio & Sound Effects'), findsOneWidget);
+      expect(find.text('Controls & Movement'), findsOneWidget);
+      expect(find.text('Player Account'), findsOneWidget);
+
+      // Switch to Graphics category filter
+      await tester.tap(find.text('Graphics'));
+      await tester.pumpAndSettle();
+      expect(find.text('Graphics & Visual Adjuster'), findsOneWidget);
+      expect(find.text('Target Framerate'), findsOneWidget);
+
+      // Switch to Audio category filter
+      await tester.tap(find.text('Audio'));
+      await tester.pumpAndSettle();
+      expect(find.text('Audio & Sound Effects'), findsOneWidget);
+      expect(find.text('Master Volume'), findsOneWidget);
+
+      // Tap TEST AUDIO & HAPTICS button
+      final testAudioBtn = find.text('TEST AUDIO & HAPTICS');
+      expect(testAudioBtn, findsOneWidget);
+      await tester.tap(testAudioBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Switch to Controls category filter
+      await tester.tap(find.text('Controls'));
+      await tester.pumpAndSettle();
+      expect(find.text('Controls & Movement'), findsOneWidget);
+      expect(find.text('Virtual Joystick'), findsOneWidget);
+      expect(find.text('Arcade D-Pad'), findsOneWidget);
+    });
+
+    testWidgets('SettingsView renders responsively on ultra-compact 320px screen width without any overflow', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SettingsView(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(SettingsView), findsOneWidget);
+      expect(find.text('Game Settings'), findsOneWidget);
+    });
+
+    testWidgets('InGameSettingsModal renders with tabs, updates settings live, and is responsive on 320px screen', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      GameSettings? updatedSettings;
+      bool resumed = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InGameSettingsModal(
+              onSettingsChanged: (s) => updatedSettings = s,
+              onResume: () => resumed = true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('IN-GAME SETTINGS'), findsOneWidget);
+      expect(find.text('GRAPHICS'), findsOneWidget);
+      expect(find.text('AUDIO'), findsOneWidget);
+      expect(find.text('CONTROLS'), findsOneWidget);
+
+      // Verify Graphics tab elements
+      expect(find.text('Quality Preset'), findsOneWidget);
+      expect(find.text('Target Framerate'), findsOneWidget);
+
+      // Switch to AUDIO tab
+      await tester.tap(find.text('AUDIO'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Master Volume'), findsOneWidget);
+      expect(find.text('TEST AUDIO & HAPTICS'), findsOneWidget);
+
+      // Switch to CONTROLS tab
+      await tester.tap(find.text('CONTROLS'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Joystick Placement'), findsOneWidget);
+      expect(find.text('Left-Handed'), findsOneWidget);
+      expect(find.text('Right-Handed'), findsOneWidget);
+
+      // Tap Right-Handed to test live settings update
+      await tester.tap(find.text('Right-Handed'));
+      await tester.pumpAndSettle();
+      expect(updatedSettings?.joystickOnLeft, false);
+
+      // Tap RESUME MATCH
+      await tester.tap(find.text('RESUME MATCH'));
+      await tester.pumpAndSettle();
+      expect(resumed, true);
+    });
+  });
+
+  group('Player Profile Pictures & Database Persistence Tests', () {
+    test('PlayerAvatar model parses presets, opponent names, custom photo URLs, and avatar studio codes', () {
+      // 1. Preset test
+      final alex = PlayerAvatar.getById('alex_classic');
+      expect(alex.name, 'Alex Smash');
+      expect(alex.isCustom, false);
+
+      final maya = PlayerAvatar.getById('maya_speed');
+      expect(maya.name, 'Maya Swift');
+
+      // 2. Opponent lookup test
+      final king = PlayerAvatar.getForOpponent('The Pickle King');
+      expect(king.id, 'the_pickle_king');
+      expect(king.badge, '👑');
+
+      final ben = PlayerAvatar.getForOpponent('Ben Dinker');
+      expect(ben.id, 'ben_dinker');
+
+      // 3. Custom Photo URL
+      final photo = PlayerAvatar.getById('https://example.com/custom_player.png');
+      expect(photo.isCustom, true);
+      expect(photo.customImageUrl, 'https://example.com/custom_player.png');
+      expect(photo.badge, '📷');
+
+      // 4. Custom Avatar Studio code
+      final studio = PlayerAvatar.getById('custom:JC:2:3');
+      expect(studio.isCustom, true);
+      expect(studio.initials, 'JC');
+      expect(studio.badge, '🎨');
+    });
+
+    test('DatabaseService saves, updates, and loads player avatar_id and returns it in leaderboard', () async {
+      final db = DatabaseService.instance;
+      final uniqueUser = 'avatar_user_${DateTime.now().millisecondsSinceEpoch}';
+      final reg = await db.registerUser(username: uniqueUser, password: 'password123');
+      final userId = reg['userId'] as int;
+
+      // 1. Save player data with custom avatar
+      await db.savePlayerData(
+        userId: userId,
+        avatarId: 'jordan_power',
+        playerLevel: 4,
+        playerXp: 200,
+        xpToNextLevel: 500,
+        coins: 1200,
+        trophies: 150,
+        matchesPlayed: 10,
+        matchesWon: 8,
+        totalSmashes: 45,
+        bestStreak: 5,
+        currentStreak: 3,
+        tournaments: [],
+        challenges: [],
+        settings: const GameSettings(),
+      );
+
+      // 2. Load and verify avatarId
+      final loaded = await db.loadPlayerData(userId);
+      expect(loaded, isNotNull);
+      expect(loaded!['avatarId'], 'jordan_power');
+
+      // 3. Update avatar to custom studio code
+      await db.updateUserAvatar(userId, 'custom:WIN:1:2');
+      final reloaded = await db.loadPlayerData(userId);
+      expect(reloaded!['avatarId'], 'custom:WIN:1:2');
+
+      // 4. Check leaderboard contains avatar_id
+      final leaderboard = await db.getAllPlayersLeaderboard();
+      expect(leaderboard.isNotEmpty, true);
+      final me = leaderboard.firstWhere((p) => p['user_id'] == userId);
+      expect(me['avatar_id'], 'custom:WIN:1:2');
+    });
+
+    testWidgets('AvatarPickerDialog allows picking champions, saving custom photo URLs, and creating studio avatars', (WidgetTester tester) async {
+      final state = GameStateManager.instance;
+      state.playerAvatarId = 'alex_classic';
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: AvatarPickerDialog(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('PLAYER PROFILE PICTURE'), findsOneWidget);
+      expect(find.text('CHAMPIONS'), findsOneWidget);
+      expect(find.text('MY PHOTO / URL'), findsOneWidget);
+      expect(find.text('AVATAR STUDIO'), findsOneWidget);
+
+      // Tap Maya Swift champion
+      expect(find.text('Maya Swift'), findsOneWidget);
+      await tester.tap(find.text('Maya Swift'));
+      await tester.pumpAndSettle();
+      expect(state.playerAvatarId, 'maya_speed');
+
+      // Switch to MY PHOTO / URL tab
+      await tester.tap(find.text('MY PHOTO / URL'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Add Your Own Custom Profile Picture'), findsOneWidget);
+      expect(find.text('SAVE THIS PROFILE PICTURE'), findsOneWidget);
+
+      // Enter custom photo URL
+      final urlField = find.byType(TextField).first;
+      await tester.enterText(urlField, 'https://mysite.com/my_pickleball_pic.jpg');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('SAVE THIS PROFILE PICTURE'));
+      await tester.pumpAndSettle();
+      expect(state.playerAvatarId, 'https://mysite.com/my_pickleball_pic.jpg');
+
+      // Switch to AVATAR STUDIO tab
+      await tester.tap(find.text('AVATAR STUDIO'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Design Your Unique Avatar'), findsOneWidget);
+      expect(find.text('SAVE CUSTOM AVATAR'), findsOneWidget);
+
+      // Enter initials
+      final initialsField = find.byType(TextField).first;
+      await tester.enterText(initialsField, 'ACE');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('SAVE CUSTOM AVATAR'));
+      await tester.pumpAndSettle();
+      expect(state.playerAvatarId.startsWith('custom:ACE:'), true);
+    });
+
+    testWidgets('InGameSettingsModal renders responsively in short landscape mode (600x360) without overflow and supports AVATAR tab', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(600, 360);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InGameSettingsModal(
+              onResume: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('IN-GAME SETTINGS'), findsOneWidget);
+      expect(find.text('AVATAR'), findsOneWidget);
+
+      // Tap AVATAR tab
+      await tester.tap(find.text('AVATAR'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Player Profile Picture'), findsOneWidget);
+      expect(find.text('Quick Select Avatar'), findsOneWidget);
+      expect(find.text('ADD OWN PHOTO / CUSTOM STUDIO'), findsOneWidget);
+    });
+
+    testWidgets('GamePlayScreen in-game HUD displays player and opponent avatars responsively on 320px width', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: GamePlayScreen(
+            matchType: 'tournament',
+            opponentName: 'Ben Dinker',
+            matchTitle: 'Quarter-Final',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(PlayerAvatarWidget), findsWidgets);
+      expect(find.text('Ben Dinker'), findsOneWidget);
+      expect(find.byKey(const ValueKey('ingame_settings_btn')), findsOneWidget);
+      expect(find.byKey(const ValueKey('ingame_pause_btn')), findsOneWidget);
+    });
+  });
+
+  group('Smooth Animated Lights Background & 2D Game Text Tests', () {
+    testWidgets('SmoothLightsAlphabetBackground renders CustomPaint canvas and child correctly', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SmoothLightsAlphabetBackground(
+              animate: false,
+              child: Center(
+                child: Text('Test Content'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(SmoothLightsAlphabetBackground), findsOneWidget);
+      expect(find.byType(CustomPaint), findsWidgets);
+      expect(find.text('Test Content'), findsOneWidget);
+    });
+
+    testWidgets('SmoothLightsAlphabetBackground animates and updates smoothly without exceptions', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SmoothLightsAlphabetBackground(
+              animate: true,
+              forceAnimateInTests: true,
+              speedMultiplier: 2.0,
+            ),
+          ),
+        ),
+      );
+      // Pump multiple animation ticks
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(SmoothLightsAlphabetBackground), findsOneWidget);
+    });
+
+    testWidgets('Game2DText renders with stroke layer, 2D drop extrusion shadow, and foreground text', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: Game2DText(
+                'SMASH POWER',
+                fontSize: 26,
+                textColor: AppTheme.electricCyan,
+                strokeColor: Colors.black,
+                strokeWidth: 4.0,
+                shadowOffset: Offset(0, 3.0),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(Game2DText), findsOneWidget);
+      expect(find.text('SMASH POWER'), findsOneWidget);
+    });
+
+    testWidgets('Game2DText hero, title, score, and badge presets render correctly with gradients and vibrant colors', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                Game2DText.hero('HERO SMASH'),
+                Game2DText.title('TITLE CHAMPION'),
+                Game2DText.score('9999'),
+                Game2DText.badge('PRO LVL 10'),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('HERO SMASH'), findsOneWidget);
+      expect(find.text('TITLE CHAMPION'), findsOneWidget);
+      expect(find.text('9999'), findsOneWidget);
+      expect(find.text('PRO LVL 10'), findsOneWidget);
+    });
+
+    testWidgets('AppTheme.game2DTextStyle generates multi-directional shadows for 2D arcade outline', (WidgetTester tester) async {
+      final style = AppTheme.game2DTextStyle(
+        fontSize: 20,
+        color: AppTheme.neonLime,
+        outlineColor: Colors.black,
+        outlineWidth: 2.0,
+        shadowDistance: 3.0,
+      );
+
+      expect(style.fontSize, 20);
+      expect(style.color, AppTheme.neonLime);
+      expect(style.shadows, isNotNull);
+      expect(style.shadows!.length, greaterThanOrEqualTo(5));
+    });
+
+    testWidgets('DashboardScreen and Auth screens render with SmoothLightsAlphabetBackground and 2D text', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      GameStateManager.instance.loginAsGuest();
+
+      await tester.pumpWidget(const PickleballApp(initialScreen: DashboardScreen()));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(SmoothLightsAlphabetBackground), findsWidgets);
+      expect(find.byType(Game2DText), findsWidgets);
+      expect(find.text('Pickleball Smash'), findsOneWidget);
     });
   });
 }

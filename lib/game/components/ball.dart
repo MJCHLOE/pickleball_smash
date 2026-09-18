@@ -1,6 +1,7 @@
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+import '../../services/audio_service.dart';
 import '../pickleball_game.dart';
 import 'dart:math';
 import 'player.dart';
@@ -69,6 +70,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     if (other is PlayerComponent) {
       // If the player is currently slashing, they hit the ball!
       if (other.currentState == PlayerState.slash) {
+        AudioService.instance.playPaddleHit();
         final diff = position - other.position;
         
         // Reflect the ball vertically

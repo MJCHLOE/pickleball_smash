@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../models/player_avatar.dart';
 import '../../services/database_service.dart';
 import '../../services/game_state_manager.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/avatar_picker_dialog.dart';
+import '../../widgets/player_avatar.dart';
 import '../auth/register_screen.dart';
 
 class PlayerStatsModal extends StatefulWidget {
@@ -214,21 +217,12 @@ class _PlayerStatsModalState extends State<PlayerStatsModal> with SingleTickerPr
       ),
       child: Row(
         children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.neonLime, width: 2),
-            ),
-            child: const Center(
-              child: Icon(Icons.sports_tennis, color: Colors.white, size: 28),
-            ),
+          PlayerAvatarWidget(
+            avatarId: state.playerAvatarId,
+            size: 52,
+            showBadge: true,
+            showBorder: true,
+            onTap: () => AvatarPickerDialog.show(context),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -501,7 +495,8 @@ class _PlayerStatsModalState extends State<PlayerStatsModal> with SingleTickerPr
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Text(
                               matchType,
@@ -510,6 +505,11 @@ class _PlayerStatsModalState extends State<PlayerStatsModal> with SingleTickerPr
                             const SizedBox(width: 6),
                             const Text('•', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                             const SizedBox(width: 6),
+                            PlayerAvatarWidget(
+                              avatar: PlayerAvatar.getForOpponent(opponentName),
+                              size: 18,
+                            ),
+                            const SizedBox(width: 4),
                             Text(
                               'vs $opponentName',
                               style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
@@ -674,17 +674,11 @@ class _PlayerStatsModalState extends State<PlayerStatsModal> with SingleTickerPr
                           ),
                         ),
                         // Avatar
-                        CircleAvatar(
-                          radius: 16,
-                          backgroundColor: isCurrentPlayer ? AppTheme.neonLime : AppTheme.surfaceBorder,
-                          child: Text(
-                            username.isNotEmpty ? username[0].toUpperCase() : 'P',
-                            style: TextStyle(
-                              color: isCurrentPlayer ? Colors.black : Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
+                        PlayerAvatarWidget(
+                          avatarId: player['avatar_id'] as String?,
+                          size: 34,
+                          showBadge: false,
+                          isSelected: isCurrentPlayer,
                         ),
                         const SizedBox(width: 10),
                         // Username + You chip

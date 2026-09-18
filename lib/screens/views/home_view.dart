@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../models/challenge_model.dart';
+import '../../models/player_avatar.dart';
 import '../../models/tournament_model.dart';
 import '../../services/game_state_manager.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/animated_character_display.dart';
+import '../../widgets/game_2d_button.dart';
+import '../../widgets/game_2d_text.dart';
+import '../../widgets/player_avatar.dart';
 import '../auth/register_screen.dart';
 import 'player_stats_modal.dart';
 
@@ -172,14 +176,13 @@ class HomeView extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 14),
-                    const Text(
+                    Game2DText.hero(
                       'Pickleball Smash',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.5,
-                      ),
+                      fontSize: 28,
+                      gradient: AppTheme.playButtonGradient,
+                      strokeColor: const Color(0xFF060B18),
+                      strokeWidth: 4.0,
+                      shadowOffset: const Offset(0, 3.5),
                     ),
                     const SizedBox(height: 6),
                     const Text(
@@ -196,43 +199,19 @@ class HomeView extends StatelessWidget {
                       runSpacing: 12,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        ElevatedButton.icon(
+                        Game2DButton(
                           onPressed: onPlayQuickMatch,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.neonLime,
-                            foregroundColor: Colors.black,
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            elevation: 8,
-                            shadowColor: AppTheme.neonLime.withValues(alpha: 0.5),
-                          ),
-                          icon: const Icon(Icons.play_arrow_rounded, size: 26),
-                          label: const Text(
-                            'QUICK MATCH',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1,
-                            ),
-                          ),
+                          text: 'QUICK MATCH',
+                          icon: Icons.play_arrow_rounded,
+                          variant: GameButtonVariant.primary,
+                          size: GameButtonSize.large,
                         ),
-                        OutlinedButton.icon(
+                        Game2DButton(
                           onPressed: onOpenTournament,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          icon: const Icon(Icons.emoji_events_outlined, size: 20),
-                          label: const Text(
-                            'Tournaments',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                          text: 'Tournaments',
+                          icon: Icons.emoji_events_outlined,
+                          variant: GameButtonVariant.cyan,
+                          size: GameButtonSize.large,
                         ),
                       ],
                     ),
@@ -322,13 +301,12 @@ class HomeView extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    Game2DText.title(
                       activeTournament.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      fontSize: 18,
+                      textColor: Colors.white,
+                      strokeWidth: 2.5,
+                      shadowOffset: const Offset(0, 2),
                     ),
                     Text(
                       currentMatch != null
@@ -361,15 +339,27 @@ class HomeView extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   Expanded(
-                    child: Text(
-                      state.playerName,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        PlayerAvatarWidget(
+                          avatarId: state.playerAvatarId,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            state.playerName,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Container(
@@ -389,15 +379,27 @@ class HomeView extends StatelessWidget {
                     ),
                   ),
                   Expanded(
-                    child: Text(
-                      currentMatch.player2Name,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            currentMatch.player2Name,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        PlayerAvatarWidget(
+                          avatar: PlayerAvatar.getForOpponent(currentMatch.player2Name),
+                          size: 24,
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -407,19 +409,13 @@ class HomeView extends StatelessWidget {
           ],
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
+            child: Game2DButton(
               onPressed: onOpenTournament,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.trophyAmber,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: Text(
-                currentMatch != null ? 'VIEW BRACKET' : 'START NEW CUP',
-                style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.8),
-              ),
+              text: currentMatch != null ? 'VIEW BRACKET' : 'START NEW CUP',
+              icon: Icons.emoji_events_rounded,
+              variant: GameButtonVariant.amber,
+              size: GameButtonSize.medium,
+              isFullWidth: true,
             ),
           ),
         ],
@@ -460,21 +456,20 @@ class HomeView extends StatelessWidget {
             spacing: 8,
             runSpacing: 4,
             children: [
-              const Row(
+              Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.flag_rounded, color: AppTheme.electricCyan, size: 20),
-                  SizedBox(width: 8),
+                  const Icon(Icons.flag_rounded, color: AppTheme.electricCyan, size: 20),
+                  const SizedBox(width: 8),
                   Flexible(
-                    child: Text(
+                    child: Game2DText.title(
                       'Active Challenge',
+                      fontSize: 16,
+                      textColor: Colors.white,
+                      strokeWidth: 2.2,
+                      shadowOffset: const Offset(0, 1.5),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
                     ),
                   ),
                 ],
@@ -593,7 +588,7 @@ class HomeView extends StatelessWidget {
                 ],
               ),
               if (pendingChallenge.isCompleted && !pendingChallenge.isClaimed)
-                ElevatedButton(
+                Game2DButton(
                   onPressed: () {
                     state.claimChallenge(pendingChallenge.id);
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -606,12 +601,10 @@ class HomeView extends StatelessWidget {
                       ),
                     );
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.neonLime,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  ),
-                  child: const Text('CLAIM', style: TextStyle(fontWeight: FontWeight.bold)),
+                  text: 'CLAIM',
+                  icon: Icons.card_giftcard_rounded,
+                  variant: GameButtonVariant.primary,
+                  size: GameButtonSize.small,
                 ),
             ],
           ),
@@ -637,21 +630,20 @@ class HomeView extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              const Row(
+              Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.analytics_outlined, color: AppTheme.neonLime, size: 20),
-                  SizedBox(width: 8),
+                  const Icon(Icons.analytics_outlined, color: AppTheme.neonLime, size: 20),
+                  const SizedBox(width: 8),
                   Flexible(
-                    child: Text(
+                    child: Game2DText.title(
                       'Career Performance',
+                      fontSize: 16,
+                      textColor: Colors.white,
+                      strokeWidth: 2.2,
+                      shadowOffset: const Offset(0, 1.5),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
                     ),
                   ),
                 ],
@@ -987,15 +979,15 @@ class HomeView extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(
+          Game2DText.score(
             value,
+            fontSize: 18,
+            textColor: Colors.white,
+            strokeWidth: 2.2,
+            shadowOffset: const Offset(0, 1.5),
+            textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
           ),
           const SizedBox(height: 4),
           Text(

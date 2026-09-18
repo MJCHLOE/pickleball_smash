@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import '../services/game_state_manager.dart';
 import '../theme/app_theme.dart';
+import '../widgets/avatar_picker_dialog.dart';
+import '../widgets/game_2d_text.dart';
+import '../widgets/player_avatar.dart';
+import '../widgets/smooth_lights_background.dart';
 import 'views/home_view.dart';
 import 'views/tournament_view.dart';
 import 'views/challenges_view.dart';
@@ -49,25 +53,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             return Scaffold(
               backgroundColor: AppTheme.background,
-              body: SafeArea(
-                child: Column(
-                  children: [
-                    // Top Player Profile & Currencies Header
-                    _buildTopHeader(context, state),
-                    const Divider(color: AppTheme.surfaceBorder, height: 1),
-                    // Body Area
-                    Expanded(
-                      child: isWide
-                          ? Row(
-                              children: [
-                                _buildNavigationRail(),
-                                const VerticalDivider(color: AppTheme.surfaceBorder, width: 1),
-                                Expanded(child: _buildCurrentView()),
-                              ],
-                            )
-                          : _buildCurrentView(),
-                    ),
-                  ],
+              body: SmoothLightsAlphabetBackground(
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      // Top Player Profile & Currencies Header
+                      _buildTopHeader(context, state),
+                      const Divider(color: AppTheme.surfaceBorder, height: 1),
+                      // Body Area
+                      Expanded(
+                        child: isWide
+                            ? Row(
+                                children: [
+                                  _buildNavigationRail(),
+                                  const VerticalDivider(color: AppTheme.surfaceBorder, width: 1),
+                                  Expanded(child: _buildCurrentView()),
+                                ],
+                              )
+                            : _buildCurrentView(),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               bottomNavigationBar: isWide ? null : _buildBottomNavigationBar(),
@@ -93,21 +99,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 2.0),
                 child: Row(
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.neonLime, width: 2),
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.sports_tennis, color: Colors.white, size: 20),
-                      ),
+                    PlayerAvatarWidget(
+                      avatarId: state.playerAvatarId,
+                      size: 40,
+                      showBadge: true,
+                      onTap: () => AvatarPickerDialog.show(context),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -118,30 +114,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Row(
                             children: [
                               Flexible(
-                                child: Text(
+                                child: Game2DText(
                                   state.playerName,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  textColor: Colors.white,
+                                  strokeWidth: 2.0,
+                                  shadowOffset: const Offset(0, 1.5),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               const SizedBox(width: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.neonLime,
-                                  borderRadius: BorderRadius.circular(5),
+                                  color: const Color(0xFF1B5E20),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFF090D16), width: 1),
                                 ),
-                                child: Text(
-                                  'LVL ${state.playerLevel}',
-                                  style: const TextStyle(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 9,
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 1.5),
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.neonLime,
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                  child: Text(
+                                    'LVL ${state.playerLevel}',
+                                    style: const TextStyle(
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 9,
+                                      letterSpacing: 0.5,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -222,26 +227,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String value,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceLight,
+        color: const Color(0xFF090D16),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: iconColor.withValues(alpha: 0.3), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: iconColor, size: 14),
-          const SizedBox(width: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-            ),
+        border: Border.all(color: const Color(0xFF090D16), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            offset: const Offset(0, 2),
+            blurRadius: 3,
           ),
         ],
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E293B),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: iconColor.withValues(alpha: 0.35), width: 1.0),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: iconColor, size: 14),
+            const SizedBox(width: 4),
+            Game2DText.score(
+              value,
+              fontSize: 12,
+              textColor: Colors.white,
+              strokeWidth: 2.0,
+              shadowOffset: const Offset(0, 1.5),
+            ),
+          ],
+        ),
       ),
     );
   }
