@@ -4,7 +4,6 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import '../models/challenge_model.dart';
 import '../models/game_settings.dart';
 import '../models/tournament_model.dart';
@@ -43,13 +42,9 @@ class DatabaseService {
   Future<Database?> _initDatabase() async {
     try {
       if (kIsWeb) {
-        databaseFactory = databaseFactoryFfiWeb;
-        return await openDatabase(
-          'pickleball_smash.db',
-          version: 2,
-          onCreate: _onCreate,
-          onUpgrade: _onUpgrade,
-        );
+        // Web environments use resilient in-memory storage immediately
+        debugPrint('Web platform detected: using resilient in-memory database store');
+        return null;
       }
 
       if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -536,6 +531,85 @@ class DatabaseService {
 
     final list = _fallbackMatchHistory.where((m) => m['user_id'] == userId).take(limit).toList();
     return list;
+  }
+
+  Future<List<Map<String, dynamic>>> getAllPlayersLeaderboard({int limit = 50}) async {
+    final db = await database;
+    if (db != null) {
+      try {
+        final results = await db.rawQuery('''
+          SELECT 
+            u.id as user_id, 
+            u.username, 
+            u.created_at,
+            COALESCE(p.player_level, 1) as player_level,
+            COALESCE(p.player_xp, 0) as player_xp,
+            COALESCE(p.coins, 500) as coins,
+            COALESCE(p.trophies, 0) as trophies,
+            COALESCE(p.matches_played, 0) as matches_played,
+            COALESCE(p.matches_won, 0) as matches_won,
+            COALESCE(p.total_smashes, 0) as total_smashes,
+            COALESCE(p.best_streak, 0) as best_streak,
+            COALESCE(p.current_streak, 0) as current_streak
+          FROM users u
+          LEFT JOIN player_data p ON u.id = p.user_id
+          ORDER BY COALESCE(p.trophies, 0) DESC, COALESCE(p.matches_won, 0) DESC, COALESCE(p.player_level, 1) DESC, u.id DESC
+          LIMIT ?
+        ''', [limit]);
+
+        if (results.isNotEmpty) {
+          return results.map((row) {
+            final played = (row['matches_played'] as num?)?.toInt() ?? 0;
+            final won = (row['matches_won'] as num?)?.toInt() ?? 0;
+            final winRate = played > 0 ? ((won / played) * 100).round() : 0;
+            return {
+              ...row,
+              'win_rate': winRate,
+              'matches_lost': played - won,
+            };
+          }).toList();
+        }
+      } catch (e) {
+        debugPrint('SQLite getAllPlayersLeaderboard error: $e');
+      }
+    }
+
+    // Fallback store
+    final list = <Map<String, dynamic>>[];
+    for (final u in _fallbackUsers.values) {
+      final userId = u['id'] as int;
+      final data = _fallbackPlayerData[userId] ?? {};
+      final played = (data['matchesPlayed'] as num?)?.toInt() ?? 0;
+      final won = (data['matchesWon'] as num?)?.toInt() ?? 0;
+      final winRate = played > 0 ? ((won / played) * 100).round() : 0;
+      list.add({
+        'user_id': userId,
+        'username': u['username'] as String,
+        'created_at': u['created_at'] as String,
+        'player_level': (data['playerLevel'] as num?)?.toInt() ?? 1,
+        'player_xp': (data['playerXp'] as num?)?.toInt() ?? 0,
+        'coins': (data['coins'] as num?)?.toInt() ?? 500,
+        'trophies': (data['trophies'] as num?)?.toInt() ?? 0,
+        'matches_played': played,
+        'matches_won': won,
+        'matches_lost': played - won,
+        'win_rate': winRate,
+        'total_smashes': (data['totalSmashes'] as num?)?.toInt() ?? 0,
+        'best_streak': (data['bestStreak'] as num?)?.toInt() ?? 0,
+        'current_streak': (data['currentStreak'] as num?)?.toInt() ?? 0,
+      });
+    }
+
+    list.sort((a, b) {
+      final tA = a['trophies'] as int;
+      final tB = b['trophies'] as int;
+      if (tB != tA) return tB.compareTo(tA);
+      final wA = a['matches_won'] as int;
+      final wB = b['matches_won'] as int;
+      return wB.compareTo(wA);
+    });
+
+    return list.take(limit).toList();
   }
 
   // Close database

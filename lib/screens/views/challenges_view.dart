@@ -131,26 +131,30 @@ class _ChallengesViewState extends State<ChallengesView> {
   Widget _buildTabSelector() {
     return Row(
       children: [
-        _buildTabButton(
-          title: 'Daily Quests',
-          icon: Icons.calendar_today_rounded,
-          isSelected: _selectedTab == ChallengeType.daily,
-          onTap: () {
-            setState(() {
-              _selectedTab = ChallengeType.daily;
-            });
-          },
+        Expanded(
+          child: _buildTabButton(
+            title: 'Daily Quests',
+            icon: Icons.calendar_today_rounded,
+            isSelected: _selectedTab == ChallengeType.daily,
+            onTap: () {
+              setState(() {
+                _selectedTab = ChallengeType.daily;
+              });
+            },
+          ),
         ),
-        const SizedBox(width: 12),
-        _buildTabButton(
-          title: 'Career Milestones',
-          icon: Icons.workspace_premium_rounded,
-          isSelected: _selectedTab == ChallengeType.career,
-          onTap: () {
-            setState(() {
-              _selectedTab = ChallengeType.career;
-            });
-          },
+        const SizedBox(width: 10),
+        Expanded(
+          child: _buildTabButton(
+            title: 'Career Milestones',
+            icon: Icons.workspace_premium_rounded,
+            isSelected: _selectedTab == ChallengeType.career,
+            onTap: () {
+              setState(() {
+                _selectedTab = ChallengeType.career;
+              });
+            },
+          ),
         ),
       ],
     );
@@ -167,7 +171,7 @@ class _ChallengesViewState extends State<ChallengesView> {
       borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected ? AppTheme.electricCyan.withValues(alpha: 0.15) : AppTheme.surface,
           borderRadius: BorderRadius.circular(14),
@@ -177,19 +181,24 @@ class _ChallengesViewState extends State<ChallengesView> {
           ),
         ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
               size: 16,
               color: isSelected ? AppTheme.electricCyan : AppTheme.textMuted,
             ),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: TextStyle(
-                color: isSelected ? Colors.white : AppTheme.textMuted,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                fontSize: 13,
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : AppTheme.textMuted,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  fontSize: 13,
+                ),
               ),
             ),
           ],

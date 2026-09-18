@@ -23,20 +23,22 @@ class GameStateManager extends ChangeNotifier {
   int playerXp = 0;
   int xpToNextLevel = 500;
   int coins = 500;
-  int trophies = 50;
+  int trophies = 0;
 
-  // Stats
-  int matchesPlayed = 24;
-  int matchesWon = 19;
-  int totalSmashes = 187;
-  int bestStreak = 6;
-  int currentStreak = 3;
+  // Stats - Individual to each player
+  int matchesPlayed = 0;
+  int matchesWon = 0;
+  int totalSmashes = 0;
+  int bestStreak = 0;
+  int currentStreak = 0;
 
   // In-memory match history for guest sessions
   final List<Map<String, dynamic>> _guestMatchHistory = [];
 
+  int get matchesLost => matchesPlayed - matchesWon;
   double get winRate => matchesPlayed > 0 ? (matchesWon / matchesPlayed) * 100 : 0.0;
   double get xpProgress => (playerXp / xpToNextLevel).clamp(0.0, 1.0);
+  double get averageSmashesPerMatch => matchesPlayed > 0 ? (totalSmashes / matchesPlayed) : 0.0;
 
   // Settings
   GameSettings settings = const GameSettings();
@@ -48,6 +50,16 @@ class GameStateManager extends ChangeNotifier {
   List<ChallengeItem> challenges = [];
 
   void _initDefaultData() {
+    playerLevel = 1;
+    playerXp = 0;
+    xpToNextLevel = 500;
+    coins = 500;
+    trophies = 0;
+    matchesPlayed = 0;
+    matchesWon = 0;
+    totalSmashes = 0;
+    bestStreak = 0;
+    currentStreak = 0;
     _initDefaultTournaments();
     _initDefaultChallenges();
   }
@@ -64,24 +76,20 @@ class GameStateManager extends ChangeNotifier {
         rewardCoins: 250,
         rewardTrophies: 50,
         isUnlocked: true,
-        currentMatchIndex: 1, // Currently on Semi-Finals
+        currentMatchIndex: 0,
         matches: [
           BracketMatch(
             id: 'rookie_qf',
             roundTitle: 'Quarter-Final',
             player1Name: playerName,
             player2Name: 'Ben Dinker',
-            player1Score: 11,
-            player2Score: 4,
-            isCompleted: true,
-            isPlayerWinner: true,
+            isCurrentMatch: true,
           ),
           BracketMatch(
             id: 'rookie_sf',
             roundTitle: 'Semi-Final',
-            player1Name: playerName,
+            player1Name: 'TBD',
             player2Name: 'Sarah Spin',
-            isCurrentMatch: true,
           ),
           BracketMatch(
             id: 'rookie_final',
@@ -167,7 +175,7 @@ class GameStateManager extends ChangeNotifier {
         title: 'First Serve',
         description: 'Play 1 match today in any mode',
         goal: 1,
-        currentProgress: 1,
+        currentProgress: 0,
         rewardCoins: 100,
         rewardXp: 50,
         isClaimed: false,
@@ -178,7 +186,7 @@ class GameStateManager extends ChangeNotifier {
         title: 'Power Smasher',
         description: 'Execute 8 powerful smash strikes',
         goal: 8,
-        currentProgress: 5,
+        currentProgress: 0,
         rewardCoins: 150,
         rewardXp: 80,
         isClaimed: false,
@@ -200,7 +208,7 @@ class GameStateManager extends ChangeNotifier {
         title: 'Smash Centurion',
         description: 'Perform 100 smash attacks across all matches',
         goal: 100,
-        currentProgress: 100,
+        currentProgress: 0,
         rewardCoins: 500,
         rewardXp: 300,
         isClaimed: false,
@@ -211,10 +219,10 @@ class GameStateManager extends ChangeNotifier {
         title: 'Tournament Contender',
         description: 'Win your first tournament knockout match',
         goal: 1,
-        currentProgress: 1,
+        currentProgress: 0,
         rewardCoins: 350,
         rewardXp: 200,
-        isClaimed: true,
+        isClaimed: false,
         type: ChallengeType.career,
       ),
       ChallengeItem(
@@ -222,7 +230,7 @@ class GameStateManager extends ChangeNotifier {
         title: 'Trophy Hunter',
         description: 'Accumulate 500 total championship trophies',
         goal: 500,
-        currentProgress: 420,
+        currentProgress: 0,
         rewardCoins: 1000,
         rewardXp: 500,
         isClaimed: false,
@@ -233,7 +241,7 @@ class GameStateManager extends ChangeNotifier {
         title: 'Rising Star',
         description: 'Reach Player Level 5',
         goal: 5,
-        currentProgress: 3,
+        currentProgress: 1,
         rewardCoins: 600,
         rewardXp: 250,
         isClaimed: false,
@@ -464,7 +472,6 @@ class GameStateManager extends ChangeNotifier {
     String username, {
     bool preserveCurrentDataIfNew = false,
   }) async {
-    final wasGuest = isGuest;
     currentUserId = userId;
     currentUsername = username;
     isGuest = false;
@@ -499,10 +506,11 @@ class GameStateManager extends ChangeNotifier {
     } else {
       // New registered user!
       // If user played as guest and wanted to save their progress, preserve it!
-      if (!preserveCurrentDataIfNew && (!wasGuest || matchesPlayed == 0)) {
+      if (!preserveCurrentDataIfNew) {
         _initDefaultData();
-      } else if (preserveCurrentDataIfNew && _guestMatchHistory.isNotEmpty) {
-        // Migrate in-memory guest match history into SQLite
+        _guestMatchHistory.clear();
+      } else if (_guestMatchHistory.isNotEmpty) {
+        // Migrate in-memory guest match history into SQLite for this new user
         for (final m in _guestMatchHistory.reversed) {
           await DatabaseService.instance.recordMatch(
             userId: userId,
@@ -567,16 +575,7 @@ class GameStateManager extends ChangeNotifier {
   }
 
   void resetAllData() {
-    playerLevel = 1;
-    playerXp = 0;
-    xpToNextLevel = 500;
-    coins = 500;
-    trophies = 50;
-    matchesPlayed = 0;
-    matchesWon = 0;
-    totalSmashes = 0;
-    bestStreak = 0;
-    currentStreak = 0;
+    _guestMatchHistory.clear();
     settings = const GameSettings();
     _initDefaultData();
     saveCurrentProgress();

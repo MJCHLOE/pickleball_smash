@@ -7,6 +7,7 @@ import 'package:pickleball_smash/screens/auth/register_screen.dart';
 import 'package:pickleball_smash/screens/dashboard_screen.dart';
 import 'package:pickleball_smash/services/database_service.dart';
 import 'package:pickleball_smash/services/game_state_manager.dart';
+import 'package:pickleball_smash/widgets/animated_character_display.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -266,7 +267,8 @@ void main() {
       });
 
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
 
       // Should now be on DashboardScreen with new username
       expect(find.byType(DashboardScreen), findsOneWidget);
@@ -295,7 +297,7 @@ void main() {
 
   group('Responsive Dashboard Widget Tests', () {
     testWidgets('Renders BottomNavigationBar on compact screen (< 700px)', (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(500, 800);
+      tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
@@ -310,6 +312,18 @@ void main() {
 
       expect(find.text('Guest Player'), findsAtLeast(1));
       expect(find.byIcon(Icons.monetization_on_rounded), findsOneWidget);
+    });
+
+    testWidgets('Renders Dashboard on ultra-compact 320px screen without any right overflow', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(const PickleballApp(initialScreen: DashboardScreen()));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DashboardScreen), findsOneWidget);
+      expect(find.text('Pickleball Smash'), findsOneWidget);
     });
 
     testWidgets('Renders NavigationRail on wide screen (>= 700px)', (WidgetTester tester) async {
@@ -370,6 +384,8 @@ void main() {
 
       final state = GameStateManager.instance;
       state.loginAsGuest();
+      // Complete a challenge so it can be claimed
+      state.challenges.firstWhere((c) => c.id == 'c_career_1').currentProgress = 100;
       final initialCoins = state.coins;
 
       await tester.pumpWidget(const PickleballApp(initialScreen: DashboardScreen()));
@@ -411,6 +427,214 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Playing as Guest. Create an account to permanently sync matches to SQLite.'), findsOneWidget);
+    });
+  });
+
+  group('Per-Player Statistics & Leaderboard Tests', () {
+    test('Each player has their own isolated statistics in SQLite', () async {
+      final db = DatabaseService.instance;
+      final state = GameStateManager.instance;
+
+      // 1. Register Player Alpha
+      final timestamp = DateTime.now().microsecondsSinceEpoch;
+      final userAlpha = 'Alpha_$timestamp';
+      final regAlpha = await db.registerUser(username: userAlpha, password: 'password123');
+      final idAlpha = regAlpha['userId'] as int;
+
+      await state.loginWithUser(idAlpha, userAlpha, preserveCurrentDataIfNew: false);
+      expect(state.matchesPlayed, 0);
+      expect(state.matchesWon, 0);
+
+      // Record 2 wins for Player Alpha
+      state.recordMatchResult(won: true, smashesHit: 6, opponentName: 'Bot 1');
+      state.recordMatchResult(won: true, smashesHit: 4, opponentName: 'Bot 2');
+      await state.saveCurrentProgress();
+
+      expect(state.matchesPlayed, 2);
+      expect(state.matchesWon, 2);
+      expect(state.totalSmashes, 10);
+
+      // 2. Register Player Beta (should have brand new clean stats)
+      final userBeta = 'Beta_${timestamp + 100}';
+      final regBeta = await db.registerUser(username: userBeta, password: 'password123');
+      final idBeta = regBeta['userId'] as int;
+
+      await state.loginWithUser(idBeta, userBeta, preserveCurrentDataIfNew: false);
+      // Verify Player Beta starts at 0 matches (no data leakage from Alpha)
+      expect(state.matchesPlayed, 0);
+      expect(state.matchesWon, 0);
+      expect(state.totalSmashes, 0);
+
+      // Record 1 win for Player Beta
+      state.recordMatchResult(won: true, smashesHit: 3, opponentName: 'Bot 3');
+      await state.saveCurrentProgress();
+
+      expect(state.matchesPlayed, 1);
+      expect(state.matchesWon, 1);
+      expect(state.totalSmashes, 3);
+
+      // 3. Re-load Player Alpha and verify their 2 matches are intact in SQLite
+      final alphaData = await db.loadPlayerData(idAlpha);
+      expect(alphaData, isNotNull);
+      expect(alphaData!['matchesPlayed'], 2);
+      expect(alphaData['matchesWon'], 2);
+      expect(alphaData['totalSmashes'], 10);
+
+      // 4. Verify Leaderboard reflects individual player records
+      final leaderboard = await db.getAllPlayersLeaderboard(limit: 500);
+      expect(leaderboard.any((p) => p['username'] == userAlpha), true);
+      expect(leaderboard.any((p) => p['username'] == userBeta), true);
+
+      final alphaInLb = leaderboard.firstWhere((p) => p['username'] == userAlpha);
+      final betaInLb = leaderboard.firstWhere((p) => p['username'] == userBeta);
+
+      expect(alphaInLb['matches_won'], 2);
+      expect(betaInLb['matches_won'], 1);
+    });
+
+    testWidgets('Tapping All Records in HomeView opens PlayerStatsModal', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 720);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final state = GameStateManager.instance;
+      state.loginAsGuest();
+
+      await tester.pumpWidget(const PickleballApp(initialScreen: DashboardScreen()));
+      await tester.pumpAndSettle();
+
+      final allRecordsBtn = find.text('All Records');
+      expect(allRecordsBtn, findsOneWidget);
+
+      await tester.tap(allRecordsBtn);
+      await tester.pumpAndSettle();
+
+      expect(find.text('PLAYER STATISTICS & RECORDS'), findsOneWidget);
+      expect(find.text('My Career Records'), findsOneWidget);
+      expect(find.text('All Players Leaderboard'), findsOneWidget);
+      expect(find.text('CAREER PERFORMANCE'), findsOneWidget);
+      expect(find.text('PERSONAL MATCH HISTORY'), findsOneWidget);
+
+      // Switch to Leaderboard tab
+      await tester.tap(find.text('All Players Leaderboard'));
+      await tester.pump();
+      await tester.runAsync(() async {
+        await Future.delayed(const Duration(milliseconds: 100));
+      });
+      await tester.pumpAndSettle();
+
+      expect(find.text('Official Pickleball Smash Rankings. Sorted by Trophies and Match Victories.'), findsOneWidget);
+    });
+  });
+
+  group('AnimatedCharacterDisplay Tests', () {
+    testWidgets('Renders AnimatedCharacterDisplay with initial controls', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: AnimatedCharacterDisplay(
+                height: 180,
+                showControls: true,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byType(AnimatedCharacterDisplay), findsOneWidget);
+      expect(find.text('TAP TO SMASH'), findsOneWidget);
+      expect(find.text('Idle'), findsOneWidget);
+      expect(find.text('Run'), findsOneWidget);
+      expect(find.text('Smash'), findsOneWidget);
+    });
+
+    testWidgets('Tapping Smash triggers smash animation and feedback', (WidgetTester tester) async {
+      bool smashTriggered = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: AnimatedCharacterDisplay(
+                height: 180,
+                showControls: true,
+                onSmashTriggered: () {
+                  smashTriggered = true;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.text('Smash'));
+      await tester.pump();
+
+      expect(smashTriggered, isTrue);
+      expect(find.text('⚡ POWER SMASH!'), findsOneWidget);
+      expect(find.text('SMASHING!'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(find.text('TAP TO SMASH'), findsOneWidget);
+    });
+
+    testWidgets('Switching character toggle between Alex and Maya works cleanly', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: AnimatedCharacterDisplay(
+                height: 180,
+                showControls: true,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final mayaSegment = find.textContaining('Maya');
+      expect(mayaSegment, findsOneWidget);
+      await tester.tap(mayaSegment);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final alexSegment = find.textContaining('Alex');
+      expect(alexSegment, findsOneWidget);
+      await tester.tap(alexSegment);
+      await tester.pump(const Duration(milliseconds: 100));
+    });
+
+    testWidgets('Renders responsively on ultra-compact 320px screen width without overflow', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Padding(
+                padding: EdgeInsets.all(8.0),
+                child: AnimatedCharacterDisplay(
+                  height: 160,
+                  showControls: true,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(AnimatedCharacterDisplay), findsOneWidget);
     });
   });
 }

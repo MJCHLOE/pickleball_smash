@@ -25,6 +25,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   PlayerState currentState = PlayerState.idle;
   
   final bool isPlayerOne;
+  final bool isFemale;
   final JoystickComponent? joystick;
   late PaddleComponent paddle;
   
@@ -34,8 +35,12 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   int hAxis = 0;
   int vAxis = 0;
 
-  PlayerComponent({this.isPlayerOne = true, this.joystick}) 
-      : currentDirection = isPlayerOne ? PlayerDirection.front : PlayerDirection.behind;
+  PlayerComponent({
+    this.isPlayerOne = true, 
+    bool? isFemale,
+    this.joystick,
+  })  : isFemale = isFemale ?? (!isPlayerOne),
+        currentDirection = isPlayerOne ? PlayerDirection.front : PlayerDirection.behind;
 
   @override
   bool onKeyEvent(KeyEvent event, Set<LogicalKeyboardKey> keysPressed) {
@@ -69,18 +74,53 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     // Add hitbox for ball collisions
     add(RectangleHitbox());
     
-    // Slash animations have 6 frames (384 / 64)
-    frontSlash = await _loadAnimation('male1_sprite/male_frontslash.png', amount: 6, loop: false, stepTime: 0.08);
-    behindSlash = await _loadAnimation('male1_sprite/male_behindslash.png', amount: 6, loop: false, stepTime: 0.08);
+    if (isFemale) {
+      // Female sprites (8 frames of 64x64)
+      frontRun = await _loadAnimation('female1_sprite/female_runfront.png', amount: 8);
+      behindRun = await _loadAnimation('female1_sprite/female_runbehind.png', amount: 8);
+      leftRun = await _loadAnimation('female1_sprite/female_runleft.png', amount: 8);
+      rightRun = await _loadAnimation('female1_sprite/female_runright.png', amount: 8);
 
-    // Idle animations have 2 frames (128 / 64)
-    p1Idle = await _loadAnimation('male1_sprite/male_p1sideidle.png', amount: 2);
-    p2Idle = await _loadAnimation('male1_sprite/male_p2sideidle.png', amount: 2);
+      p1Idle = await _loadAnimation(
+        'female1_sprite/female_runfront.png',
+        amount: 2,
+        textureSize: Vector2(64, 64),
+        stepTime: 0.35,
+      );
+      p2Idle = await _loadAnimation(
+        'female1_sprite/female_runbehind.png',
+        amount: 2,
+        textureSize: Vector2(64, 64),
+        stepTime: 0.35,
+      );
 
-    frontRun = await _loadAnimation('male1_sprite/male_frontrun.png', amount: 8);
-    behindRun = await _loadAnimation('male1_sprite/male_behindrun.png', amount: 8);
-    leftRun = await _loadAnimation('male1_sprite/male_leftrun.png', amount: 8);
-    rightRun = await _loadAnimation('male1_sprite/male_rightrun.png', amount: 8);
+      frontSlash = await _loadAnimation(
+        'female1_sprite/female_runfront.png',
+        amount: 8,
+        loop: false,
+        stepTime: 0.04,
+      );
+      behindSlash = await _loadAnimation(
+        'female1_sprite/female_runbehind.png',
+        amount: 8,
+        loop: false,
+        stepTime: 0.04,
+      );
+    } else {
+      // Male sprites
+      // Slash animations have 6 frames (384 / 64)
+      frontSlash = await _loadAnimation('male1_sprite/male_frontslash.png', amount: 6, loop: false, stepTime: 0.08);
+      behindSlash = await _loadAnimation('male1_sprite/male_behindslash.png', amount: 6, loop: false, stepTime: 0.08);
+
+      // Idle animations have 2 frames (128 / 64)
+      p1Idle = await _loadAnimation('male1_sprite/male_p1sideidle.png', amount: 2);
+      p2Idle = await _loadAnimation('male1_sprite/male_p2sideidle.png', amount: 2);
+
+      frontRun = await _loadAnimation('male1_sprite/male_frontrun.png', amount: 8);
+      behindRun = await _loadAnimation('male1_sprite/male_behindrun.png', amount: 8);
+      leftRun = await _loadAnimation('male1_sprite/male_leftrun.png', amount: 8);
+      rightRun = await _loadAnimation('male1_sprite/male_rightrun.png', amount: 8);
+    }
 
     animation = isPlayerOne ? p1Idle : p2Idle;
     
@@ -181,15 +221,21 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     }
   }
 
-  Future<SpriteAnimation> _loadAnimation(String path, {required int amount, double stepTime = 0.1, bool loop = true}) async {
+  Future<SpriteAnimation> _loadAnimation(
+    String path, {
+    required int amount,
+    double stepTime = 0.1,
+    bool loop = true,
+    Vector2? textureSize,
+  }) async {
     final image = await game.images.load(path);
+    final frameSize = textureSize ?? Vector2(image.width / amount, image.height.toDouble());
     return SpriteAnimation.fromFrameData(
       image,
       SpriteAnimationData.sequenced(
         amount: amount,
         stepTime: stepTime,
-        // Calculate the size of a single frame (Image Width / number of frames)
-        textureSize: Vector2(image.width / amount, image.height.toDouble()),
+        textureSize: frameSize,
         loop: loop,
       ),
     );

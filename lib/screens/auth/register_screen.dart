@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/database_service.dart';
 import '../../services/game_state_manager.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/game_2d_button.dart';
 import '../dashboard_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -307,36 +308,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: 24),
 
                       // Register Button
-                      ElevatedButton(
+                      // Submit button (2D Arcade Button)
+                      Game2DButton(
                         key: const ValueKey('register_submit_btn'),
                         onPressed: _isLoading ? null : _handleRegister,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.neonLime,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          elevation: 6,
-                          shadowColor: AppTheme.neonLime.withValues(alpha: 0.4),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                                ),
-                              )
-                            : const Text(
-                                'CREATE ACCOUNT',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.2,
-                                ),
-                              ),
+                        text: 'CREATE ACCOUNT',
+                        icon: Icons.person_add_alt_1_rounded,
+                        variant: GameButtonVariant.primary,
+                        size: GameButtonSize.large,
+                        isFullWidth: true,
+                        isLoading: _isLoading,
                       ),
                       const SizedBox(height: 16),
 
@@ -366,15 +347,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Guest option
+                      // Guest option (2D Arcade Button)
                       Center(
-                        child: TextButton.icon(
+                        child: Game2DButton(
                           onPressed: _handlePlayAsGuest,
-                          icon: const Icon(Icons.play_arrow_rounded, color: AppTheme.textMuted, size: 18),
-                          label: const Text(
-                            'Skip for now, play as Guest',
-                            style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
-                          ),
+                          text: 'Play as Guest',
+                          icon: Icons.sports_tennis_rounded,
+                          variant: GameButtonVariant.dark,
+                          size: GameButtonSize.small,
                         ),
                       ),
                     ],

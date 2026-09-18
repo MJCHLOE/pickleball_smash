@@ -3,6 +3,7 @@ import '../../models/game_settings.dart';
 import '../../services/game_state_manager.dart';
 import '../../theme/app_theme.dart';
 import '../auth/login_screen.dart';
+import 'player_stats_modal.dart';
 
 class SettingsView extends StatelessWidget {
   const SettingsView({super.key});
@@ -94,25 +95,27 @@ class SettingsView extends StatelessWidget {
           child: const Icon(Icons.tune_rounded, color: Colors.white, size: 24),
         ),
         const SizedBox(width: 12),
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Game Settings',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Game Settings',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            Text(
-              'Customize audio, controls, theme, and gameplay options',
-              style: TextStyle(
-                color: AppTheme.textMuted,
-                fontSize: 13,
+              Text(
+                'Customize audio, controls, theme, and gameplay options',
+                style: TextStyle(
+                  color: AppTheme.textMuted,
+                  fontSize: 13,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
@@ -569,6 +572,25 @@ class SettingsView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
+          // View Stats & Records button
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => PlayerStatsModal.show(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.neonLime,
+                side: const BorderSide(color: AppTheme.neonLime),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              icon: const Icon(Icons.analytics_rounded, size: 18),
+              label: const Text(
+                'VIEW RECORDS & LEADERBOARD',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           if (isGuest)
             SizedBox(
               width: double.infinity,

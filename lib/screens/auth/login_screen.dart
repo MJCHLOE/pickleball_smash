@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/database_service.dart';
 import '../../services/game_state_manager.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/game_2d_button.dart';
 import '../dashboard_screen.dart';
 import 'register_screen.dart';
 
@@ -256,37 +257,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 24),
 
-                      // Sign In Button
-                      ElevatedButton(
+                      // Sign In Button (2D Arcade Button)
+                      Game2DButton(
                         key: const ValueKey('login_submit_btn'),
                         onPressed: _isLoading ? null : _handleLogin,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.neonLime,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          elevation: 6,
-                          shadowColor: AppTheme.neonLime.withValues(alpha: 0.4),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                                ),
-                              )
-                            : const Text(
-                                'SIGN IN',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.2,
-                                ),
-                              ),
+                        text: 'SIGN IN',
+                        icon: Icons.login_rounded,
+                        variant: GameButtonVariant.primary,
+                        size: GameButtonSize.large,
+                        isFullWidth: true,
+                        isLoading: _isLoading,
                       ),
                       const SizedBox(height: 16),
 
@@ -341,26 +321,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      // Play as Guest Button
-                      OutlinedButton.icon(
+                      // Play as Guest Button (2D Arcade Button)
+                      Game2DButton(
                         key: const ValueKey('play_as_guest_btn'),
                         onPressed: _handlePlayAsGuest,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: AppTheme.surfaceBorder, width: 1.5),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        icon: const Icon(Icons.play_circle_outline_rounded, color: AppTheme.neonLime, size: 20),
-                        label: const Text(
-                          'PLAY AS GUEST',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
+                        text: 'PLAY AS GUEST',
+                        icon: Icons.sports_tennis_rounded,
+                        variant: GameButtonVariant.dark,
+                        size: GameButtonSize.medium,
+                        isFullWidth: true,
                       ),
                     ],
                   ),

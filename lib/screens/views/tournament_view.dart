@@ -94,25 +94,27 @@ class _TournamentViewState extends State<TournamentView> {
           child: const Icon(Icons.emoji_events, color: AppTheme.trophyAmber, size: 24),
         ),
         const SizedBox(width: 12),
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Championship Tournaments',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Championship Tournaments',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            Text(
-              'Climb the knockout brackets and earn prestigious trophies',
-              style: TextStyle(
-                color: AppTheme.textMuted,
-                fontSize: 13,
+              Text(
+                'Climb the knockout brackets and earn prestigious trophies',
+                style: TextStyle(
+                  color: AppTheme.textMuted,
+                  fontSize: 13,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
@@ -497,24 +499,32 @@ class _TournamentViewState extends State<TournamentView> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Text(
-                      match.player1Name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                    Flexible(
+                      child: Text(
+                        match.player1Name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
                     const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8.0),
+                      padding: EdgeInsets.symmetric(horizontal: 6.0),
                       child: Text('vs', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                     ),
-                    Text(
-                      match.player2Name,
-                      style: TextStyle(
-                        color: match.isCurrentMatch ? AppTheme.electricCyan : Colors.white70,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
+                    Flexible(
+                      child: Text(
+                        match.player2Name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: match.isCurrentMatch ? AppTheme.electricCyan : Colors.white70,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
                   ],

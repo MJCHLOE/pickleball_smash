@@ -5,6 +5,7 @@ import 'views/home_view.dart';
 import 'views/tournament_view.dart';
 import 'views/challenges_view.dart';
 import 'views/settings_view.dart';
+import 'views/player_stats_modal.dart';
 import 'game_play_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -79,90 +80,120 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildTopHeader(BuildContext context, GameStateManager state) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
       color: AppTheme.surface,
       child: Row(
         children: [
-          // Player Avatar & Info
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppTheme.neonLime, width: 2),
-            ),
-            child: const Center(
-              child: Icon(Icons.sports_tennis, color: Colors.white, size: 24),
-            ),
-          ),
-          const SizedBox(width: 12),
+          // Player Avatar & Info - Tap to view individual stats and records
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
+            child: InkWell(
+              onTap: () => PlayerStatsModal.show(context),
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 2.0),
+                child: Row(
                   children: [
-                    Flexible(
-                      child: Text(
-                        state.playerName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                        overflow: TextOverflow.ellipsis,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.neonLime, width: 2),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.sports_tennis, color: Colors.white, size: 20),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.neonLime,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'LVL ${state.playerLevel}',
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 10,
-                        ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  state.playerName,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.neonLime,
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                child: Text(
+                                  'LVL ${state.playerLevel}',
+                                  style: const TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 9,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          // XP Progress bar
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: LinearProgressIndicator(
+                                    value: state.xpProgress,
+                                    backgroundColor: AppTheme.surfaceLight,
+                                    valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.electricCyan),
+                                    minHeight: 4,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                flex: 4,
+                                child: Text(
+                                  '${state.playerXp}/${state.xpToNextLevel} XP',
+                                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 9),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 5),
-                // XP Progress bar
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 100,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: state.xpProgress,
-                          backgroundColor: AppTheme.surfaceLight,
-                          valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.electricCyan),
-                          minHeight: 5,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${state.playerXp}/${state.xpToNextLevel} XP',
-                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 10),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
+          const SizedBox(width: 4),
+          // Leaderboard Icon Button
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.all(6),
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            icon: const Icon(Icons.leaderboard_rounded, color: AppTheme.neonLime, size: 20),
+            tooltip: 'All Players Leaderboard',
+            onPressed: () => PlayerStatsModal.show(context, initialTabIndex: 1),
+          ),
+          const SizedBox(width: 2),
           // Currencies Chips
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -172,7 +203,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 iconColor: AppTheme.goldCoin,
                 value: '${state.coins}',
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               _buildCurrencyChip(
                 icon: Icons.emoji_events_rounded,
                 iconColor: AppTheme.trophyAmber,
@@ -191,23 +222,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String value,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
         color: AppTheme.surfaceLight,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: iconColor.withValues(alpha: 0.3), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: iconColor, size: 16),
-          const SizedBox(width: 6),
+          Icon(icon, color: iconColor, size: 14),
+          const SizedBox(width: 4),
           Text(
             value,
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
-              fontSize: 13,
+              fontSize: 12,
             ),
           ),
         ],

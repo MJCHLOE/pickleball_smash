@@ -3,7 +3,9 @@ import '../../models/challenge_model.dart';
 import '../../models/tournament_model.dart';
 import '../../services/game_state_manager.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/animated_character_display.dart';
 import '../auth/register_screen.dart';
+import 'player_stats_modal.dart';
 
 class HomeView extends StatelessWidget {
   final VoidCallback onPlayQuickMatch;
@@ -117,116 +119,158 @@ class HomeView extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+            padding: const EdgeInsets.all(20.0),
+            child: LayoutBuilder(
+              builder: (context, heroConstraints) {
+                final isWide = heroConstraints.maxWidth >= 600;
+
+                final leftInfoColumn = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.neonLime.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppTheme.neonLime, width: 1),
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.neonLime.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppTheme.neonLime, width: 1),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.bolt, color: AppTheme.neonLime, size: 16),
+                              SizedBox(width: 4),
+                              Text(
+                                'READY TO SERVE',
+                                style: TextStyle(
+                                  color: AppTheme.neonLime,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Text(
+                            '1280x720 Court',
+                            style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Pickleball Smash',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
                       ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.bolt, color: AppTheme.neonLime, size: 16),
-                          SizedBox(width: 4),
-                          Text(
-                            'READY TO SERVE',
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Jump onto the court for a fast-paced singles duel. Use movement and timely smashes to dominate the match!',
+                      style: TextStyle(
+                        color: AppTheme.textMuted,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: onPlayQuickMatch,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.neonLime,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            elevation: 8,
+                            shadowColor: AppTheme.neonLime.withValues(alpha: 0.5),
+                          ),
+                          icon: const Icon(Icons.play_arrow_rounded, size: 26),
+                          label: const Text(
+                            'QUICK MATCH',
                             style: TextStyle(
-                              color: AppTheme.neonLime,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1,
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Text(
-                        '1280x720 Court',
-                        style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
-                      ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: onOpenTournament,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          icon: const Icon(Icons.emoji_events_outlined, size: 20),
+                          label: const Text(
+                            'Tournaments',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Pickleball Smash',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Jump onto the court for a fast-paced singles duel. Use movement and timely smashes to dominate the match!',
-                  style: TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 14,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: onPlayQuickMatch,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.neonLime,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 8,
-                        shadowColor: AppTheme.neonLime.withValues(alpha: 0.5),
-                      ),
-                      icon: const Icon(Icons.play_arrow_rounded, size: 28),
-                      label: const Text(
-                        'QUICK MATCH',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1,
+                );
+
+                if (isWide) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(flex: 3, child: leftInfoColumn),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        flex: 2,
+                        child: AnimatedCharacterDisplay(
+                          height: 190,
+                          showControls: true,
                         ),
                       ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: onOpenTournament,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                    ],
+                  );
+                } else {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      leftInfoColumn,
+                      const SizedBox(height: 16),
+                      const Center(
+                        child: AnimatedCharacterDisplay(
+                          height: 170,
+                          showControls: true,
                         ),
                       ),
-                      icon: const Icon(Icons.emoji_events_outlined, size: 20),
-                      label: const Text(
-                        'Tournaments',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  );
+                }
+              },
             ),
           ),
         ],
@@ -316,14 +360,20 @@ class HomeView extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  Text(
-                    state.playerName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
+                  Expanded(
+                    child: Text(
+                      state.playerName,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 6),
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.black26,
@@ -338,11 +388,16 @@ class HomeView extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Text(
-                    currentMatch.player2Name,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Text(
+                      currentMatch.player2Name,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -399,19 +454,27 @@ class HomeView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
             children: [
               const Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.flag_rounded, color: AppTheme.electricCyan, size: 20),
                   SizedBox(width: 8),
-                  Text(
-                    'Active Challenge',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                  Flexible(
+                    child: Text(
+                      'Active Challenge',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -473,10 +536,15 @@ class HomeView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -485,6 +553,7 @@ class HomeView extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(Icons.monetization_on, color: AppTheme.goldCoin, size: 14),
                         const SizedBox(width: 4),
@@ -499,7 +568,6 @@ class HomeView extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
@@ -507,6 +575,7 @@ class HomeView extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(Icons.star, color: AppTheme.electricCyan, size: 14),
                         const SizedBox(width: 4),
@@ -573,48 +642,71 @@ class HomeView extends StatelessWidget {
                 children: [
                   Icon(Icons.analytics_outlined, color: AppTheme.neonLime, size: 20),
                   SizedBox(width: 8),
-                  Text(
-                    'Career Performance',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                  Flexible(
+                    child: Text(
+                      'Career Performance',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
               ),
-              TextButton.icon(
-                onPressed: () => _showMatchHistory(context, state),
-                icon: const Icon(Icons.history_rounded, size: 16, color: AppTheme.electricCyan),
-                label: const Text(
-                  'Match History',
-                  style: TextStyle(
-                    color: AppTheme.electricCyan,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => PlayerStatsModal.show(context),
+                    icon: const Icon(Icons.leaderboard_rounded, size: 16, color: AppTheme.neonLime),
+                    label: const Text(
+                      'All Records',
+                      style: TextStyle(
+                        color: AppTheme.neonLime,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ),
-                ),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
+                  TextButton.icon(
+                    onPressed: () => _showMatchHistory(context, state),
+                    icon: const Icon(Icons.history_rounded, size: 16, color: AppTheme.electricCyan),
+                    label: const Text(
+                      'Match History',
+                      style: TextStyle(
+                        color: AppTheme.electricCyan,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
           const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final itemWidth = (constraints.maxWidth - 24) / 3;
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildStatItem('Matches', '${state.matchesPlayed}', itemWidth),
-                  _buildStatItem('Win Rate', '${state.winRate.toStringAsFixed(0)}%', itemWidth),
-                  _buildStatItem('Total Smashes', '${state.totalSmashes}', itemWidth),
-                ],
-              );
-            },
+          Row(
+            children: [
+              Expanded(child: _buildStatItem('Matches', '${state.matchesPlayed}')),
+              const SizedBox(width: 8),
+              Expanded(child: _buildStatItem('Win Rate', '${state.winRate.toStringAsFixed(0)}%')),
+              const SizedBox(width: 8),
+              Expanded(child: _buildStatItem('Total Smashes', '${state.totalSmashes}')),
+            ],
           ),
         ],
       ),
@@ -886,10 +978,9 @@ class HomeView extends StatelessWidget {
     );
   }
 
-  Widget _buildStatItem(String label, String value, double width) {
+  Widget _buildStatItem(String label, String value) {
     return Container(
-      width: width,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
       decoration: BoxDecoration(
         color: AppTheme.surfaceLight,
         borderRadius: BorderRadius.circular(12),
@@ -898,15 +989,19 @@ class HomeView extends StatelessWidget {
         children: [
           Text(
             value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 20,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: AppTheme.textMuted,
               fontSize: 11,

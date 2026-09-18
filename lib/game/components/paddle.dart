@@ -9,8 +9,11 @@ class PaddleComponent extends SpriteComponent with HasGameReference<PickleballGa
 
   @override
   Future<void> onLoad() async {
-    // Loading the specific paddle image from your assets
-    sprite = await game.loadSprite('male1_sprite/pickleballpaddle_for player1.png');
+    // Loading the specific paddle image from assets based on player
+    final paddleAsset = isPlayerOne
+        ? 'male1_sprite/pickleballpaddle_for player1.png'
+        : 'female1_sprite/pickleballpaddle_for player2.png';
+    sprite = await game.loadSprite(paddleAsset);
     
     // We assume the paddle size based on standard asset sizes.
     // If it's a different size, we can adjust this.
