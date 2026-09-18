@@ -214,6 +214,9 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     
     // Swing the paddle alongside the character
     paddle.swing();
+    if (isPlayerOne) {
+      game.onPlayerSmash();
+    }
   }
 
   void changeDirection(PlayerDirection newDirection) {

@@ -53,7 +53,11 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
 
     // Check bounds for scoring (Top and Bottom walls)
     if (position.y < -radius * 2 || position.y > 720 + radius * 2) {
-      // Score! (Just reset for now)
+      if (position.y < -radius * 2) {
+        game.onPointScored(isPlayerOne: true);
+      } else {
+        game.onPointScored(isPlayerOne: false);
+      }
       resetBall();
     }
   }
