@@ -954,8 +954,6 @@ void main() {
       final betaInBoard = leaderboard.firstWhere((p) => p['user_id'] == userBetaId);
       expect(alphaInBoard['avatar_id'], 'C:/photos/alpha_gallery_pic.png');
       expect(betaInBoard['avatar_id'], '/storage/emulated/0/DCIM/beta_camera.jpg');
-
-      state.loginAsGuest();
     });
 
     testWidgets('AvatarPickerDialog allows picking champions, saving custom photo URLs, and creating studio avatars', (WidgetTester tester) async {
@@ -964,7 +962,6 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       final state = GameStateManager.instance;
-      state.loginAsGuest();
       state.playerAvatarId = 'alex_classic';
 
       await tester.pumpWidget(
