@@ -2,7 +2,6 @@ import 'package:flame/components.dart';
 import 'package:flame/collisions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'paddle.dart';
 
 import '../pickleball_game.dart';
 
@@ -27,7 +26,6 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   final bool isPlayerOne;
   final bool isFemale;
   JoystickComponent? joystick;
-  late PaddleComponent paddle;
   
   final double speed = 350.0;
   final double aiSpeed = 400.0; // AI needs to be fast enough to hit the ball
@@ -81,32 +79,32 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     
     if (isFemale) {
       // Female sprites (8 frames of 64x64)
-      frontRun = await _loadAnimation('female1_sprite/female_runfront.png', amount: 8);
-      behindRun = await _loadAnimation('female1_sprite/female_runbehind.png', amount: 8);
-      leftRun = await _loadAnimation('female1_sprite/female_runleft.png', amount: 8);
-      rightRun = await _loadAnimation('female1_sprite/female_runright.png', amount: 8);
+      frontRun = await _loadAnimation('female1 sprite (reworked)/female_runfront.png', amount: 8);
+      behindRun = await _loadAnimation('female1 sprite (reworked)/female_runbehind.png', amount: 8);
+      leftRun = await _loadAnimation('female1 sprite (reworked)/female_runleft.png', amount: 8);
+      rightRun = await _loadAnimation('female1 sprite (reworked)/female_runright.png', amount: 8);
 
       p1Idle = await _loadAnimation(
-        'female1_sprite/female_runfront.png',
+        'female1 sprite (reworked)/female_runfront.png',
         amount: 2,
         textureSize: Vector2(64, 64),
         stepTime: 0.35,
       );
       p2Idle = await _loadAnimation(
-        'female1_sprite/female_runbehind.png',
+        'female1 sprite (reworked)/female_runbehind.png',
         amount: 2,
         textureSize: Vector2(64, 64),
         stepTime: 0.35,
       );
 
       frontSlash = await _loadAnimation(
-        'female1_sprite/female_runfront.png',
+        'female1 sprite (reworked)/female_frontslash.png', // Changed from female_runfront.png to use the actual slash sprite! Wait, previous code used female_runfront for slash? Let me check.
         amount: 8,
         loop: false,
         stepTime: 0.04,
       );
       behindSlash = await _loadAnimation(
-        'female1_sprite/female_runbehind.png',
+        'female1 sprite (reworked)/female _behindslash.png', // Notice the space!
         amount: 8,
         loop: false,
         stepTime: 0.04,
@@ -114,17 +112,17 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     } else {
       // Male sprites
       // Slash animations have 6 frames (384 / 64)
-      frontSlash = await _loadAnimation('male1_sprite/male_frontslash.png', amount: 6, loop: false, stepTime: 0.08);
-      behindSlash = await _loadAnimation('male1_sprite/male_behindslash.png', amount: 6, loop: false, stepTime: 0.08);
+      frontSlash = await _loadAnimation('male1 sprite (reworked)/male_frontslash.png', amount: 6, loop: false, stepTime: 0.08);
+      behindSlash = await _loadAnimation('male1 sprite (reworked)/male_behindslash.png', amount: 6, loop: false, stepTime: 0.08);
 
       // Idle animations have 2 frames (128 / 64)
-      p1Idle = await _loadAnimation('male1_sprite/male_p1sideidle.png', amount: 2);
-      p2Idle = await _loadAnimation('male1_sprite/male_p2sideidle.png', amount: 2);
+      p1Idle = await _loadAnimation('male1 sprite (reworked)/male_p1sideidle.png', amount: 2);
+      p2Idle = await _loadAnimation('male1 sprite (reworked)/male_p2sideidle.png', amount: 2);
 
-      frontRun = await _loadAnimation('male1_sprite/male_frontrun.png', amount: 8);
-      behindRun = await _loadAnimation('male1_sprite/male_behindrun.png', amount: 8);
-      leftRun = await _loadAnimation('male1_sprite/male_leftrun.png', amount: 8);
-      rightRun = await _loadAnimation('male1_sprite/male_rightrun.png', amount: 8);
+      frontRun = await _loadAnimation('male1 sprite (reworked)/male_frontrun.png', amount: 8);
+      behindRun = await _loadAnimation('male1 sprite (reworked)/male_behindrun.png', amount: 8);
+      leftRun = await _loadAnimation('male1 sprite (reworked)/male_leftrun.png', amount: 8);
+      rightRun = await _loadAnimation('male1 sprite (reworked)/male_rightrun.png', amount: 8);
     }
 
     animation = isPlayerOne ? p1Idle : p2Idle;
@@ -138,9 +136,6 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     paint.filterQuality = FilterQuality.none;
     
     anchor = Anchor.center;
-
-    paddle = PaddleComponent(isPlayerOne: isPlayerOne);
-    add(paddle);
     _animationsLoaded = true;
   }
 
@@ -308,8 +303,6 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       _updateAnimation();
     };
     
-    // Swing the paddle alongside the character
-    paddle.swing();
     if (isPlayerOne) {
       game.onPlayerSmash();
     }
