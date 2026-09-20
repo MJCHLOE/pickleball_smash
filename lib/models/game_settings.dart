@@ -13,11 +13,18 @@ class GameSettings {
   // Controller Settings
   final String controlScheme; // 'joystick', 'dpad', 'drag'
   final bool joystickOnLeft;
-  final double joystickSensitivity; // 0.5 to 2.0
+  final double joystickExpand; // 0.7 to 1.6 (scale size of joystick)
   final double joystickDeadzone; // 0.05 to 0.30
   final String buttonSize; // 'Normal', 'Large', 'Extra Large'
-  final double controllerOpacity; // 0.2 to 1.0
+  final double transparentCapacity; // 0.1 to 1.0 (opacity / transparent capacity)
+  final String joystickColor; // 'Neon Lime', 'Electric Cyan', 'Hot Pink', 'Trophy Gold', 'Pure White'
   final bool hapticOnHit;
+  final bool autoServe; // Auto-serves after countdown if player doesn't tap
+
+  // Deprecated/compatibility aliases
+  double get controllerOpacity => transparentCapacity;
+  double get joystickSensitivity => 1.0;
+  bool get continuousPlay => false;
 
   // Graphics Settings
   final String graphicsQuality; // 'Ultra', 'High', 'Medium', 'Low'
@@ -43,11 +50,13 @@ class GameSettings {
     // Controller
     this.controlScheme = 'joystick',
     this.joystickOnLeft = true,
-    this.joystickSensitivity = 1.0,
+    this.joystickExpand = 1.0,
     this.joystickDeadzone = 0.10,
     this.buttonSize = 'Normal',
-    this.controllerOpacity = 0.85,
+    this.transparentCapacity = 0.85,
+    this.joystickColor = 'Neon Lime',
     this.hapticOnHit = true,
+    this.autoServe = false,
     // Graphics
     this.graphicsQuality = 'High',
     this.targetFps = 60,
@@ -73,11 +82,17 @@ class GameSettings {
     // Controller
     String? controlScheme,
     bool? joystickOnLeft,
-    double? joystickSensitivity,
+    double? joystickExpand,
     double? joystickDeadzone,
     String? buttonSize,
-    double? controllerOpacity,
+    double? transparentCapacity,
+    String? joystickColor,
     bool? hapticOnHit,
+    bool? autoServe,
+    // Deprecated compatibility parameters (ignored or redirected)
+    double? joystickSensitivity,
+    double? controllerOpacity,
+    bool? continuousPlay,
     // Graphics
     String? graphicsQuality,
     int? targetFps,
@@ -102,11 +117,13 @@ class GameSettings {
       // Controller
       controlScheme: controlScheme ?? this.controlScheme,
       joystickOnLeft: joystickOnLeft ?? this.joystickOnLeft,
-      joystickSensitivity: joystickSensitivity ?? this.joystickSensitivity,
+      joystickExpand: joystickExpand ?? this.joystickExpand,
       joystickDeadzone: joystickDeadzone ?? this.joystickDeadzone,
       buttonSize: buttonSize ?? this.buttonSize,
-      controllerOpacity: controllerOpacity ?? this.controllerOpacity,
+      transparentCapacity: transparentCapacity ?? controllerOpacity ?? this.transparentCapacity,
+      joystickColor: joystickColor ?? this.joystickColor,
       hapticOnHit: hapticOnHit ?? this.hapticOnHit,
+      autoServe: autoServe ?? this.autoServe,
       // Graphics
       graphicsQuality: graphicsQuality ?? this.graphicsQuality,
       targetFps: targetFps ?? this.targetFps,
@@ -134,11 +151,17 @@ class GameSettings {
       // Controller
       'controlScheme': controlScheme,
       'joystickOnLeft': joystickOnLeft ? 1 : 0,
-      'joystickSensitivity': joystickSensitivity,
+      'joystickExpand': joystickExpand,
       'joystickDeadzone': joystickDeadzone,
       'buttonSize': buttonSize,
-      'controllerOpacity': controllerOpacity,
+      'transparentCapacity': transparentCapacity,
+      'joystickColor': joystickColor,
       'hapticOnHit': hapticOnHit ? 1 : 0,
+      'autoServe': autoServe ? 1 : 0,
+      // Legacy backward compatibility keys
+      'joystickSensitivity': 1.0,
+      'controllerOpacity': transparentCapacity,
+      'continuousPlay': 0,
       // Graphics
       'graphicsQuality': graphicsQuality,
       'targetFps': targetFps,
@@ -166,11 +189,15 @@ class GameSettings {
       // Controller
       controlScheme: map['controlScheme'] as String? ?? 'joystick',
       joystickOnLeft: (map['joystickOnLeft'] as int? ?? 1) == 1,
-      joystickSensitivity: (map['joystickSensitivity'] as num?)?.toDouble() ?? 1.0,
+      joystickExpand: (map['joystickExpand'] as num?)?.toDouble() ?? 1.0,
       joystickDeadzone: (map['joystickDeadzone'] as num?)?.toDouble() ?? 0.10,
       buttonSize: map['buttonSize'] as String? ?? 'Normal',
-      controllerOpacity: (map['controllerOpacity'] as num?)?.toDouble() ?? 0.85,
+      transparentCapacity: (map['transparentCapacity'] as num?)?.toDouble() ??
+          (map['controllerOpacity'] as num?)?.toDouble() ??
+          0.85,
+      joystickColor: map['joystickColor'] as String? ?? 'Neon Lime',
       hapticOnHit: (map['hapticOnHit'] as int? ?? 1) == 1,
+      autoServe: (map['autoServe'] as int? ?? 0) == 1,
       // Graphics
       graphicsQuality: map['graphicsQuality'] as String? ?? 'High',
       targetFps: (map['targetFps'] as num?)?.toInt() ?? 60,

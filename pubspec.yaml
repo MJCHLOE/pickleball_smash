@@ -72,6 +72,10 @@ flutter:
     - assets/images/male1_sprite/
     - assets/female1_sprite/
     - assets/images/female1_sprite/
+    - "assets/images/male1 sprite (reworked)/"
+    - "assets/images/female1 sprite (reworked)/"
+    - "assets/images/background reworked/"
+    - assets/images/logo/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

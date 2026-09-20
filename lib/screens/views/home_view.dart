@@ -13,12 +13,14 @@ import 'player_stats_modal.dart';
 
 class HomeView extends StatelessWidget {
   final VoidCallback onPlayQuickMatch;
+  final VoidCallback? onPlayDoublesMatch;
   final VoidCallback onOpenTournament;
   final VoidCallback onOpenChallenges;
 
   const HomeView({
     super.key,
     required this.onPlayQuickMatch,
+    this.onPlayDoublesMatch,
     required this.onOpenTournament,
     required this.onOpenChallenges,
   });
@@ -177,8 +179,8 @@ class HomeView extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                     Game2DText.hero(
-                      'Pickleball Smash',
-                      fontSize: 28,
+                      'PICKL',
+                      fontSize: 32,
                       gradient: AppTheme.playButtonGradient,
                       strokeColor: const Color(0xFF060B18),
                       strokeWidth: 4.0,
@@ -195,23 +197,34 @@ class HomeView extends StatelessWidget {
                     ),
                     const SizedBox(height: 18),
                     Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
+                      spacing: 10,
+                      runSpacing: 10,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Game2DButton(
+                          key: const ValueKey('dashboard_1v1_btn'),
                           onPressed: onPlayQuickMatch,
-                          text: 'QUICK MATCH',
-                          icon: Icons.play_arrow_rounded,
+                          text: '1v1 SINGLES',
+                          icon: Icons.person_rounded,
                           variant: GameButtonVariant.primary,
-                          size: GameButtonSize.large,
+                          size: GameButtonSize.medium,
                         ),
+                        if (onPlayDoublesMatch != null)
+                          Game2DButton(
+                            key: const ValueKey('dashboard_2v2_btn'),
+                            onPressed: onPlayDoublesMatch,
+                            text: '2v2 DOUBLES',
+                            icon: Icons.people_rounded,
+                            variant: GameButtonVariant.cyan,
+                            size: GameButtonSize.medium,
+                          ),
                         Game2DButton(
+                          key: const ValueKey('dashboard_tournaments_btn'),
                           onPressed: onOpenTournament,
-                          text: 'Tournaments',
+                          text: 'TOURNAMENTS',
                           icon: Icons.emoji_events_outlined,
-                          variant: GameButtonVariant.cyan,
-                          size: GameButtonSize.large,
+                          variant: GameButtonVariant.amber,
+                          size: GameButtonSize.medium,
                         ),
                       ],
                     ),

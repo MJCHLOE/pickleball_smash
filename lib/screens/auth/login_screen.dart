@@ -111,34 +111,31 @@ class _LoginScreenState extends State<LoginScreen> {
                         // Header Logo & Title
                         Center(
                           child: Container(
-                            width: 64,
-                            height: 64,
+                            width: 76,
+                            height: 76,
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [AppTheme.neonLime, AppTheme.pickleGreen],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppTheme.neonLime.withValues(alpha: 0.35),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 4),
+                                  color: AppTheme.electricCyan.withValues(alpha: 0.4),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 6),
                                 ),
                               ],
                             ),
-                            child: const Icon(
-                              Icons.sports_tennis,
-                              color: Colors.black,
-                              size: 36,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(20),
+                              child: Image.asset(
+                                'assets/images/logo/app_logo.png',
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
                         ),
                         const SizedBox(height: 16),
                         Game2DText.hero(
-                          'PICKLEBALL SMASH',
-                          fontSize: 24,
+                          'PICKL',
+                          fontSize: 28,
                           textAlign: TextAlign.center,
                           gradient: AppTheme.playButtonGradient,
                           strokeColor: const Color(0xFF070B16),

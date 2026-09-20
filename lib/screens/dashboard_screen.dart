@@ -41,6 +41,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     String? tournamentId,
     String? opponentName,
     String? matchTitle,
+    bool isDoubles = false,
   }) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -49,6 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           tournamentId: tournamentId,
           opponentName: opponentName,
           matchTitle: matchTitle,
+          isDoubles: isDoubles,
         ),
       ),
     );
@@ -413,7 +415,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     switch (_selectedTabIndex) {
       case 0:
         return HomeView(
-          onPlayQuickMatch: () => _navigateToGame(matchType: 'quick'),
+          onPlayQuickMatch: () => _navigateToGame(matchType: 'quick', isDoubles: false),
+          onPlayDoublesMatch: () => _navigateToGame(matchType: 'doubles', isDoubles: true),
           onOpenTournament: () {
             setState(() {
               _selectedTabIndex = 1;

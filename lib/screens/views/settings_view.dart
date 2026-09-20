@@ -845,44 +845,114 @@ class _SettingsViewState extends State<SettingsView> {
           ),
           const SizedBox(height: 14),
 
-          // 4. Stick Sensitivity
+          // 4. Joystick Expand
           Row(
             children: [
               const Expanded(
-                child: Text('Stick Sensitivity', style: TextStyle(color: Colors.white, fontSize: 13)),
+                child: Text('Joystick Expand (Size)', style: TextStyle(color: Colors.white, fontSize: 13)),
               ),
-              Text('${(settings.joystickSensitivity * 100).round()}%', style: const TextStyle(color: AppTheme.trophyAmber, fontWeight: FontWeight.bold, fontSize: 12)),
+              Text('${(settings.joystickExpand * 100).round()}%', style: const TextStyle(color: AppTheme.trophyAmber, fontWeight: FontWeight.bold, fontSize: 12)),
             ],
           ),
           Slider(
-            value: settings.joystickSensitivity,
-            min: 0.5,
-            max: 2.0,
+            value: settings.joystickExpand,
+            min: 0.7,
+            max: 1.6,
+            divisions: 9,
             activeColor: AppTheme.trophyAmber,
             inactiveColor: AppTheme.surfaceLight,
             onChanged: (val) {
-              state.updateSettings(settings.copyWith(joystickSensitivity: val));
+              state.updateSettings(settings.copyWith(joystickExpand: val));
             },
           ),
 
-          // 5. Controller Opacity
+          // 5. Transparent Capacity
           Row(
             children: [
               const Expanded(
-                child: Text('Controller Opacity', style: TextStyle(color: Colors.white, fontSize: 13)),
+                child: Text('Transparent Capacity', style: TextStyle(color: Colors.white, fontSize: 13)),
               ),
-              Text('${(settings.controllerOpacity * 100).round()}%', style: const TextStyle(color: AppTheme.electricCyan, fontWeight: FontWeight.bold, fontSize: 12)),
+              Text('${(settings.transparentCapacity * 100).round()}%', style: const TextStyle(color: AppTheme.electricCyan, fontWeight: FontWeight.bold, fontSize: 12)),
             ],
           ),
           Slider(
-            value: settings.controllerOpacity,
-            min: 0.2,
+            value: settings.transparentCapacity,
+            min: 0.1,
             max: 1.0,
+            divisions: 9,
             activeColor: AppTheme.electricCyan,
             inactiveColor: AppTheme.surfaceLight,
             onChanged: (val) {
-              state.updateSettings(settings.copyWith(controllerOpacity: val));
+              state.updateSettings(settings.copyWith(transparentCapacity: val));
             },
+          ),
+          const SizedBox(height: 6),
+
+          // 6. Joystick Color Choices
+          const Text('Joystick Color', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              'Neon Lime',
+              'Electric Cyan',
+              'Hot Pink',
+              'Trophy Gold',
+              'Pure White',
+            ].map((colorName) {
+              final isSelected = settings.joystickColor == colorName;
+              final colorVal = _getColorValue(colorName);
+              return InkWell(
+                onTap: () => state.updateSettings(settings.copyWith(joystickColor: colorName)),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isSelected ? colorVal.withValues(alpha: 0.25) : AppTheme.surfaceLight,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isSelected ? colorVal : AppTheme.surfaceBorder,
+                      width: isSelected ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: colorVal,
+                          shape: BoxShape.circle,
+                          boxShadow: isSelected ? [BoxShadow(color: colorVal.withValues(alpha: 0.6), blurRadius: 4)] : null,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        colorName,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : AppTheme.textMuted,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 10),
+
+          // Auto-Serve Switch
+          SwitchListTile(
+            title: const Text('Auto-Serve Assistant', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+            subtitle: const Text('Automatically serves when ready so play never stalls or freezes', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            value: settings.autoServe,
+            activeThumbColor: AppTheme.electricCyan,
+            contentPadding: EdgeInsets.zero,
+            onChanged: (val) => state.updateSettings(settings.copyWith(autoServe: val)),
           ),
           const SizedBox(height: 10),
 
@@ -925,7 +995,9 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   Widget _buildControllerLivePreview(GameSettings settings) {
-    final opacity = settings.controllerOpacity;
+    final opacity = settings.transparentCapacity;
+    final expand = settings.joystickExpand;
+    final colorChoice = settings.joystickColor;
     final isLeft = settings.joystickOnLeft;
 
     double buttonRadius = 24.0;
@@ -942,37 +1014,40 @@ class _SettingsViewState extends State<SettingsView> {
         border: Border.all(color: Colors.white12),
       ),
       child: Row(
-        mainAxisAlignment: isLeft ? MainAxisAlignment.spaceBetween : MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           if (isLeft) ...[
-            _buildMiniJoystick(opacity),
+            _buildMiniJoystick(opacity, expand, colorChoice),
             _buildMiniStrikeButton(opacity, buttonRadius),
           ] else ...[
             _buildMiniStrikeButton(opacity, buttonRadius),
-            _buildMiniJoystick(opacity),
+            _buildMiniJoystick(opacity, expand, colorChoice),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildMiniJoystick(double opacity) {
+  Widget _buildMiniJoystick(double opacity, double expand, String colorChoice) {
+    final colorVal = _getColorValue(colorChoice);
+    final size = (56.0 * expand.clamp(0.7, 1.4)).clamp(38.0, 75.0);
+    final knobSize = (24.0 * expand.clamp(0.7, 1.4)).clamp(16.0, 32.0);
     return Opacity(
-      opacity: opacity.clamp(0.2, 1.0),
+      opacity: opacity.clamp(0.1, 1.0),
       child: Container(
-        width: 60,
-        height: 60,
+        width: size,
+        height: size,
         decoration: BoxDecoration(
-          color: Colors.blue.withValues(alpha: 0.3),
+          color: colorVal.withValues(alpha: 0.25),
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.blueAccent, width: 1.5),
+          border: Border.all(color: colorVal, width: 1.5),
         ),
         child: Center(
           child: Container(
-            width: 26,
-            height: 26,
-            decoration: const BoxDecoration(
-              color: Colors.blueAccent,
+            width: knobSize,
+            height: knobSize,
+            decoration: BoxDecoration(
+              color: colorVal,
               shape: BoxShape.circle,
             ),
           ),
@@ -981,27 +1056,112 @@ class _SettingsViewState extends State<SettingsView> {
     );
   }
 
+  Color _getColorValue(String colorName) {
+    switch (colorName) {
+      case 'Electric Cyan':
+        return const Color(0xFF00E5FF);
+      case 'Hot Pink':
+        return const Color(0xFFFF1744);
+      case 'Trophy Gold':
+        return const Color(0xFFFFD700);
+      case 'Pure White':
+        return const Color(0xFFFFFFFF);
+      case 'Neon Lime':
+      default:
+        return const Color(0xFFCCFF00);
+    }
+  }
+
   Widget _buildMiniStrikeButton(double opacity, double radius) {
+    final bevelH = (radius * 0.18).clamp(3.0, 6.0);
+    final paddleSize = radius * 1.25;
+
     return Opacity(
       opacity: opacity.clamp(0.2, 1.0),
-      child: Container(
-        width: radius * 2,
-        height: radius * 2,
-        decoration: BoxDecoration(
-          color: Colors.redAccent.withValues(alpha: 0.8),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.redAccent.withValues(alpha: 0.5),
-              blurRadius: 8,
+      child: SizedBox(
+        width: radius * 2 + 6,
+        height: radius * 2 + bevelH + 6,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // 1. Dark Arcade Casing Base
+            Positioned(
+              top: bevelH / 2,
+              child: Container(
+                width: radius * 2 + 4,
+                height: radius * 2 + bevelH + 2,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0B0F19),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // 2. 3D Bottom Bevel
+            Positioned(
+              top: bevelH,
+              child: Container(
+                width: radius * 2,
+                height: radius * 2,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFB71C1C),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            // 3. Top Button Face
+            Positioned(
+              top: 0,
+              child: Container(
+                width: radius * 2,
+                height: radius * 2,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF2D55),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.black45, width: 1.2),
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Paddle sprite
+                    Image.asset(
+                      'assets/images/logo/pixel_paddle.png',
+                      width: paddleSize,
+                      height: paddleSize,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const Icon(
+                        Icons.sports_tennis_rounded,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                    // Action label
+                    Positioned(
+                      bottom: 2,
+                      child: Text(
+                        'SMASH',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.95),
+                          fontWeight: FontWeight.w900,
+                          fontSize: (radius * 0.22).clamp(7.0, 10.0),
+                          letterSpacing: 0.5,
+                          shadows: const [
+                            Shadow(color: Colors.black, blurRadius: 2, offset: Offset(1, 1)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
-        ),
-        child: const Center(
-          child: Text(
-            'HIT',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10),
-          ),
         ),
       ),
     );
@@ -1158,7 +1318,7 @@ class _SettingsViewState extends State<SettingsView> {
           const SizedBox(height: 12),
           const Center(
             child: Text(
-              'Pickleball Smash v1.0.0 • Built with Flutter & Flame',
+              'PICKL v1.0.0 • Built with Flutter & Flame',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
             ),

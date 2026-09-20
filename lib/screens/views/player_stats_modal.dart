@@ -592,7 +592,7 @@ class _PlayerStatsModalState extends State<PlayerStatsModal> with SingleTickerPr
                   const SizedBox(width: 10),
                   const Expanded(
                     child: Text(
-                      'Official Pickleball Smash Rankings. Sorted by Trophies and Match Victories.',
+                      'Official PICKL Rankings. Sorted by Trophies and Match Victories.',
                       style: TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   ),

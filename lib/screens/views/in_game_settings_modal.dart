@@ -593,36 +593,106 @@ class _InGameSettingsModalState extends State<InGameSettingsModal> {
         ),
         const SizedBox(height: 14),
 
-        // Sensitivity
+        // 1. Joystick Expand
         Row(
           children: [
-            const Expanded(child: Text('Stick Sensitivity', style: TextStyle(color: Colors.white, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis)),
-            Text('${(settings.joystickSensitivity * 100).round()}%', style: const TextStyle(color: AppTheme.trophyAmber, fontWeight: FontWeight.bold, fontSize: 12)),
+            const Expanded(child: Text('Joystick Expand (Size)', style: TextStyle(color: Colors.white, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            Text('${(settings.joystickExpand * 100).round()}%', style: const TextStyle(color: AppTheme.trophyAmber, fontWeight: FontWeight.bold, fontSize: 12)),
           ],
         ),
         Slider(
-          value: settings.joystickSensitivity,
-          min: 0.5,
-          max: 2.0,
+          value: settings.joystickExpand,
+          min: 0.7,
+          max: 1.6,
+          divisions: 9,
           activeColor: AppTheme.trophyAmber,
           inactiveColor: AppTheme.surfaceLight,
-          onChanged: (val) => _update(settings.copyWith(joystickSensitivity: val)),
+          onChanged: (val) => _update(settings.copyWith(joystickExpand: val)),
         ),
 
-        // Opacity
+        // 2. Transparent Capacity
         Row(
           children: [
-            const Expanded(child: Text('In-Game Controller Opacity', style: TextStyle(color: Colors.white, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis)),
-            Text('${(settings.controllerOpacity * 100).round()}%', style: const TextStyle(color: AppTheme.electricCyan, fontWeight: FontWeight.bold, fontSize: 12)),
+            const Expanded(child: Text('Transparent Capacity', style: TextStyle(color: Colors.white, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            Text('${(settings.transparentCapacity * 100).round()}%', style: const TextStyle(color: AppTheme.electricCyan, fontWeight: FontWeight.bold, fontSize: 12)),
           ],
         ),
         Slider(
-          value: settings.controllerOpacity,
-          min: 0.2,
+          value: settings.transparentCapacity,
+          min: 0.1,
           max: 1.0,
+          divisions: 9,
           activeColor: AppTheme.electricCyan,
           inactiveColor: AppTheme.surfaceLight,
-          onChanged: (val) => _update(settings.copyWith(controllerOpacity: val)),
+          onChanged: (val) => _update(settings.copyWith(transparentCapacity: val)),
+        ),
+        const SizedBox(height: 6),
+
+        // 3. Choices Color
+        const Text('Joystick Color', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            'Neon Lime',
+            'Electric Cyan',
+            'Hot Pink',
+            'Trophy Gold',
+            'Pure White',
+          ].map((colorName) {
+            final isSelected = settings.joystickColor == colorName;
+            final colorVal = _getColorValue(colorName);
+            return InkWell(
+              onTap: () => _update(settings.copyWith(joystickColor: colorName)),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isSelected ? colorVal.withValues(alpha: 0.25) : AppTheme.surfaceLight,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isSelected ? colorVal : AppTheme.surfaceBorder,
+                    width: isSelected ? 2 : 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: colorVal,
+                        shape: BoxShape.circle,
+                        boxShadow: isSelected ? [BoxShadow(color: colorVal.withValues(alpha: 0.6), blurRadius: 4)] : null,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      colorName,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : AppTheme.textMuted,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 10),
+
+        // Auto-Serve Switch
+        SwitchListTile(
+          title: const Text('Auto-Serve Assistant', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+          subtitle: const Text('Automatically serves when ready so play never stalls or freezes', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+          value: settings.autoServe,
+          activeThumbColor: AppTheme.electricCyan,
+          contentPadding: EdgeInsets.zero,
+          onChanged: (val) => _update(settings.copyWith(autoServe: val)),
         ),
       ],
     );
@@ -796,5 +866,21 @@ class _InGameSettingsModalState extends State<InGameSettingsModal> {
       visualDensity: VisualDensity.compact,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
+  }
+
+  Color _getColorValue(String colorName) {
+    switch (colorName) {
+      case 'Electric Cyan':
+        return const Color(0xFF00E5FF);
+      case 'Hot Pink':
+        return const Color(0xFFFF1744);
+      case 'Trophy Gold':
+        return const Color(0xFFFFD700);
+      case 'Pure White':
+        return const Color(0xFFFFFFFF);
+      case 'Neon Lime':
+      default:
+        return const Color(0xFFCCFF00);
+    }
   }
 }

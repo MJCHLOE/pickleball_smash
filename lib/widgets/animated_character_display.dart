@@ -50,11 +50,10 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
   static const String maleIdle = 'assets/images/male1_sprite/male_charselectidle.png';
   static const String maleRun = 'assets/images/male1_sprite/male_frontrun.png';
   static const String maleSmash = 'assets/images/male1_sprite/male_frontslash.png';
-  static const String malePaddle = 'assets/images/male1_sprite/pickleballpaddle_for player1.png';
 
+  static const String femaleIdle = 'assets/images/female1_sprite/female_charselectidle.png';
   static const String femaleRun = 'assets/images/female1_sprite/female_runfront.png';
-  static const String femaleBehind = 'assets/images/female1_sprite/female_runbehind.png';
-  static const String femalePaddle = 'assets/images/female1_sprite/pickleballpaddle_for player2.png';
+  static const String femaleSmash = 'assets/images/female1_sprite/female_frontslash.png';
 
   @override
   void initState() {
@@ -98,10 +97,9 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
       maleIdle,
       maleRun,
       maleSmash,
-      malePaddle,
+      femaleIdle,
       femaleRun,
-      femaleBehind,
-      femalePaddle,
+      femaleSmash,
     ];
 
     try {
@@ -178,16 +176,15 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
           break;
       }
     } else {
-      // Female sprite sheet has 8 frames of 64x64
       switch (_action) {
         case CharacterAction.idle:
-          _totalFrames = 2; // Use first 2 frames for gentle breathing idle
+          _totalFrames = 2;
           break;
         case CharacterAction.run:
           _totalFrames = 8;
           break;
         case CharacterAction.smash:
-          _totalFrames = 8; // Full power spin and strike
+          _totalFrames = 6;
           break;
       }
     }
@@ -234,17 +231,13 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
     } else {
       switch (_action) {
         case CharacterAction.idle:
-          return femaleRun;
+          return femaleIdle;
         case CharacterAction.run:
           return femaleRun;
         case CharacterAction.smash:
-          return femaleRun;
+          return femaleSmash;
       }
     }
-  }
-
-  String _getActivePaddlePath() {
-    return _gender == CharacterGender.male ? malePaddle : femalePaddle;
   }
 
   @override
@@ -259,7 +252,6 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
     }
 
     final spriteImage = _imageCache[_getActiveSpritePath()];
-    final paddleImage = _imageCache[_getActivePaddlePath()];
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -297,7 +289,6 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
                     child: CustomPaint(
                       painter: _SpriteCharacterPainter(
                         spriteImage: spriteImage,
-                        paddleImage: paddleImage,
                         frameIndex: _currentFrame,
                         totalFrames: _totalFrames,
                         action: _action,
@@ -524,7 +515,6 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
 
 class _SpriteCharacterPainter extends CustomPainter {
   final ui.Image? spriteImage;
-  final ui.Image? paddleImage;
   final int frameIndex;
   final int totalFrames;
   final CharacterAction action;
@@ -533,7 +523,6 @@ class _SpriteCharacterPainter extends CustomPainter {
 
   _SpriteCharacterPainter({
     required this.spriteImage,
-    required this.paddleImage,
     required this.frameIndex,
     required this.totalFrames,
     required this.action,
@@ -562,7 +551,7 @@ class _SpriteCharacterPainter extends CustomPainter {
       shadowPaint,
     );
 
-    // 2. Render Character Sprite Frame
+    // 2. Render Character Sprite Frame (Only Character)
     if (spriteImage != null) {
       final safeFrame = frameIndex.clamp(0, math.max(0, totalFrames - 1));
       const frameWidth = 64.0;
@@ -589,49 +578,7 @@ class _SpriteCharacterPainter extends CustomPainter {
 
       canvas.drawImageRect(spriteImage!, srcRect, dstRect, spritePaint);
 
-      // 3. Render Paddle Attachment if female or smash motion
-      if (paddleImage != null) {
-        canvas.save();
-        
-        // Paddle position relative to character's hand
-        double paddleX = targetX + targetWidth * 0.72;
-        double paddleY = targetY + targetHeight * 0.52;
-        double paddleAngle = 0.2;
-
-        if (action == CharacterAction.smash) {
-          // Dynamic swing rotation
-          paddleAngle = math.pi * 0.5 * (1.0 - smashProgress) - 0.4;
-          paddleX += 8 * math.sin(smashProgress * math.pi);
-          paddleY -= 12 * math.sin(smashProgress * math.pi);
-        } else if (action == CharacterAction.run) {
-          paddleAngle += 0.25 * math.sin(frameIndex);
-        }
-
-        canvas.translate(paddleX, paddleY);
-        canvas.rotate(paddleAngle);
-
-        final paddlePaint = Paint()
-          ..filterQuality = FilterQuality.none
-          ..isAntiAlias = false;
-
-        const paddleSize = 28.0;
-        final paddleSrc = Rect.fromLTWH(
-          0,
-          0,
-          paddleImage!.width.toDouble(),
-          paddleImage!.height.toDouble(),
-        );
-        final paddleDst = Rect.fromCenter(
-          center: Offset.zero,
-          width: paddleSize,
-          height: paddleSize,
-        );
-
-        canvas.drawImageRect(paddleImage!, paddleSrc, paddleDst, paddlePaint);
-        canvas.restore();
-      }
-
-      // 4. Draw Smash Swing Arc and Motion Lines
+      // 3. Draw Smash Swing Arc and Motion Lines
       if (action == CharacterAction.smash && smashProgress > 0.1 && smashProgress < 0.9) {
         final arcPaint = Paint()
           ..style = PaintingStyle.stroke
@@ -657,7 +604,6 @@ class _SpriteCharacterPainter extends CustomPainter {
         oldDelegate.action != action ||
         oldDelegate.gender != gender ||
         oldDelegate.smashProgress != smashProgress ||
-        oldDelegate.spriteImage != spriteImage ||
-        oldDelegate.paddleImage != paddleImage;
+        oldDelegate.spriteImage != spriteImage;
   }
 }

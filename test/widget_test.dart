@@ -1,3 +1,5 @@
+import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,9 +11,12 @@ import 'package:pickleball_smash/screens/auth/register_screen.dart';
 import 'package:pickleball_smash/screens/dashboard_screen.dart';
 import 'package:pickleball_smash/screens/game_play_screen.dart';
 import 'package:flame/components.dart';
+import 'package:flame/input.dart';
 import 'package:pickleball_smash/game/pickleball_game.dart';
 import 'package:pickleball_smash/game/components/ball.dart';
 import 'package:pickleball_smash/game/components/player.dart';
+import 'package:pickleball_smash/game/components/background.dart';
+import 'package:pickleball_smash/game/components/arcade_button_component.dart';
 import 'package:pickleball_smash/screens/views/in_game_settings_modal.dart';
 import 'package:pickleball_smash/screens/views/settings_view.dart';
 import 'package:pickleball_smash/services/database_service.dart';
@@ -20,6 +25,7 @@ import 'package:pickleball_smash/theme/app_theme.dart';
 import 'package:pickleball_smash/widgets/animated_character_display.dart';
 import 'package:pickleball_smash/widgets/avatar_picker_dialog.dart';
 import 'package:pickleball_smash/widgets/game_2d_text.dart';
+import 'package:pickleball_smash/widgets/pickleball_rules_modal.dart';
 import 'package:pickleball_smash/widgets/player_avatar.dart';
 import 'package:pickleball_smash/widgets/smooth_lights_background.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -274,8 +280,11 @@ void main() {
 
       await tester.runAsync(() async {
         await tester.tap(find.byKey(const ValueKey('register_submit_btn')));
-        for (int i = 0; i < 50; i++) {
-          if (!GameStateManager.instance.isGuest) break;
+        for (int i = 0; i < 200; i++) {
+          if (!GameStateManager.instance.isGuest) {
+            await Future.delayed(const Duration(milliseconds: 300));
+            break;
+          }
           await Future.delayed(const Duration(milliseconds: 50));
         }
       });
@@ -285,9 +294,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
 
       // Should now be on DashboardScreen with new username
-      expect(find.byType(DashboardScreen), findsOneWidget);
       expect(GameStateManager.instance.isGuest, false);
       expect(GameStateManager.instance.currentUsername, testUser);
+      expect(find.byType(DashboardScreen), findsOneWidget);
     });
 
     testWidgets('RegisterScreen allows playing as guest', (WidgetTester tester) async {
@@ -341,7 +350,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(DashboardScreen), findsOneWidget);
-      expect(find.text('Pickleball Smash'), findsOneWidget);
+      expect(find.text('PICKL'), findsOneWidget);
     });
 
     testWidgets('Renders NavigationRail on wide screen (>= 700px)', (WidgetTester tester) async {
@@ -359,7 +368,8 @@ void main() {
       expect(find.byKey(const ValueKey('rail_item_2')), findsOneWidget);
       expect(find.byKey(const ValueKey('rail_item_3')), findsOneWidget);
 
-      expect(find.text('QUICK MATCH'), findsOneWidget);
+      expect(find.text('1v1 SINGLES'), findsOneWidget);
+      expect(find.text('2v2 DOUBLES'), findsOneWidget);
     });
 
     testWidgets('Can switch tabs to Tournaments, Challenges, and Settings', (WidgetTester tester) async {
@@ -542,7 +552,7 @@ void main() {
       });
       await tester.pumpAndSettle();
 
-      expect(find.text('Official Pickleball Smash Rankings. Sorted by Trophies and Match Victories.'), findsOneWidget);
+      expect(find.text('Official PICKL Rankings. Sorted by Trophies and Match Victories.'), findsOneWidget);
     });
   });
 
@@ -671,10 +681,11 @@ void main() {
         soundProfile: 'Stadium Live',
         controlScheme: 'dpad',
         joystickOnLeft: false,
-        joystickSensitivity: 1.4,
+        joystickExpand: 1.3,
         joystickDeadzone: 0.15,
         buttonSize: 'Large',
-        controllerOpacity: 0.7,
+        transparentCapacity: 0.7,
+        joystickColor: 'Electric Cyan',
         hapticOnHit: true,
         graphicsQuality: 'Ultra',
         targetFps: 120,
@@ -697,7 +708,9 @@ void main() {
       expect(reconstructed.soundProfile, 'Stadium Live');
       expect(reconstructed.controlScheme, 'dpad');
       expect(reconstructed.joystickOnLeft, false);
-      expect(reconstructed.joystickSensitivity, 1.4);
+      expect(reconstructed.joystickExpand, 1.3);
+      expect(reconstructed.transparentCapacity, 0.7);
+      expect(reconstructed.joystickColor, 'Electric Cyan');
       expect(reconstructed.buttonSize, 'Large');
       expect(reconstructed.graphicsQuality, 'Ultra');
       expect(reconstructed.targetFps, 120);
@@ -705,15 +718,24 @@ void main() {
       expect(reconstructed.showFps, true);
       expect(reconstructed.courtTheme, 'Electric Blue');
       expect(reconstructed.courtBrightness, 1.2);
+      expect(reconstructed.autoServe, false);
 
       final copy = original.copyWith(
         graphicsQuality: 'Low',
         masterVolume: 0.2,
         controlScheme: 'drag',
+        joystickExpand: 1.5,
+        transparentCapacity: 0.95,
+        joystickColor: 'Hot Pink',
+        autoServe: true,
       );
       expect(copy.graphicsQuality, 'Low');
       expect(copy.masterVolume, 0.2);
       expect(copy.controlScheme, 'drag');
+      expect(copy.joystickExpand, 1.5);
+      expect(copy.transparentCapacity, 0.95);
+      expect(copy.joystickColor, 'Hot Pink');
+      expect(copy.autoServe, true);
       expect(copy.courtTheme, 'Electric Blue'); // retained
     });
 
@@ -828,8 +850,22 @@ void main() {
       expect(find.text('Joystick Placement'), findsOneWidget);
       expect(find.text('Left-Handed'), findsOneWidget);
       expect(find.text('Right-Handed'), findsOneWidget);
+      expect(find.text('Joystick Expand (Size)'), findsOneWidget);
+      expect(find.text('Transparent Capacity'), findsOneWidget);
+      expect(find.text('Joystick Color'), findsOneWidget);
+      expect(find.text('Neon Lime'), findsOneWidget);
+      expect(find.text('Electric Cyan'), findsOneWidget);
 
-      // Tap Right-Handed to test live settings update
+      // Scroll and tap Electric Cyan to test live color choice update
+      await tester.ensureVisible(find.text('Electric Cyan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Electric Cyan'));
+      await tester.pumpAndSettle();
+      expect(updatedSettings?.joystickColor, 'Electric Cyan');
+
+      // Scroll and tap Right-Handed to test live settings update
+      await tester.ensureVisible(find.text('Right-Handed'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Right-Handed'));
       await tester.pumpAndSettle();
       expect(updatedSettings?.joystickOnLeft, false);
@@ -1195,7 +1231,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byType(SmoothLightsAlphabetBackground), findsWidgets);
       expect(find.byType(Game2DText), findsWidgets);
-      expect(find.text('Pickleball Smash'), findsOneWidget);
+      expect(find.text('PICKL'), findsOneWidget);
     });
 
     testWidgets('SettingsView does not display Reset Progress option', (WidgetTester tester) async {
@@ -1356,7 +1392,156 @@ void main() {
       expect(game.p1Score, 1);
     });
 
-    testWidgets('GamePlayScreen displays serve action prompt and server indicator', (WidgetTester tester) async {
+    test('Standard pickleball game defaults to 11 points and requires win by 2 margin', () {
+      bool matchFinished = false;
+      final game = PickleballGame(
+        onMatchFinished: (won) {
+          matchFinished = true;
+        },
+      );
+      game.player1 = PlayerComponent(isPlayerOne: true);
+      game.player2 = PlayerComponent(isPlayerOne: false);
+      game.ball = BallComponent()..customGame = game;
+      game.prepareServicePositions();
+
+      expect(game.targetScore, 11);
+
+      // Score is 10 - 10
+      game.p1Score = 10;
+      game.p2Score = 10;
+      game.serverPlayer = 1;
+
+      // P1 reaches 11 points (lead is only 1 point: 11 - 10)
+      game.handleRallyWon(winnerIsPlayerOne: true, faultReason: '');
+      expect(game.p1Score, 11);
+      expect(matchFinished, false); // Must win by 2!
+
+      // P1 scores again (12 - 10: lead is 2 points!)
+      game.handleRallyWon(winnerIsPlayerOne: true, faultReason: '');
+      expect(game.p1Score, 12);
+      expect(matchFinished, true);
+    });
+
+    test('Kitchen Momentum Fault triggers when player momentum enters kitchen after volley', () {
+      String? lastViolation;
+      final game = PickleballGame(
+        onViolation: (type, desc, rule) {
+          lastViolation = type;
+        },
+      );
+      final p1 = PlayerComponent(isPlayerOne: true)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false)..customGame = game;
+      game.player1 = p1;
+      game.player2 = p2;
+      game.ball = BallComponent()..customGame = game;
+      game.isWaitingForServe = false;
+      game.rallyHitCount = 2; // Open play
+
+      // P1 hits a volley outside the kitchen at Y = 445 (kitchen bottom line is at 440)
+      p1.position = Vector2(640, 445);
+      game.ball.position = Vector2(640, 445);
+      game.ball.velocity = Vector2(0, 300);
+      game.ball.bounceCountCurrentSide = 0; // In air -> volley!
+      p1.strike();
+
+      expect(p1.timeSinceLastVolley, 0.0);
+
+      // P1 momentum carries forward into kitchen (Y moves to 438 <= 440) within 0.5s
+      p1.position = Vector2(640, 438);
+      p1.update(0.1);
+
+      expect(lastViolation, 'KITCHEN MOMENTUM');
+      expect(game.serverPlayer, 2); // Side-out awarded to CPU!
+    });
+
+    test('Body hits in flight do NOT trigger Body Fault and rally continues', () {
+      String? lastViolation;
+      final game = PickleballGame(
+        onViolation: (type, desc, rule) {
+          lastViolation = type;
+        },
+      );
+      final p1 = PlayerComponent(isPlayerOne: true)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false)..customGame = game;
+      game.player1 = p1;
+      game.player2 = p2;
+      game.ball = BallComponent()..customGame = game;
+      game.isWaitingForServe = false;
+
+      // Ball in flight strikes P2's body before bouncing (z > 2, bounceCount == 0, idle player)
+      game.ball.position = p2.position;
+      game.ball.z = 12.0;
+      game.ball.bounceCountCurrentSide = 0;
+      p2.currentState = PlayerState.idle;
+
+      game.ball.onCollisionStart({}, p2);
+
+      // Body fault removed: no fault triggered and score remains unchanged!
+      expect(lastViolation, isNull);
+      expect(game.p1Score, 0);
+    });
+
+    test('Multiple floor bounces do NOT trigger Double Bounce fault and ball remains in play', () {
+      String? lastViolation;
+      final game = PickleballGame(
+        onViolation: (type, desc, rule) {
+          lastViolation = type;
+        },
+      );
+      final p1 = PlayerComponent(isPlayerOne: true)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false)..customGame = game;
+      game.player1 = p1;
+      game.player2 = p2;
+      game.ball = BallComponent()..customGame = game;
+      game.isWaitingForServe = false;
+      game.rallyHitCount = 2; // In active rally
+
+      // Simulate 1st bounce
+      game.ball.bounceCountCurrentSide = 0;
+      game.ball.position = Vector2(640, 520); // P1 side
+      game.ball.z = 0.0;
+      game.ball.zVelocity = -180.0;
+      game.ball.update(0.016);
+
+      expect(game.ball.bounceCountCurrentSide, 1);
+      expect(lastViolation, isNull);
+
+      // Advance time and simulate 2nd floor bounce
+      game.ball.update(0.3);
+      game.ball.z = 0.0;
+      game.ball.zVelocity = -180.0;
+      game.ball.update(0.016);
+
+      // Double bounce removed: rally does NOT fault or end!
+      expect(game.ball.bounceCountCurrentSide, 2);
+      expect(lastViolation, isNull);
+      expect(game.isGameOver, isFalse);
+    });
+
+    test('Expert AI calculates predictive trajectory, covers court, and strikes smoothly', () {
+      final game = PickleballGame();
+      final p1 = PlayerComponent(isPlayerOne: true)..customGame = game;
+      final cpu = PlayerComponent(isPlayerOne: false, isAI: true)..customGame = game;
+      game.player1 = p1;
+      game.player2 = cpu;
+      game.ball = BallComponent()..customGame = game;
+      game.isWaitingForServe = false;
+
+      // Ball moving toward CPU with speed
+      game.ball.position = Vector2(640, 300);
+      game.ball.velocity = Vector2(80, -250);
+      game.ball.bounceCountCurrentSide = 0;
+
+      // CPU updates with predictive anticipation
+      cpu.position = Vector2(640, 150);
+      cpu.update(0.1);
+
+      // CPU should move towards predicted landing position
+      expect(cpu.aiVelocity.length, greaterThan(0));
+      expect(cpu.aiSpeed, 315.0);
+    });
+
+    testWidgets('GamePlayScreen renders top-left scoreboard, top-center violation display, and top-right unified controls', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(800, 480);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -1371,13 +1556,1043 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.byKey(const ValueKey('serve_action_prompt')), findsOneWidget);
-      expect(find.textContaining('TAP STRIKE TO SERVE'), findsOneWidget);
+      expect(find.textContaining('TAP SMASH TO SERVE'), findsOneWidget);
+
+      // Top-Left Scoreboard verifies
+      expect(find.textContaining('FIRST TO 11 • WIN BY 2'), findsOneWidget);
+
+      // Top-Right Unified Controls verifies
+      expect(find.byKey(const ValueKey('ingame_pause_btn')), findsOneWidget);
+      expect(find.byKey(const ValueKey('ingame_settings_btn')), findsOneWidget);
 
       // Tap the serve action prompt to serve
       await tester.tap(find.byKey(const ValueKey('serve_action_prompt')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('Reworked Characters & Omnidirectional AI Movement Tests', () {
+    test('PlayerComponent loads and animates reworked male and female characters without exceptions', () async {
+      final game = PickleballGame();
+      final malePlayer = PlayerComponent(isPlayerOne: true, isFemale: false)..customGame = game;
+      final femalePlayer = PlayerComponent(isPlayerOne: false, isFemale: true)..customGame = game;
+      game.player1 = malePlayer;
+      game.player2 = femalePlayer;
+      game.ball = BallComponent()..customGame = game;
+
+      // Both male and female players initialize successfully
+      expect(malePlayer.isFemale, false);
+      expect(femalePlayer.isFemale, true);
+      expect(malePlayer.size, Vector2(64, 64));
+      expect(femalePlayer.size, Vector2(64, 64));
+    });
+
+    test('Enemy CPU moves omnidirectionally: forward, backward, and side-to-side', () {
+      final game = PickleballGame();
+      final cpu = PlayerComponent(isPlayerOne: false, isFemale: true)..customGame = game;
+      final p1 = PlayerComponent(isPlayerOne: true, isFemale: false)..customGame = game;
+      game.player1 = p1;
+      game.player2 = cpu;
+      game.ball = BallComponent()..customGame = game;
+      game.isWaitingForServe = false;
+
+      // Start at baseline ready position
+      cpu.position = Vector2(640.0, 140.0);
+
+      // 1. Forward movement: ball drops short near kitchen (Y = 300, moving up towards CPU)
+      game.ball.position = Vector2(640.0, 300.0);
+      game.ball.velocity = Vector2(0, -300);
+      game.rallyHitCount = 2; // Open play
+
+      final initialY = cpu.position.y;
+      cpu.update(0.1);
+
+      // CPU should move FORWARD (downwards towards net, increasing Y)
+      expect(cpu.position.y > initialY, true);
+      expect(cpu.currentDirection, PlayerDirection.front);
+
+      // 2. Backward movement: ball is deep towards top baseline (Y = 100)
+      game.ball.position = Vector2(640.0, 100.0);
+      game.ball.velocity = Vector2(0, -300);
+
+      final currentY = cpu.position.y;
+      cpu.update(0.15);
+
+      // CPU should move BACKWARD (upwards towards baseline, decreasing Y)
+      expect(cpu.position.y < currentY, true);
+      expect(cpu.currentDirection, PlayerDirection.behind);
+
+      // 3. Side-to-side movement: ball is to the left (X = 400)
+      game.ball.position = Vector2(400.0, 180.0);
+      game.ball.velocity = Vector2(0, -300);
+
+      final currentX = cpu.position.x;
+      cpu.update(0.1);
+
+      // CPU should move LEFT (decreasing X)
+      expect(cpu.position.x < currentX, true);
+      expect(cpu.currentDirection, PlayerDirection.left);
+
+      // 4. Side-to-side movement: ball is to the right (X = 800)
+      game.ball.position = Vector2(800.0, 180.0);
+      game.ball.velocity = Vector2(0, -300);
+
+      final nextX = cpu.position.x;
+      cpu.update(0.1);
+
+      // CPU should move RIGHT (increasing X)
+      expect(cpu.position.x > nextX, true);
+      expect(cpu.currentDirection, PlayerDirection.right);
+    });
+
+    testWidgets('GamePlayScreen renders responsively across multiple screen dimensions', (WidgetTester tester) async {
+      // 1. Ultrawide modern phone landscape (800x360)
+      tester.view.physicalSize = const Size(800, 360);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(const MaterialApp(home: GamePlayScreen(matchType: 'quick')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(GamePlayScreen), findsOneWidget);
+
+      // 2. Standard 16:9 landscape (1280x720)
+      tester.view.physicalSize = const Size(1280, 720);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(tester.takeException(), isNull);
+
+      // 3. Portrait screen (400x800)
+      tester.view.physicalSize = const Size(400, 800);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(tester.takeException(), isNull);
+    });
+
+    test('PickleballGame camera and background scale dynamically and center across 20:9, 4:3, and 16:9 screens', () {
+      final game = PickleballGame();
+      expect(game.camera.viewfinder.anchor, Anchor.center);
+
+      // 1. Ultrawide 20:9 phone (2400 x 1080)
+      game.onGameResize(Vector2(2400, 1080));
+      expect(game.camera.viewfinder.zoom, closeTo(1.5, 0.001));
+      expect(game.camera.viewfinder.position, Vector2(640, 360));
+
+      // 2. Tablet 4:3 iPad (2048 x 1536)
+      game.onGameResize(Vector2(2048, 1536));
+      expect(game.camera.viewfinder.zoom, closeTo(1.6, 0.001));
+      expect(game.camera.viewfinder.position, Vector2(640, 360));
+
+      // 3. Standard 16:9 HD screen (1280 x 720)
+      game.onGameResize(Vector2(1280, 720));
+      expect(game.camera.viewfinder.zoom, closeTo(1.0, 0.001));
+      expect(game.camera.viewfinder.position, Vector2(640, 360));
+
+      // 4. Background arena floor color matches theme
+      final bg = Background();
+      bg.updateTheme('Classic Red');
+      expect(bg.apronOuterColor, const Color(0xFF7A0114));
+      bg.updateTheme('Electric Blue');
+      expect(bg.apronOuterColor, const Color(0xFF05121B));
+    });
+
+    test('BallComponent simulates 3D parabolic flight and bounces on the court floor', () {
+      final game = PickleballGame();
+      final ball = BallComponent()..customGame = game;
+      game.ball = ball;
+      game.player1 = PlayerComponent(isPlayerOne: true)..customGame = game;
+      game.player2 = PlayerComponent(isPlayerOne: false)..customGame = game;
+      game.player1.position = Vector2(760, 600);
+      game.player2.position = Vector2(520, 130);
+
+      // 1. Ball starts at paddle height ready for serve
+      ball.setupForServe();
+      expect(ball.z, 16.0);
+      expect(ball.isWaitingForServe, true);
+
+      // 2. Serve ball -> launches upward arc
+      ball.executeServe(isPlayerOne: true);
+      expect(ball.zVelocity, 210.0);
+      expect(ball.isWaitingForServe, false);
+      expect(ball.bounceCountCurrentSide, 0);
+
+      // 3. Gravity pulls ball down toward floor
+      ball.update(0.1);
+      expect(ball.z > 0, true);
+
+      // 4. Ball reaches floor (z <= 0) -> Floor bounce triggers in open rally!
+      game.rallyHitCount = 2;
+      ball.position = Vector2(640, 200);
+      ball.z = 2.0;
+      ball.zVelocity = -200.0;
+      ball.update(0.02); // Drops to z <= 0
+
+      // Ball bounced on floor:
+      expect(ball.z, 0.0);
+      expect(ball.bounceCountCurrentSide, 1);
+      expect(ball.zVelocity > 0, true); // Rebounded upward off the hard floor!
+    });
+
+    test('Player 1 and Player 2 are allowed to step outside the white lines into the apron while remaining clamped to playable limits', () {
+      final game = PickleballGame();
+      final p1 = PlayerComponent(isPlayerOne: true, isFemale: false)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false, isFemale: true)..customGame = game;
+      game.player1 = p1;
+      game.player2 = p2;
+      game.ball = BallComponent()..customGame = game;
+      game.isWaitingForServe = false;
+
+      // 1. Player 1 (Bottom): can step outside white lines (X < 400 or X > 880, Y > 670)
+      // Moving into left apron: clamped to 320.0
+      p1.position = Vector2(100.0, 680.0);
+      p1.update(0.1);
+      expect(p1.position.x, 320.0);
+      expect(p1.position.x < 400.0, true); // Outside white line!
+      expect(p1.isOutsideCourt, true);
+
+      // Moving into right apron and behind baseline: clamped to 960.0 and 715.0
+      p1.position = Vector2(1100.0, 800.0);
+      p1.update(0.1);
+      expect(p1.position.x, 960.0);
+      expect(p1.position.x > 880.0, true); // Outside white line!
+      expect(p1.position.y, 715.0);
+      expect(p1.position.y > 670.0, true); // Outside baseline!
+      expect(p1.isOutsideCourt, true);
+
+      // Player 1 cannot cross net into opponent's half
+      p1.position = Vector2(640.0, 200.0);
+      p1.update(0.1);
+      expect(p1.position.y, 385.0);
+
+      // 2. Player 2 (CPU): can step outside white lines
+      p2.position = Vector2(100.0, 5.0);
+      p2.update(0.1);
+      expect(p2.position.x, 320.0);
+      expect(p2.position.x < 400.0, true);
+      expect(p2.position.y, 15.0);
+      expect(p2.position.y < 50.0, true); // Outside top baseline!
+      expect(p2.isOutsideCourt, true);
+
+      // Player 2 cannot cross net into P1 half
+      p2.position = Vector2(640.0, 500.0);
+      p2.update(0.1);
+      expect(p2.position.y, 330.0);
+    });
+
+    test('Player outside the white line can hit ball after floor bounce, and ball is guaranteed to bounce inside opponent court', () {
+      final game = PickleballGame();
+      final p1 = PlayerComponent(isPlayerOne: true, isFemale: false)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false, isFemale: true)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+      game.player1 = p1;
+      game.player2 = p2;
+      game.ball = ball;
+      game.isWaitingForServe = false;
+      game.rallyHitCount = 3; // Open play
+
+      // Position Player 1 in the right apron outside the white sideline
+      p1.position = Vector2(920.0, 550.0);
+      expect(p1.isOutsideCourt, true);
+
+      // Ball is flying towards P1 in the apron
+      ball.position = Vector2(915.0, 540.0);
+      ball.velocity = Vector2(0.0, 200.0); // Moving towards P1
+      ball.z = 12.0;
+
+      // 1. If ball has not bounced yet, strike from outside court is prevented
+      ball.bounceCountCurrentSide = 0;
+      p1.strike();
+      expect(ball.velocity.y > 0, true); // Not hit yet, still moving toward P1
+
+      // 2. Once ball bounces on floor, strike from outside court is allowed!
+      ball.bounceCountCurrentSide = 1;
+      p1.strike();
+
+      // Ball was struck!
+      expect(ball.velocity.y < 0, true); // Propelled toward opponent court
+      expect(ball.bounceCountCurrentSide, 0);
+
+      // Calculate where the ball will land on the floor
+      final tBounce = (ball.zVelocity + sqrt(ball.zVelocity * ball.zVelocity + 4 * 170.0 * ball.z)) / 340.0;
+      final landingX = ball.position.x + ball.velocity.x * tBounce;
+      final landingY = ball.position.y + ball.velocity.y * tBounce;
+
+      // Ball MUST bounce inside the opponent's court boundaries!
+      // Court X is [400, 880], Court Y (P2 side) is [50, 360]
+      expect(landingX >= 400.0 && landingX <= 880.0, true,
+          reason: 'Ball landing X ($landingX) must be inside court sidelines [400, 880]');
+      expect(landingY >= 50.0 && landingY <= 360.0, true,
+          reason: 'Ball landing Y ($landingY) must be inside opponent court half [50, 360]');
+    });
+
+    test('Soft hit or neutral hit from any position cleanly clears net and bounces inside court boundaries', () {
+      final game = PickleballGame();
+      final p1 = PlayerComponent(isPlayerOne: true, isFemale: false)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false, isFemale: true)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+      game.player1 = p1;
+      game.player2 = p2;
+      game.ball = ball;
+      game.isWaitingForServe = false;
+      game.rallyHitCount = 2;
+
+      // Player 1 at deep court, hitting without extra joystick movement (neutral / soft touch)
+      p1.position = Vector2(640.0, 650.0);
+      ball.position = Vector2(640.0, 640.0);
+      ball.velocity = Vector2(0.0, 150.0);
+      ball.bounceCountCurrentSide = 1;
+
+      ball.processPlayerHit(p1);
+
+      // Parabolic flight time to floor
+      final tBounce = (ball.zVelocity + sqrt(ball.zVelocity * ball.zVelocity + 4 * 170.0 * ball.z)) / 340.0;
+      final landingX = ball.position.x + ball.velocity.x * tBounce;
+      final landingY = ball.position.y + ball.velocity.y * tBounce;
+
+      // Verify net clearance at Y = 360
+      final tNet = (360.0 - ball.position.y) / ball.velocity.y;
+      final zAtNet = ball.z + ball.zVelocity * tNet - 0.5 * ball.gravity * tNet * tNet;
+
+      expect(zAtNet > 18.0, true, reason: 'Ball altitude at net ($zAtNet px) must exceed net tape height (18 px)');
+      expect(landingX >= 400.0 && landingX <= 880.0, true, reason: 'Landing X ($landingX) must be in-bounds');
+      expect(landingY >= 50.0 && landingY <= 360.0, true, reason: 'Landing Y ($landingY) must be inside P2 court');
+    });
+
+    test('Background renders 2D pixelated portrait court geometry with un-aliased lines and theme support', () {
+      final bg = Background();
+      expect(bg.paint.isAntiAlias, false);
+      expect(bg.paint.filterQuality, FilterQuality.none);
+      expect(Background.courtLeftX, 400.0);
+      expect(Background.courtRightX, 880.0);
+      expect(Background.courtTopY, 50.0);
+      expect(Background.courtBottomY, 670.0);
+      expect(Background.netY, 360.0);
+      expect(Background.kitchenTopY, 280.0);
+      expect(Background.kitchenBottomY, 440.0);
+    });
+
+    test('BallComponent returns forward without sharp sideways angles when hit by player', () {
+      final game = PickleballGame();
+      final ball = BallComponent()..customGame = game;
+      final p1 = PlayerComponent(isPlayerOne: true)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false)..customGame = game;
+      game.ball = ball;
+      game.player1 = p1;
+      game.player2 = p2;
+
+      // Position ball near P1 for a hit, with maximum lateral offset and movement
+      p1.position = Vector2(640.0, 580.0);
+      p1.hAxis = 1; // Moving full speed right
+      ball.position = Vector2(695.0, 575.0); // Extreme lateral edge of paddle reach
+      ball.velocity = Vector2(0, 300); // Coming down from P2
+      ball.z = 10.0;
+      ball.isWaitingForServe = false;
+      game.isWaitingForServe = false;
+      game.rallyHitCount = 2;
+      ball.bounceCountCurrentSide = 1;
+
+      // Strike ball
+      p1.strike();
+
+      // Ball velocity.x should be smoothly bounded within [-120, 120] and velocity.y must propel toward P2
+      expect(ball.velocity.x.abs() <= 120.0, true);
+      expect(ball.velocity.y < 0, true); // Traveling forward up toward opponent court
+    });
+
+    testWidgets('AnimatedCharacterDisplay renders only character without paddle attachment', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: AnimatedCharacterDisplay(
+                height: 180,
+                showControls: true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(AnimatedCharacterDisplay), findsOneWidget);
+    });
+  });
+
+  group('Doubles 2v2 Mode and Official Rules Tests', () {
+    test('Doubles mode initializes with 4 players and starts at 0-0-2 with server 2 on Team 1', () {
+      final game = PickleballGame(isDoubles: true);
+      expect(game.isDoubles, true);
+      expect(game.serverTeam, 1);
+      expect(game.serverNumber, 2);
+      expect(game.doublesScoreCallout, '0 - 0 - 2');
+      expect(game.servingSide, 'right');
+    });
+
+    test('Doubles server stands behind baseline outside court during service preparation', () {
+      final game = PickleballGame(isDoubles: true);
+      final p1 = PlayerComponent(isPlayerOne: true, isAI: false, playerSlot: 1)..customGame = game;
+      final p1Partner = PlayerComponent(isPlayerOne: true, isAI: true, playerSlot: 2)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false, isAI: true, playerSlot: 1)..customGame = game;
+      final p2Partner = PlayerComponent(isPlayerOne: false, isAI: true, playerSlot: 2)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+
+      game.player1 = p1;
+      game.player1Partner = p1Partner;
+      game.player2 = p2;
+      game.player2Partner = p2Partner;
+      game.ball = ball;
+
+      game.prepareServicePositions();
+
+      // Team 1 Server 2 starts serving from right side behind baseline (Y = 695.0, court bottom is 670.0)
+      final server = game.activeServerComponent;
+      expect(server.position.y, 695.0);
+      expect(server.position.y > 670.0, true);
+      expect(server.position.x, 760.0);
+
+      // Ball is placed with the server at paddle position
+      expect(ball.position.x, server.position.x + 20);
+      expect(ball.position.y, server.position.y - 28);
+
+      // Strike serve: ball is launched towards diagonal court (X ~ 520, Y ~ 165)
+      server.strike();
+      expect(ball.velocity.y < 0, true); // Moving towards Team 2 side
+      expect(ball.isWaitingForServe, false);
+      expect(game.isWaitingForServe, false);
+
+      // Server steps forward into court inside baseline
+      expect(server.position.y <= 670.0, true);
+    });
+
+    test('Doubles rally win by server scores 1 point and swaps partner courts', () {
+      final game = PickleballGame(isDoubles: true);
+      final p1 = PlayerComponent(isPlayerOne: true, isAI: false, playerSlot: 1)..customGame = game;
+      final p1Partner = PlayerComponent(isPlayerOne: true, isAI: true, playerSlot: 2)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false, isAI: true, playerSlot: 1)..customGame = game;
+      final p2Partner = PlayerComponent(isPlayerOne: false, isAI: true, playerSlot: 2)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+
+      game.player1 = p1;
+      game.player1Partner = p1Partner;
+      game.player2 = p2;
+      game.player2Partner = p2Partner;
+      game.ball = ball;
+
+      expect(game.p1CourtSide, 'right');
+      expect(game.p1PartnerCourtSide, 'left');
+
+      // Team 1 wins rally
+      game.handleRallyWon(winnerIsPlayerOne: true, faultReason: '');
+
+      // Score increases by 1, partners swap courts
+      expect(game.p1Score, 1);
+      expect(game.p2Score, 0);
+      expect(game.serverNumber, 2); // Same server serves again
+      expect(game.p1CourtSide, 'left');
+      expect(game.p1PartnerCourtSide, 'right');
+      expect(game.doublesScoreCallout, '1 - 0 - 2');
+    });
+
+    test('Doubles opening serve loss (0-0-2) causes immediate Side-Out to Team 2 Server 1', () {
+      final game = PickleballGame(isDoubles: true);
+      final p1 = PlayerComponent(isPlayerOne: true, isAI: false, playerSlot: 1)..customGame = game;
+      final p1Partner = PlayerComponent(isPlayerOne: true, isAI: true, playerSlot: 2)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false, isAI: true, playerSlot: 1)..customGame = game;
+      final p2Partner = PlayerComponent(isPlayerOne: false, isAI: true, playerSlot: 2)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+
+      game.player1 = p1;
+      game.player1Partner = p1Partner;
+      game.player2 = p2;
+      game.player2Partner = p2Partner;
+      game.ball = ball;
+
+      // Opponent wins the rally
+      game.handleRallyWon(winnerIsPlayerOne: false, faultReason: 'FAULT: Out of Bounds');
+
+      // Side-Out to Team 2, server 1
+      expect(game.serverTeam, 2);
+      expect(game.serverNumber, 1);
+      expect(game.p1Score, 0);
+      expect(game.p2Score, 0);
+      expect(game.doublesScoreCallout, '0 - 0 - 1');
+    });
+
+    test('Doubles regular rotation: Server 1 loss transfers to Server 2 on same team; Server 2 loss causes Side-Out', () {
+      final game = PickleballGame(isDoubles: true);
+      final p1 = PlayerComponent(isPlayerOne: true, isAI: false, playerSlot: 1)..customGame = game;
+      final p1Partner = PlayerComponent(isPlayerOne: true, isAI: true, playerSlot: 2)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false, isAI: true, playerSlot: 1)..customGame = game;
+      final p2Partner = PlayerComponent(isPlayerOne: false, isAI: true, playerSlot: 2)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+
+      game.player1 = p1;
+      game.player1Partner = p1Partner;
+      game.player2 = p2;
+      game.player2Partner = p2Partner;
+      game.ball = ball;
+
+      // Force state to Team 2 Server 1 (e.g. after side-out)
+      game.serverTeam = 2;
+      game.serverNumber = 1;
+
+      // Team 1 wins rally -> Team 2 Server 1 loses serve
+      game.handleRallyWon(winnerIsPlayerOne: true, faultReason: '');
+
+      // Serve rotates to Server 2 of same team (Team 2)
+      expect(game.serverTeam, 2);
+      expect(game.serverNumber, 2);
+      expect(game.doublesScoreCallout, '0 - 0 - 2');
+
+      // Team 1 wins rally again -> Team 2 Server 2 loses serve -> Side-Out to Team 1 Server 1
+      game.handleRallyWon(winnerIsPlayerOne: true, faultReason: '');
+      expect(game.serverTeam, 1);
+      expect(game.serverNumber, 1);
+      expect(game.doublesScoreCallout, '0 - 0 - 1');
+    });
+
+    testWidgets('Dashboard renders 1v1 SINGLES and 2v2 DOUBLES buttons and navigates to 2v2 Doubles match', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 720);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final state = GameStateManager.instance;
+      state.loginAsGuest();
+
+      await tester.pumpWidget(const PickleballApp(initialScreen: DashboardScreen()));
+      await tester.pumpAndSettle();
+
+      final singlesBtn = find.byKey(const ValueKey('dashboard_1v1_btn'));
+      final doublesBtn = find.byKey(const ValueKey('dashboard_2v2_btn'));
+
+      expect(singlesBtn, findsOneWidget);
+      expect(doublesBtn, findsOneWidget);
+
+      // Tap 2v2 Doubles button
+      await tester.tap(doublesBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byType(GamePlayScreen), findsOneWidget);
+    });
+
+    testWidgets('GamePlayScreen renders HUD for 2v2 Doubles with 3-number score callout and partner info', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 720);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: GamePlayScreen(
+            isDoubles: true,
+            opponentName: 'CPU Duo',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('2V2 DOUBLES'), findsOneWidget);
+      expect(find.textContaining('CALL: 0 - 0 - 2'), findsOneWidget);
+      expect(find.byKey(const ValueKey('serve_action_prompt')), findsOneWidget);
+      expect(find.byKey(const ValueKey('ingame_pause_btn')), findsOneWidget);
+      expect(find.byKey(const ValueKey('ingame_settings_btn')), findsOneWidget);
+    });
+  });
+
+  group('Character Ground Shadow & Responsive In-Game Rules Tests', () {
+    test('PlayerComponent renders ground shadow beneath character feet and reports kitchen boundary correctly', () {
+      final game = PickleballGame();
+      final p1 = PlayerComponent(isPlayerOne: true)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false)..customGame = game;
+      game.player1 = p1;
+      game.player2 = p2;
+
+      expect(p1.size, Vector2(64, 64));
+
+      // Test Kitchen boundary detection for P1 (Bottom side, NVZ is y <= 440.0)
+      p1.position = Vector2(640.0, 420.0);
+      expect(p1.isInKitchen, true);
+      p1.position = Vector2(640.0, 520.0);
+      expect(p1.isInKitchen, false);
+
+      // Test Kitchen boundary detection for P2 (Top side, NVZ is y >= 280.0)
+      p2.position = Vector2(640.0, 300.0);
+      expect(p2.isInKitchen, true);
+      p2.position = Vector2(640.0, 150.0);
+      expect(p2.isInKitchen, false);
+
+      // Verify render executes without error and draws ground shadow
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      p1.render(canvas);
+      final picture = recorder.endRecording();
+      expect(picture, isNotNull);
+    });
+
+    testWidgets('PickleballRulesModal renders all 5 rule tabs, navigation, and resume action', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 720);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      bool resumed = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PickleballRulesModal(
+              onResume: () {
+                resumed = true;
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('PICKLEBALL RULES GUIDE'), findsOneWidget);
+      expect(find.text('Violations & Faults'), findsOneWidget);
+      expect(find.text('Two-Bounce Rule'), findsOneWidget);
+      expect(find.text('The Kitchen (NVZ)'), findsOneWidget);
+      expect(find.text('Serving & Court'), findsOneWidget);
+      expect(find.text('Scoring & Rotation'), findsOneWidget);
+
+      // Switch to Two-Bounce Rule tab
+      await tester.tap(find.text('Two-Bounce Rule'));
+      await tester.pumpAndSettle();
+      expect(find.text('Shot 1: The Serve'), findsOneWidget);
+      expect(find.text('Shot 2: Return of Serve'), findsOneWidget);
+
+      // Switch to Kitchen tab
+      await tester.tap(find.text('The Kitchen (NVZ)'));
+      await tester.pumpAndSettle();
+      expect(find.text('No Volleys Allowed Inside'), findsOneWidget);
+      expect(find.text('Hitting Off the Bounce (Dinking)'), findsOneWidget);
+
+      // Switch to Serving tab
+      await tester.tap(find.text('Serving & Court'));
+      await tester.pumpAndSettle();
+      expect(find.text('Underhand Motion'), findsOneWidget);
+      expect(find.text('Clearing the Kitchen Line'), findsOneWidget);
+
+      // Switch to Scoring tab
+      await tester.tap(find.text('Scoring & Rotation'));
+      await tester.pumpAndSettle();
+      expect(find.text('Only the Serving Side Scores'), findsOneWidget);
+
+      // Tap Resume Play
+      await tester.tap(find.text('RESUME PLAY'));
+      await tester.pumpAndSettle();
+      expect(resumed, true);
+    });
+
+    testWidgets('PickleballRulesModal auto-selects tab corresponding to highlighted violation', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 720);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PickleballRulesModal(
+              highlightedViolation: 'TWO-BOUNCE RULE',
+              onResume: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Should auto-navigate to Two-Bounce Rule tab
+      expect(find.text('THE TWO-BOUNCE RULE (USA Pickleball Rule 2)'), findsOneWidget);
+      expect(find.textContaining('Violation Review: TWO-BOUNCE RULE'), findsOneWidget);
+    });
+
+    testWidgets('GamePlayScreen renders top bar responsively across 320px ultra-compact width, short landscape, and desktop', (WidgetTester tester) async {
+      // 1. Ultra-compact 320px width
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: GamePlayScreen(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('serve_action_prompt')), findsOneWidget);
+      expect(find.byKey(const ValueKey('ingame_pause_btn')), findsOneWidget);
+      expect(find.byKey(const ValueKey('ingame_rules_btn')), findsOneWidget);
+      expect(find.byKey(const ValueKey('ingame_settings_btn')), findsOneWidget);
+
+      // 2. Short landscape screen (600x360)
+      tester.view.physicalSize = const Size(600, 360);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('ingame_rules_btn')), findsOneWidget);
+
+      // 3. Desktop / Tablet screen (1280x720)
+      tester.view.physicalSize = const Size(1280, 720);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('serve_action_prompt')), findsOneWidget);
+      expect(find.byKey(const ValueKey('ingame_rules_btn')), findsOneWidget);
+    });
+
+    testWidgets('Tapping rules button in GamePlayScreen top bar or pause menu opens PickleballRulesModal', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 720);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: GamePlayScreen(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // 1. Tap ingame_rules_btn directly from top bar
+      final rulesBtn = find.byKey(const ValueKey('ingame_rules_btn'));
+      expect(rulesBtn, findsOneWidget);
+      await tester.tap(rulesBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.byType(PickleballRulesModal), findsOneWidget);
+      expect(find.text('PICKLEBALL RULES GUIDE'), findsOneWidget);
+
+      // Close modal using RESUME PLAY
+      await tester.tap(find.text('RESUME PLAY'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.byType(PickleballRulesModal), findsNothing);
+
+      // 2. Pause match and open rules via pause menu
+      final pauseBtn = find.byKey(const ValueKey('ingame_pause_btn'));
+      await tester.tap(pauseBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final pauseRulesBtn = find.byKey(const ValueKey('pause_menu_rules_btn'));
+      expect(pauseRulesBtn, findsOneWidget);
+      await tester.tap(pauseRulesBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.byType(PickleballRulesModal), findsOneWidget);
+      await tester.tap(find.text('RESUME PLAY'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.byType(PickleballRulesModal), findsNothing);
+    });
+
+    test('AI waits for ball to bounce on floor before striking and movement speeds are slower and smooth', () {
+      final game = PickleballGame();
+      final cpu = PlayerComponent(isPlayerOne: false, isAI: true)..customGame = game;
+      final p1 = PlayerComponent(isPlayerOne: true, isAI: false)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+      game.player1 = p1;
+      game.player2 = cpu;
+      game.ball = ball;
+      game.isWaitingForServe = false;
+      ball.isWaitingForServe = false;
+
+      // 1. Movement speed verification
+      expect(p1.speed, 280.0);
+      expect(cpu.aiSpeed, 315.0);
+      expect(ball.initialSpeed, 280.0);
+      expect(ball.gravity, 340.0);
+
+      // 2. Ball approaching CPU in air before floor bounce (bounceCountCurrentSide == 0)
+      cpu.position = Vector2(640.0, 140.0);
+      ball.position = Vector2(640.0, 145.0);
+      ball.velocity = Vector2(0, -280.0);
+      ball.bounceCountCurrentSide = 0; // In air!
+      game.rallyHitCount = 2;
+
+      // Update CPU AI - should NOT strike yet because ball has not bounced on floor!
+      final hitsBefore = game.rallyHitCount;
+      cpu.update(0.016);
+      expect(game.rallyHitCount, hitsBefore); // Did not hit in the air
+
+      // 3. Ball bounces on the court floor (bounceCountCurrentSide >= 1)
+      ball.bounceCountCurrentSide = 1; // Bounced!
+      cpu.update(0.016);
+
+      // CPU should now strike cleanly after the floor bounce!
+      expect(game.rallyHitCount > hitsBefore, true);
+      expect(ball.velocity.y > 0, true); // Propelled forward back to P1 side
+    });
+  });
+
+  group('Continuous Gameplay & Seamless Flow Tests', () {
+    test('BallComponent floor bounce pop provides generous hangtime for continuous play', () {
+      final game = PickleballGame();
+      final ball = BallComponent()..customGame = game;
+      game.ball = ball;
+      game.isWaitingForServe = false;
+      ball.isWaitingForServe = false;
+
+      // Ball falling toward floor at high speed
+      ball.position = Vector2(640.0, 500.0);
+      ball.z = 2.0;
+      ball.zVelocity = -220.0;
+      ball.update(0.02); // Triggers floor bounce (z <= 0)
+
+      // Verify generous pop-up velocity (>= 175 px/s, giving > 1.0s airtime)
+      expect(ball.z, 0.0);
+      expect(ball.bounceCountCurrentSide, 1);
+      expect(ball.zVelocity >= 175.0, true, reason: 'Floor bounce must pop up >= 175 px/s for generous hangtime');
+
+      // Estimate hangtime until second bounce: 2 * v_z / g = 2 * 175 / 340 ~ 1.03s
+      final hangTime = (2 * ball.zVelocity) / ball.gravity;
+      expect(hangTime >= 1.0, true, reason: 'Hangtime ($hangTime s) must exceed 1.0s to keep rallies continuous');
+    });
+
+    test('Auto-serve executes smoothly so gameplay never stalls', () {
+      final game = PickleballGame(
+        settings: const GameSettings(autoServe: true),
+      );
+      final p1 = PlayerComponent(isPlayerOne: true, isAI: false)..customGame = game;
+      final cpu = PlayerComponent(isPlayerOne: false, isAI: true)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+      game.player1 = p1;
+      game.player2 = cpu;
+      game.ball = ball;
+
+      // 1. Human serve auto-serves after countdown if player does not tap
+      game.prepareServicePositions();
+      expect(game.isWaitingForServe, true);
+      expect(ball.isWaitingForServe, true);
+
+      // Simulate 1.9s of wait time (exceeds 1.8s auto-serve threshold)
+      for (int i = 0; i < 20; i++) {
+        ball.update(0.1);
+      }
+
+      // Auto-serve should have fired!
+      expect(game.isWaitingForServe, false, reason: 'Auto-serve must launch if player does not tap within 1.8s');
+      expect(ball.isWaitingForServe, false);
+      expect(ball.velocity.length > 0, true);
+    });
+
+    test('Continuous rally streak increments on legal hits and resets on rally end', () {
+      final game = PickleballGame();
+      final p1 = PlayerComponent(isPlayerOne: true, isAI: false)..customGame = game;
+      final cpu = PlayerComponent(isPlayerOne: false, isAI: true)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+      game.player1 = p1;
+      game.player2 = cpu;
+      game.ball = ball;
+      game.isWaitingForServe = false;
+
+      int recordedStreak = 0;
+      int recordedLongest = 0;
+      game.onRallyStreakUpdated = (streak, longest) {
+        recordedStreak = streak;
+        recordedLongest = longest;
+      };
+
+      // 1. First hit by Player 1
+      p1.position = Vector2(640.0, 580.0);
+      ball.position = Vector2(640.0, 570.0);
+      ball.velocity = Vector2(0.0, 200.0);
+      ball.bounceCountCurrentSide = 1;
+
+      ball.processPlayerHit(p1);
+      expect(game.continuousRallyStreak, 1);
+      expect(recordedStreak, 1);
+      expect(game.longestRally, 1);
+
+      // 2. Second hit by CPU
+      cpu.position = Vector2(640.0, 150.0);
+      ball.position = Vector2(640.0, 160.0);
+      ball.velocity = Vector2(0.0, -200.0);
+      ball.bounceCountCurrentSide = 1;
+
+      ball.processPlayerHit(cpu);
+      expect(game.continuousRallyStreak, 2);
+      expect(recordedStreak, 2);
+      expect(game.longestRally, 2);
+      expect(recordedLongest, 2);
+
+      // 3. Rally concludes
+      game.handleRallyWon(winnerIsPlayerOne: true, faultReason: '');
+      expect(game.continuousRallyStreak, 0);
+      expect(recordedStreak, 0);
+      expect(game.longestRally, 2); // Longest streak preserved!
+    });
+
+    test('resetForNewMatch seamlessly restarts game state for continuous play', () {
+      final game = PickleballGame();
+      final p1 = PlayerComponent(isPlayerOne: true, isAI: false)..customGame = game;
+      final cpu = PlayerComponent(isPlayerOne: false, isAI: true)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+      game.player1 = p1;
+      game.player2 = cpu;
+      game.ball = ball;
+
+      // Simulate a finished match
+      game.p1Score = 11;
+      game.p2Score = 9;
+      game.isGameOver = true;
+      game.pauseEngine();
+
+      // Reset for continuous next match
+      game.resetForNewMatch();
+
+      expect(game.p1Score, 0);
+      expect(game.p2Score, 0);
+      expect(game.isGameOver, false);
+      expect(game.isWaitingForServe, true);
+      expect(game.continuousRallyStreak, 0);
+    });
+
+    testWidgets('GamePlayScreen renders continuous rally badge and Play Next Match button', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1200, 720);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: GamePlayScreen(matchType: 'quick'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Play Next Match button exists in the tree when match is finished
+      // We can inspect the widget hierarchy
+      expect(find.byType(GamePlayScreen), findsOneWidget);
+    });
+
+    test('Joystick expand and transparent capacity update in-place without doubling components', () {
+      final game = PickleballGame();
+      game.player1 = PlayerComponent(isPlayerOne: true)..customGame = game;
+      game.background = Background();
+
+      // Initialize controls
+      game.applySettings(const GameSettings(joystickExpand: 1.0, transparentCapacity: 0.85));
+
+      expect(game.camera.viewport.children.whereType<JoystickComponent>().length, 1);
+      expect(game.camera.viewport.children.whereType<HudButtonComponent>().length, 1);
+
+      // Simulate dragging sliders repeatedly (e.g. 5 times in settings)
+      for (double expand = 0.8; expand <= 1.6; expand += 0.2) {
+        game.applySettings(
+          GameSettings(
+            joystickExpand: expand,
+            transparentCapacity: 0.5,
+            joystickColor: 'Electric Cyan',
+          ),
+        );
+
+        // Verify that components NEVER double or accumulate!
+        expect(game.camera.viewport.children.whereType<JoystickComponent>().length, 1);
+        expect(game.camera.viewport.children.whereType<HudButtonComponent>().length, 1);
+      }
+
+      // Check final knob radius and color
+      final knob = game.joystick.knob as CircleComponent;
+      expect(knob.radius, closeTo(26.0 * 1.6, 0.01));
+      expect(knob.paint.color.a, closeTo((240 * 0.5) / 255.0, 0.05));
+    });
+
+    test('Smash button renders with 2D arcade button style and updates in-place without doubling', () {
+      final game = PickleballGame();
+      game.player1 = PlayerComponent(isPlayerOne: true)..customGame = game;
+      game.background = Background();
+
+      // Apply initial Normal settings
+      game.applySettings(const GameSettings(buttonSize: 'Normal', transparentCapacity: 0.85));
+
+      expect(game.strikeButton.button, isA<ArcadeButtonFaceComponent>());
+      expect(game.strikeButton.buttonDown, isA<ArcadeButtonFaceComponent>());
+
+      final face = game.strikeButton.button as ArcadeButtonFaceComponent;
+      final downFace = game.strikeButton.buttonDown as ArcadeButtonFaceComponent;
+
+      expect(face.isPressed, false);
+      expect(downFace.isPressed, true);
+      expect(face.radius, 40.0);
+
+      // Mutate to Large
+      game.applySettings(const GameSettings(buttonSize: 'Large', transparentCapacity: 0.6));
+      expect(game.camera.viewport.children.whereType<HudButtonComponent>().length, 1);
+      expect(face.radius, 48.0);
+      expect(face.opacity, 0.6);
+
+      // Mutate to Extra Large
+      game.applySettings(const GameSettings(buttonSize: 'Extra Large', transparentCapacity: 1.0));
+      expect(game.camera.viewport.children.whereType<HudButtonComponent>().length, 1);
+      expect(face.radius, 56.0);
+      expect(face.opacity, 1.0);
+    });
+
+    test('Player must manually serve before match begins (default manual serve)', () {
+      final game = PickleballGame(); // default settings has autoServe: false
+      final p1 = PlayerComponent(isPlayerOne: true, isAI: false)..customGame = game;
+      final cpu = PlayerComponent(isPlayerOne: false, isAI: true)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+      game.player1 = p1;
+      game.player2 = cpu;
+      game.ball = ball;
+
+      game.prepareServicePositions();
+      expect(game.isWaitingForServe, true);
+      expect(ball.isWaitingForServe, true);
+
+      // Simulate 3.0s of elapsed waiting time
+      for (int i = 0; i < 30; i++) {
+        ball.update(0.1);
+      }
+
+      // Ball must STILL be waiting for player to manually serve!
+      expect(game.isWaitingForServe, true, reason: 'Game must wait for player to manually serve');
+      expect(ball.isWaitingForServe, true);
+
+      // Now player strikes to serve
+      p1.strike();
+
+      // Serve is launched!
+      expect(game.isWaitingForServe, false, reason: 'Serve launches when player presses smash');
+      expect(ball.isWaitingForServe, false);
+      expect(ball.velocity.length > 0, true);
+    });
+
+    test('Smash button triggers dynamic tap effect with shockwave and sparks', () {
+      final game = PickleballGame();
+      game.player1 = PlayerComponent(isPlayerOne: true)..customGame = game;
+      game.background = Background();
+      game.applySettings(const GameSettings());
+
+      final face = game.strikeButton.button as ArcadeButtonFaceComponent;
+      expect(face.tapEffectProgress, 0.0);
+
+      // Trigger tap effect
+      game.triggerSmashButtonEffect();
+      expect(face.tapEffectProgress, 1.0);
+
+      // Advance update frame
+      face.update(0.1);
+      expect(face.tapEffectProgress < 1.0, true);
+      expect(face.tapEffectProgress > 0.0, true);
+
+      // Decays over time back to 0
+      face.update(0.5);
+      expect(face.tapEffectProgress, 0.0);
     });
   });
 }

@@ -74,7 +74,7 @@ class PickleballApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Pickleball Smash',
+      title: 'PICKL',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       home: initialScreen ?? const DashboardScreen(),
