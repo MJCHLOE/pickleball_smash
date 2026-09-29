@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../models/ball_catalog.dart';
 import '../../models/challenge_model.dart';
+import '../../models/character_roster.dart';
+import '../../models/court_catalog.dart';
 import '../../models/player_avatar.dart';
 import '../../models/tournament_model.dart';
 import '../../services/game_state_manager.dart';
@@ -7,7 +10,14 @@ import '../../theme/app_theme.dart';
 import '../../widgets/animated_character_display.dart';
 import '../../widgets/game_2d_button.dart';
 import '../../widgets/game_2d_text.dart';
+import '../../widgets/inventory_modal.dart';
 import '../../widgets/player_avatar.dart';
+import '../../widgets/avatar_picker_dialog.dart';
+import '../../widgets/friends_modal.dart';
+import '../../widgets/player_profile_modal.dart';
+import '../../widgets/shop_modal.dart';
+import '../../models/multiplayer_models.dart';
+import '../../services/multiplayer_service.dart';
 import '../auth/register_screen.dart';
 import 'player_stats_modal.dart';
 
@@ -16,6 +26,9 @@ class HomeView extends StatelessWidget {
   final VoidCallback? onPlayDoublesMatch;
   final VoidCallback onOpenTournament;
   final VoidCallback onOpenChallenges;
+  final VoidCallback? onOpenBattleRoom;
+  final VoidCallback? onOpenFriends;
+  final VoidCallback? onOpenProfile;
 
   const HomeView({
     super.key,
@@ -23,6 +36,9 @@ class HomeView extends StatelessWidget {
     this.onPlayDoublesMatch,
     required this.onOpenTournament,
     required this.onOpenChallenges,
+    this.onOpenBattleRoom,
+    this.onOpenFriends,
+    this.onOpenProfile,
   });
 
   @override
@@ -49,7 +65,9 @@ class HomeView extends StatelessWidget {
                               flex: 6,
                               child: Column(
                                 children: [
-                                  _buildHeroPlayCard(context),
+                                  _buildHeroPlayCard(context, state),
+                                  const SizedBox(height: 16),
+                                  _buildShopAndLockerBanner(context, state),
                                   const SizedBox(height: 16),
                                   _buildStatsOverviewCard(context, state),
                                 ],
@@ -60,6 +78,8 @@ class HomeView extends StatelessWidget {
                               flex: 5,
                               child: Column(
                                 children: [
+                                  _buildMultiplayerLobbyBanner(context),
+                                  const SizedBox(height: 16),
                                   _buildTournamentBanner(context, state),
                                   const SizedBox(height: 16),
                                   _buildDailyQuestSnapshot(context, state),
@@ -70,7 +90,11 @@ class HomeView extends StatelessWidget {
                         )
                       : Column(
                           children: [
-                            _buildHeroPlayCard(context),
+                            _buildHeroPlayCard(context, state),
+                            const SizedBox(height: 16),
+                            _buildMultiplayerLobbyBanner(context),
+                            const SizedBox(height: 16),
+                            _buildShopAndLockerBanner(context, state),
                             const SizedBox(height: 16),
                             _buildTournamentBanner(context, state),
                             const SizedBox(height: 16),
@@ -88,7 +112,7 @@ class HomeView extends StatelessWidget {
     );
   }
 
-  Widget _buildHeroPlayCard(BuildContext context) {
+  Widget _buildHeroPlayCard(BuildContext context, GameStateManager state) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
@@ -218,6 +242,15 @@ class HomeView extends StatelessWidget {
                             variant: GameButtonVariant.cyan,
                             size: GameButtonSize.medium,
                           ),
+                        if (onOpenBattleRoom != null)
+                          Game2DButton(
+                            key: const ValueKey('dashboard_battle_room_btn'),
+                            onPressed: onOpenBattleRoom,
+                            text: 'BATTLE ROOM (ONLINE)',
+                            icon: Icons.language_rounded,
+                            variant: GameButtonVariant.primary,
+                            size: GameButtonSize.medium,
+                          ),
                         Game2DButton(
                           key: const ValueKey('dashboard_tournaments_btn'),
                           onPressed: onOpenTournament,
@@ -231,18 +264,111 @@ class HomeView extends StatelessWidget {
                   ],
                 );
 
+                final equippedChar = CharacterRoster.getById(state.playerAvatarId);
+                CharacterGender genderFromType(CharacterType type) {
+                  switch (type) {
+                    case CharacterType.female1:
+                      return CharacterGender.female;
+                    case CharacterType.female2:
+                      return CharacterGender.female2;
+                    case CharacterType.male2:
+                      return CharacterGender.male2;
+                    case CharacterType.male3:
+                      return CharacterGender.male3;
+                    case CharacterType.male1:
+                      return CharacterGender.male;
+                  }
+                }
+
+                CharacterType typeFromGender(CharacterGender gender) {
+                  switch (gender) {
+                    case CharacterGender.female:
+                      return CharacterType.female1;
+                    case CharacterGender.female2:
+                      return CharacterType.female2;
+                    case CharacterGender.male2:
+                      return CharacterType.male2;
+                    case CharacterGender.male3:
+                      return CharacterType.male3;
+                    case CharacterGender.male:
+                      return CharacterType.male1;
+                  }
+                }
+
+                final characterSection = Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Active Character Tag with tap-to-swap
+                    InkWell(
+                      key: const ValueKey('dash_hero_badge'),
+                      onTap: () => AvatarPickerDialog.show(context),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: equippedChar.gradientColors),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: equippedChar.borderColor, width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: equippedChar.borderColor.withValues(alpha: 0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(equippedChar.badge, style: const TextStyle(fontSize: 13)),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                '${equippedChar.name.toUpperCase()} • ${equippedChar.title.toUpperCase()}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 10,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.swap_horiz_rounded, color: Colors.white70, size: 14),
+                          ],
+                        ),
+                      ),
+                    ),
+                    AnimatedCharacterDisplay(
+                      key: ValueKey('dash_char_${state.playerAvatarId}'),
+                      initialGender: genderFromType(equippedChar.type),
+                      height: isWide ? 190 : 170,
+                      showControls: true,
+                      onGenderChanged: (newGender) {
+                        final targetChar = CharacterRoster.getByType(typeFromGender(newGender));
+                        if (state.isCharacterUnlocked(targetChar.id) || targetChar.isDefaultUnlocked) {
+                          state.updatePlayerAvatar(targetChar.id);
+                        } else {
+                          AvatarPickerDialog.show(context);
+                        }
+                      },
+                    ),
+                  ],
+                );
+
                 if (isWide) {
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(flex: 3, child: leftInfoColumn),
                       const SizedBox(width: 16),
-                      const Expanded(
+                      Expanded(
                         flex: 2,
-                        child: AnimatedCharacterDisplay(
-                          height: 190,
-                          showControls: true,
-                        ),
+                        child: characterSection,
                       ),
                     ],
                   );
@@ -253,17 +379,157 @@ class HomeView extends StatelessWidget {
                     children: [
                       leftInfoColumn,
                       const SizedBox(height: 16),
-                      const Center(
-                        child: AnimatedCharacterDisplay(
-                          height: 170,
-                          showControls: true,
-                        ),
+                      Center(
+                        child: characterSection,
                       ),
                     ],
                   );
                 }
               },
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShopAndLockerBanner(BuildContext context, GameStateManager state) {
+    final activeChar = CharacterRoster.getById(state.playerAvatarId);
+    final activeCourt = CourtCatalog.getById(state.equippedCourtId);
+    final activeBall = BallCatalog.getById(state.equippedBallId);
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.surfaceBorder, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.goldCoin.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.goldCoin.withValues(alpha: 0.4), width: 1.5),
+                ),
+                child: const Icon(Icons.storefront_rounded, color: AppTheme.goldCoin, size: 20),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Game2DText(
+                      'PRO SHOP & LOCKER',
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      textColor: Colors.white,
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Equip obtained gear or buy courts, balls & characters',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Active Loadout Pill row
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF090D16),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF1E293B)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildMiniLoadoutItem('CHAR', activeChar.name, activeChar.badge, activeChar.borderColor),
+                Container(width: 1, height: 28, color: const Color(0xFF1E293B)),
+                _buildMiniLoadoutItem('COURT', activeCourt.name, activeCourt.badge, activeCourt.accentColor),
+                Container(width: 1, height: 28, color: const Color(0xFF1E293B)),
+                _buildMiniLoadoutItem('BALL', activeBall.name, activeBall.badge, activeBall.glowColor),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Game2DButton(
+                  key: const ValueKey('home_open_shop_btn'),
+                  onPressed: () => ShopModal.show(context),
+                  text: 'PRO SHOP',
+                  icon: Icons.storefront_rounded,
+                  variant: GameButtonVariant.amber,
+                  size: GameButtonSize.small,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Game2DButton(
+                  key: const ValueKey('home_open_inventory_btn'),
+                  onPressed: () => InventoryModal.show(context),
+                  text: 'LOCKER',
+                  icon: Icons.inventory_2_rounded,
+                  variant: GameButtonVariant.cyan,
+                  size: GameButtonSize.small,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniLoadoutItem(String category, String name, String badge, Color color) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            category,
+            style: const TextStyle(
+              color: AppTheme.textMuted,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(badge, style: const TextStyle(fontSize: 12)),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  name,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1014,6 +1280,167 @@ class HomeView extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMultiplayerLobbyBanner(BuildContext context) {
+    final multi = MultiplayerService.instance;
+    final onlineCount = multi.friends.where((f) => f.status == PlayerPresenceStatus.online).length;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF0F172A),
+            Color(0xFF020617),
+          ],
+        ),
+        border: Border.all(
+          color: AppTheme.electricCyan.withValues(alpha: 0.4),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.electricCyan.withValues(alpha: 0.12),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top pill & badges
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.electricCyan.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppTheme.electricCyan, width: 1),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.wifi_tethering_rounded, color: AppTheme.electricCyan, size: 13),
+                      SizedBox(width: 4),
+                      Text(
+                        'LIVE BATTLE',
+                        style: TextStyle(
+                          color: AppTheme.electricCyan,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Online Friends count badge
+                InkWell(
+                  onTap: () {
+                    if (onOpenFriends != null) {
+                      onOpenFriends!();
+                    } else {
+                      FriendsModal.show(context);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF22C55E).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF22C55E), width: 1),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.circle, color: Color(0xFF22C55E), size: 8),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$onlineCount Online',
+                          style: const TextStyle(
+                            color: Color(0xFF22C55E),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'MULTIPLAYER BATTLE ROOMS',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Challenge friends or rivals in private 1v1 & 2v2 live battle rooms with zero-lag prediction and spectator flow.',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (onOpenBattleRoom != null)
+                  Game2DButton(
+                    onPressed: onOpenBattleRoom,
+                    text: 'ENTER BATTLE ROOM',
+                    icon: Icons.meeting_room_rounded,
+                    variant: GameButtonVariant.primary,
+                    size: GameButtonSize.small,
+                  ),
+                Game2DButton(
+                  onPressed: () {
+                    if (onOpenFriends != null) {
+                      onOpenFriends!();
+                    } else {
+                      FriendsModal.show(context);
+                    }
+                  },
+                  text: 'FRIENDS HUB',
+                  icon: Icons.people_alt_rounded,
+                  variant: GameButtonVariant.cyan,
+                  size: GameButtonSize.small,
+                ),
+                Game2DButton(
+                  onPressed: () {
+                    if (onOpenProfile != null) {
+                      onOpenProfile!();
+                    } else {
+                      PlayerProfileModal.show(context);
+                    }
+                  },
+                  text: 'MY PROFILE',
+                  icon: Icons.account_box_rounded,
+                  variant: GameButtonVariant.dark,
+                  size: GameButtonSize.small,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

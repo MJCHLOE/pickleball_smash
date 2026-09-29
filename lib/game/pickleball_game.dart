@@ -1,14 +1,21 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flame/game.dart';
 import 'package:flame/input.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/painting.dart';
+import '../models/character_roster.dart';
 import '../models/game_settings.dart';
+import '../models/multiplayer_models.dart';
 import '../services/audio_service.dart';
+import '../services/game_state_manager.dart';
+import '../services/multiplayer_service.dart';
 import 'components/background.dart';
 import 'components/player.dart';
 import 'components/ball.dart';
 import 'components/arcade_button_component.dart';
+import 'components/arcade_skill_button_component.dart';
+import '../models/battle_technique.dart';
 
 class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHandlerComponents {
   final void Function(int p1Score, int p2Score)? onScoreUpdated;
@@ -40,6 +47,10 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
   int rallyHitCount = 0; // 0 = serve, 1 = return, 2+ = open play
   bool isWaitingForServe = true;
   final bool? player1IsFemale;
+  final CharacterType? player1CharacterType;
+  final CharacterType? player2CharacterType;
+  final CharacterType? partner1CharacterType;
+  final CharacterType? partner2CharacterType;
 
   // Doubles (2v2) rotation & serve tracking
   int serverTeam = 1; // 1 = Team 1 (User + Partner), 2 = Team 2 (CPU 1 + CPU 2)
@@ -62,12 +73,29 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     this.isDoubles = false,
     this.settings,
     this.player1IsFemale,
+    this.player1CharacterType,
+    this.player2CharacterType,
+    this.partner1CharacterType,
+    this.partner2CharacterType,
+    this.courtId,
+    this.ballId,
+    this.isMultiplayer = false,
+    this.isHost = false,
   }) : super(
           camera: CameraComponent(),
         );
 
+  final String? courtId;
+  final String? ballId;
+  final bool isMultiplayer;
+  final bool isHost;
+  RemotePlayerInterpolator? _remoteInterpolator;
+  StreamSubscription<MultiplayerPacket>? _networkPacketSub;
+  double _networkTickTimer = 0.0;
+
   Background? _background;
-  Background get background => _background ??= Background();
+  Background get background =>
+      _background ??= Background(courtId: courtId ?? GameStateManager.instance.equippedCourtId);
   set background(Background val) => _background = val;
   PlayerComponent? _player1;
   PlayerComponent get player1 => _player1!;
@@ -81,6 +109,15 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
 
   late JoystickComponent joystick;
   late HudButtonComponent strikeButton;
+  ArcadeSkillButtonComponent? leftSpinButton;
+  ArcadeSkillButtonComponent? rightSpinButton;
+  ArcadeSkillButtonComponent? dashButton;
+
+  // Backward-compatible aliases
+  ArcadeSkillButtonComponent? get thunderButton => leftSpinButton;
+  set thunderButton(ArcadeSkillButtonComponent? val) => leftSpinButton = val;
+  ArcadeSkillButtonComponent? get phantomButton => rightSpinButton;
+  set phantomButton(ArcadeSkillButtonComponent? val) => rightSpinButton = val;
   late BallComponent ball;
   FpsTextComponent? fpsText;
   Sprite? paddleSprite;
@@ -155,49 +192,65 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     continuousRallyStreak = 0;
     onRallyStreakUpdated?.call(0, longestRally);
 
+    final bool isRallyScoring = (settings?.scoringMode == 'rally');
     final bool serverWon = isDoubles
         ? (winnerIsPlayerOne == (serverTeam == 1))
         : (winnerIsPlayerOne == (serverPlayer == 1));
 
-    if (serverWon) {
-      // 1. Points can ONLY be scored by the serving team
-      if (isDoubles) {
-        if (serverTeam == 1) {
-          p1Score++;
-        } else {
-          p2Score++;
-        }
+    if (isRallyScoring || serverWon) {
+      // 1. Points awarded to winner of rally (in Rally Scoring, every rally awards point; in Side-Out, only server)
+      if (winnerIsPlayerOne) {
+        p1Score++;
       } else {
-        if (serverPlayer == 1) {
-          p1Score++;
-        } else {
-          p2Score++;
-        }
+        p2Score++;
       }
 
       AudioService.instance.playPointScored();
       onScoreUpdated?.call(p1Score, p2Score);
 
       // 2. Win by 2 margin check
-      final int servingScore = isDoubles
-          ? (serverTeam == 1 ? p1Score : p2Score)
-          : (serverPlayer == 1 ? p1Score : p2Score);
-      final int receiverScore = isDoubles
-          ? (serverTeam == 1 ? p2Score : p1Score)
-          : (serverPlayer == 1 ? p2Score : p1Score);
+      final int maxScore = math.max(p1Score, p2Score);
+      final int minScore = math.min(p1Score, p2Score);
 
-      if (servingScore >= targetScore && (servingScore - receiverScore) >= 2) {
+      if (maxScore >= targetScore && (maxScore - minScore) >= 2) {
         isGameOver = true;
         pauseEngine();
+        if (winnerIsPlayerOne) {
+          AudioService.instance.playVictory();
+        } else {
+          AudioService.instance.playDefeat();
+        }
         onAnnouncement?.call(
           winnerIsPlayerOne ? 'VICTORY!' : 'MATCH DEFEAT',
           'Final Score: $p1Score - $p2Score',
         );
+        if (isMultiplayer && isHost) {
+          MultiplayerService.instance.broadcastPacket(
+            MultiplayerPacket(
+              type: PacketType.scoreSync,
+              timestamp: DateTime.now().millisecondsSinceEpoch,
+              senderId: MultiplayerService.instance.myProfile.playerId,
+              data: {
+                'p1Score': p1Score,
+                'p2Score': p2Score,
+              },
+            ),
+          );
+        }
         onMatchFinished?.call(winnerIsPlayerOne);
         return;
       }
 
-      // 3. Rule 5: In Doubles, the serving team switches sides when they win a rally!
+      // If Rally Scoring: the team that won the rally gets to serve next!
+      if (isRallyScoring) {
+        if (isDoubles) {
+          serverTeam = winnerIsPlayerOne ? 1 : 2;
+        } else {
+          serverPlayer = winnerIsPlayerOne ? 1 : 2;
+        }
+      }
+
+      // 3. In Doubles, the serving team switches sides when they win a rally!
       if (isDoubles) {
         if (serverTeam == 1) {
           final temp = p1CourtSide;
@@ -212,12 +265,26 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
 
       final callout = isDoubles ? doublesScoreCallout : '$p1Score - $p2Score';
 
+      if (isMultiplayer && isHost) {
+        MultiplayerService.instance.broadcastPacket(
+          MultiplayerPacket(
+            type: PacketType.scoreSync,
+            timestamp: DateTime.now().millisecondsSinceEpoch,
+            senderId: MultiplayerService.instance.myProfile.playerId,
+            data: {
+              'p1Score': p1Score,
+              'p2Score': p2Score,
+            },
+          ),
+        );
+      }
+
       onAnnouncement?.call(
         'POINT! ($callout)',
-        faultReason.isNotEmpty ? faultReason : 'Rally won by serving team',
+        faultReason.isNotEmpty ? faultReason : 'Rally won by ${winnerIsPlayerOne ? 'Player 1' : 'Player 2'}',
       );
 
-      // Same server serves again from the switched side
+      // Prepare next service positions
       prepareServicePositions();
     } else {
       // 4. Receiving team won rally -> No point awarded
@@ -276,6 +343,9 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     p2PartnerCourtSide = 'right';
 
     resumeEngine();
+    leftSpinButton?.resetCooldown();
+    rightSpinButton?.resetCooldown();
+    dashButton?.resetCooldown();
     onScoreUpdated?.call(0, 0);
     onRallyStreakUpdated?.call(0, longestRally);
     prepareServicePositions();
@@ -287,6 +357,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
   }
 
   void _dispatchViolation(String faultReason) {
+    AudioService.instance.playFault();
     String violationType = 'RULE VIOLATION';
     String description = faultReason;
     String ruleDetail = 'A fault ends the rally according to official pickleball rules.';
@@ -425,17 +496,28 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     camera.viewfinder.position = Vector2(1280 / 2, 720 / 2);
     _updateCameraViewport();
 
-    background = Background();
+    final effectiveCourt = courtId ?? GameStateManager.instance.equippedCourtId;
+    background = Background(courtId: effectiveCourt);
     world.add(background);
 
     _setupControls();
 
-    final effectiveP1IsFemale = player1IsFemale ?? false;
+    final effectiveP1Char = player1CharacterType ??
+        (player1IsFemale == true ? CharacterType.female1 : CharacterType.male1);
+    final effectiveP2Char = player2CharacterType ??
+        (effectiveP1Char == CharacterType.female1
+            ? CharacterType.female2
+            : (effectiveP1Char == CharacterType.female2 ? CharacterType.male2 : CharacterType.female1));
+    final effectiveP1PartnerChar = partner1CharacterType ??
+        (effectiveP1Char == CharacterType.male1 ? CharacterType.female2 : CharacterType.male1);
+    final effectiveP2PartnerChar = partner2CharacterType ??
+        (effectiveP2Char == CharacterType.male2 ? CharacterType.female2 : CharacterType.male2);
 
     // Player 1 (Team 1, Bottom, Human User)
     player1 = PlayerComponent(
       isPlayerOne: true,
-      isFemale: effectiveP1IsFemale,
+      characterType: effectiveP1Char,
+      isFemale: effectiveP1Char == CharacterType.female1 || effectiveP1Char == CharacterType.female2,
       isAI: false,
       playerSlot: 1,
       joystick: joystick,
@@ -447,7 +529,8 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     if (isDoubles) {
       player1Partner = PlayerComponent(
         isPlayerOne: true,
-        isFemale: !effectiveP1IsFemale,
+        characterType: effectiveP1PartnerChar,
+        isFemale: effectiveP1PartnerChar == CharacterType.female1 || effectiveP1PartnerChar == CharacterType.female2,
         isAI: true,
         playerSlot: 2,
         joystick: null,
@@ -456,11 +539,12 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       world.add(player1Partner!);
     }
 
-    // Player 2 (Team 2, Top, CPU 1)
+    // Player 2 (Team 2, Top, Remote Player or CPU 1)
     player2 = PlayerComponent(
       isPlayerOne: false,
-      isFemale: !effectiveP1IsFemale,
-      isAI: true,
+      characterType: effectiveP2Char,
+      isFemale: effectiveP2Char == CharacterType.female1 || effectiveP2Char == CharacterType.female2,
+      isAI: !isMultiplayer,
       playerSlot: 1,
       joystick: null,
     );
@@ -471,7 +555,8 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     if (isDoubles) {
       player2Partner = PlayerComponent(
         isPlayerOne: false,
-        isFemale: effectiveP1IsFemale,
+        characterType: effectiveP2PartnerChar,
+        isFemale: effectiveP2PartnerChar == CharacterType.female1 || effectiveP2PartnerChar == CharacterType.female2,
         isAI: true,
         playerSlot: 2,
         joystick: null,
@@ -481,7 +566,8 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     }
 
     // The Ball!
-    ball = BallComponent();
+    final effectiveBall = ballId ?? GameStateManager.instance.equippedBallId;
+    ball = BallComponent(ballId: effectiveBall);
     ball.customGame = this;
     world.add(ball);
 
@@ -504,18 +590,163 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     } catch (_) {}
 
     _updateFpsOverlay();
+
+    if (isMultiplayer) {
+      _remoteInterpolator = RemotePlayerInterpolator(
+        startX: player2.position.x,
+        startY: player2.position.y,
+      );
+      player2.remoteInterpolator = _remoteInterpolator;
+      _networkPacketSub = MultiplayerService.instance.packetStream.listen(_handleNetworkPacket);
+    }
   }
 
   @override
   void update(double dt) {
     super.update(dt);
     elapsedTime += dt;
+
+    if (isMultiplayer) {
+      _networkTickTimer += dt;
+      if (_networkTickTimer >= 0.033) {
+        _networkTickTimer = 0.0;
+        final myId = MultiplayerService.instance.myProfile.playerId;
+        MultiplayerService.instance.broadcastPacket(
+          MultiplayerPacket(
+            type: PacketType.playerState,
+            timestamp: DateTime.now().millisecondsSinceEpoch,
+            senderId: myId,
+            data: {
+              'x': player1.position.x,
+              'y': player1.position.y,
+              'vx': player1.currentVelocity.x,
+              'vy': player1.currentVelocity.y,
+              'isStriking': player1.currentState == PlayerState.slash,
+              'technique': player1.activeTechnique.name,
+              'isDashing': player1.isDashing,
+            },
+          ),
+        );
+
+        // Host continuously streams authoritative ball physics to Guest
+        if (isHost && !ball.isWaitingForServe) {
+          MultiplayerService.instance.broadcastPacket(
+            MultiplayerPacket(
+              type: PacketType.ballStrike,
+              timestamp: DateTime.now().millisecondsSinceEpoch,
+              senderId: myId,
+              data: {
+                'x': ball.position.x,
+                'y': ball.position.y,
+                'vx': ball.velocity.x,
+                'vy': ball.velocity.y,
+                'z': ball.z,
+                'zVelocity': ball.zVelocity,
+                'spin': ball.spin,
+              },
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  void onRemove() {
+    _networkPacketSub?.cancel();
+    super.onRemove();
+  }
+
+  void _handleNetworkPacket(MultiplayerPacket packet) {
+    if (packet.senderId == MultiplayerService.instance.myProfile.playerId) {
+      return;
+    }
+    if (packet.type == PacketType.playerState) {
+      // Invert coordinates across the symmetrical court (center: 640, 360)
+      final rawX = (packet.data['x'] as num?)?.toDouble() ?? 640.0;
+      final rawY = (packet.data['y'] as num?)?.toDouble() ?? 550.0;
+      final rawVx = (packet.data['vx'] as num?)?.toDouble() ?? 0.0;
+      final rawVy = (packet.data['vy'] as num?)?.toDouble() ?? 0.0;
+
+      final x = 1280.0 - rawX;
+      final y = 720.0 - rawY;
+      final vx = -rawVx;
+      final vy = -rawVy;
+
+      _remoteInterpolator?.onPacketReceived(x: x, y: y, vx: vx, vy: vy);
+
+      if (packet.data['isStriking'] == true) {
+        player2.strike();
+      }
+      if (packet.data['isDashing'] == true) {
+        player2.dash();
+      }
+      if (packet.data['technique'] != null && packet.data['technique'] != 'none') {
+        final tech = BattleTechnique.values.firstWhere(
+          (t) => t.name == packet.data['technique'],
+          orElse: () => BattleTechnique.none,
+        );
+        if (tech != BattleTechnique.none) {
+          player2.queueTechnique(tech);
+        }
+      }
+    } else if (packet.type == PacketType.ballStrike) {
+      final rawX = (packet.data['x'] as num?)?.toDouble();
+      final rawY = (packet.data['y'] as num?)?.toDouble();
+      final rawVx = (packet.data['vx'] as num?)?.toDouble();
+      final rawVy = (packet.data['vy'] as num?)?.toDouble();
+      final rawSpin = (packet.data['spin'] as num?)?.toDouble();
+      final z = (packet.data['z'] as num?)?.toDouble();
+      final zVelocity = (packet.data['zVelocity'] as num?)?.toDouble();
+
+      final bx = rawX != null ? 1280.0 - rawX : null;
+      final by = rawY != null ? 720.0 - rawY : null;
+      final bvx = rawVx != null ? -rawVx : null;
+      final bvy = rawVy != null ? -rawVy : null;
+      final bspin = rawSpin != null ? -rawSpin : null;
+
+      if (bx != null && by != null) {
+        if (!isHost) {
+          // Guest receiving authoritative ball from Host
+          ball.position.setValues(bx, by);
+          if (bvx != null && bvy != null) ball.velocity.setValues(bvx, bvy);
+          if (bspin != null) ball.spin = bspin;
+          if (z != null) ball.z = z;
+          if (zVelocity != null) ball.zVelocity = zVelocity;
+          if (ball.isWaitingForServe) {
+            ball.isWaitingForServe = false;
+            isWaitingForServe = false;
+          }
+        } else {
+          // Host receiving ball hit from Guest: Guest struck the ball
+          ball.position.setValues(bx, by);
+          if (bvx != null && bvy != null) ball.velocity.setValues(bvx, bvy);
+          if (bspin != null) ball.spin = bspin;
+        }
+      }
+    } else if (packet.type == PacketType.scoreSync) {
+      final p1 = packet.data['p1Score'] as int?;
+      final p2 = packet.data['p2Score'] as int?;
+      if (p1 != null && p2 != null) {
+        if (isHost) {
+          p1Score = p1;
+          p2Score = p2;
+        } else {
+          p1Score = p2;
+          p2Score = p1;
+        }
+        onScoreUpdated?.call(p1Score, p2Score);
+      }
+    }
   }
 
   @override
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
     _updateCameraViewport();
+    if (isLoaded) {
+      _setupControls();
+    }
   }
 
   void _updateCameraViewport() {
@@ -562,12 +793,25 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
 
     final baseColor = _resolveJoystickColor(settings?.joystickColor);
 
-    double buttonRadius = 40.0;
+    final bool showJoystick = settings?.showJoystick ?? true;
+    final bool showSkillButtons = settings?.showSkillButtons ?? true;
+
+    final double joyMarginX = settings?.joystickMarginX ?? 36.0;
+    final double joyMarginY = settings?.joystickMarginY ?? 36.0;
+
+    final double skillMarginX = settings?.skillMarginX ?? 36.0;
+    final double skillMarginY = settings?.skillMarginY ?? 36.0;
+    final double skillSpacing = settings?.skillSpacing ?? 90.0;
+    final double skillScale = settings?.skillButtonScale ?? 1.0;
+
+    double baseButtonRadius = 40.0;
     if (settings?.buttonSize == 'Large') {
-      buttonRadius = 48.0;
+      baseButtonRadius = 48.0;
     } else if (settings?.buttonSize == 'Extra Large') {
-      buttonRadius = 56.0;
+      baseButtonRadius = 56.0;
     }
+    final buttonRadius = baseButtonRadius * skillScale;
+    final skillRadius = (buttonRadius * 0.65).clamp(20.0, 48.0);
 
     final knobRadius = 26.0 * expand;
     final bgRadius = 68.0 * expand;
@@ -575,92 +819,247 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     // Setup HUD Controls based on joystickOnLeft setting
     final knobPaint = Paint()..color = baseColor.withAlpha(knobAlpha);
     final bgPaint = Paint()..color = baseColor.withAlpha(bgAlpha);
-    
-    final joystickMargin = effectiveJoystickOnLeft
-        ? const EdgeInsets.only(left: 36, bottom: 36)
-        : const EdgeInsets.only(right: 36, bottom: 36);
 
-    // 1. IN-PLACE UPDATE FOR JOYSTICK (prevents doubling / duplicate components)
-    final existingJoysticks = camera.viewport.children.whereType<JoystickComponent>().toList();
-    if (existingJoysticks.isNotEmpty) {
-      joystick = existingJoysticks.first;
-      final knobComp = joystick.knob as CircleComponent;
-      knobComp.radius = knobRadius;
-      knobComp.paint = knobPaint;
+    final bool isArcadePreset = settings?.controlsPreset == 'Default Arcade';
+    final double vpWidth = hasLayout ? (camera.viewport.size.x > 0 ? camera.viewport.size.x : 1280.0) : 1280.0;
+    final double vpHeight = hasLayout ? (camera.viewport.size.y > 0 ? camera.viewport.size.y : 720.0) : 720.0;
+    final bool isLeftHanded = !effectiveJoystickOnLeft;
 
-      final bgComp = joystick.background as CircleComponent;
-      bgComp.radius = bgRadius;
-      bgComp.paint = bgPaint;
-
-      joystick.margin = joystickMargin;
-
-      // Clean up any extraneous duplicate joysticks if present
-      for (int i = 1; i < existingJoysticks.length; i++) {
-        existingJoysticks[i].removeFromParent();
-      }
-    } else {
-      joystick = JoystickComponent(
-        knob: CircleComponent(radius: knobRadius, paint: knobPaint),
-        background: CircleComponent(radius: bgRadius, paint: bgPaint),
-        margin: joystickMargin,
-      );
-      camera.viewport.add(joystick);
+    EdgeInsets calculateNormalizedMargin(double normalizedX, double normalizedY, double width, double height) {
+      final effX = isLeftHanded ? (1.0 - normalizedX) : normalizedX;
+      final effY = normalizedY;
+      final double targetLeft = (effX * vpWidth - width / 2).clamp(4.0, math.max(4.0, vpWidth - width - 4.0)).toDouble();
+      final double targetTop = (effY * vpHeight - height / 2).clamp(4.0, math.max(4.0, vpHeight - height - 4.0)).toDouble();
+      return EdgeInsets.only(left: targetLeft, top: targetTop);
     }
 
-    final buttonMargin = effectiveJoystickOnLeft
-        ? const EdgeInsets.only(right: 36, bottom: 36)
-        : const EdgeInsets.only(left: 36, bottom: 36);
+    final EdgeInsets joystickMargin;
+    final EdgeInsets buttonMargin;
+    final EdgeInsets leftSpinMargin;
+    final EdgeInsets rightSpinMargin;
+    final EdgeInsets dashMargin;
 
-    // 2. IN-PLACE UPDATE FOR 2D ARCADE SMASH BUTTON (prevents doubling / duplicate components)
-    final existingButtons = camera.viewport.children.whereType<HudButtonComponent>().toList();
-    if (existingButtons.isNotEmpty) {
-      strikeButton = existingButtons.first;
-      if (strikeButton.button is ArcadeButtonFaceComponent) {
-        final btnFace = strikeButton.button as ArcadeButtonFaceComponent;
-        btnFace.updateProperties(
-          radius: buttonRadius,
-          opacity: opacity,
-          paddleSprite: paddleSprite,
-        );
-      }
-      if (strikeButton.buttonDown is ArcadeButtonFaceComponent) {
-        final btnDownFace = strikeButton.buttonDown as ArcadeButtonFaceComponent;
-        btnDownFace.updateProperties(
-          radius: buttonRadius,
-          opacity: opacity,
-          paddleSprite: paddleSprite,
-        );
-      }
+    if (isArcadePreset) {
+      joystickMargin = effectiveJoystickOnLeft
+          ? EdgeInsets.only(left: joyMarginX, bottom: joyMarginY)
+          : EdgeInsets.only(right: joyMarginX, bottom: joyMarginY);
 
-      strikeButton.margin = buttonMargin;
+      buttonMargin = effectiveJoystickOnLeft
+          ? EdgeInsets.only(right: skillMarginX, bottom: skillMarginY)
+          : EdgeInsets.only(left: skillMarginX, bottom: skillMarginY);
 
-      // Clean up any extraneous duplicate buttons if present
-      for (int i = 1; i < existingButtons.length; i++) {
-        existingButtons[i].removeFromParent();
+      leftSpinMargin = effectiveJoystickOnLeft
+          ? EdgeInsets.only(right: skillMarginX + skillSpacing, bottom: skillMarginY)
+          : EdgeInsets.only(left: skillMarginX + skillSpacing, bottom: skillMarginY);
+      rightSpinMargin = effectiveJoystickOnLeft
+          ? EdgeInsets.only(right: skillMarginX, bottom: skillMarginY + skillSpacing)
+          : EdgeInsets.only(left: skillMarginX, bottom: skillMarginY + skillSpacing);
+      dashMargin = effectiveJoystickOnLeft
+          ? EdgeInsets.only(right: skillMarginX + skillSpacing, bottom: skillMarginY + skillSpacing)
+          : EdgeInsets.only(left: skillMarginX + skillSpacing, bottom: skillMarginY + skillSpacing);
+    } else {
+      // Mobile Legends: Bang Bang (MLBB) & Free Position Controller Layout
+      final double joyX = settings?.joystickPosX ?? GameSettings.mlbbJoystickX;
+      final double joyY = settings?.joystickPosY ?? GameSettings.mlbbJoystickY;
+      final double smashX = settings?.smashPosX ?? GameSettings.mlbbSmashX;
+      final double smashY = settings?.smashPosY ?? GameSettings.mlbbSmashY;
+      final double leftSpinX = settings?.leftSpinPosX ?? GameSettings.mlbbLeftSpinX;
+      final double leftSpinY = settings?.leftSpinPosY ?? GameSettings.mlbbLeftSpinY;
+      final double rightSpinX = settings?.rightSpinPosX ?? GameSettings.mlbbRightSpinX;
+      final double rightSpinY = settings?.rightSpinPosY ?? GameSettings.mlbbRightSpinY;
+      final double dashX = settings?.dashPosX ?? GameSettings.mlbbDashX;
+      final double dashY = settings?.dashPosY ?? GameSettings.mlbbDashY;
+
+      joystickMargin = calculateNormalizedMargin(joyX, joyY, bgRadius * 2, bgRadius * 2);
+      buttonMargin = calculateNormalizedMargin(smashX, smashY, buttonRadius * 2, buttonRadius * 2);
+      leftSpinMargin = calculateNormalizedMargin(leftSpinX, leftSpinY, skillRadius * 2 + 8, skillRadius * 2 + 12);
+      rightSpinMargin = calculateNormalizedMargin(rightSpinX, rightSpinY, skillRadius * 2 + 8, skillRadius * 2 + 12);
+      dashMargin = calculateNormalizedMargin(dashX, dashY, skillRadius * 2 + 8, skillRadius * 2 + 12);
+    }
+
+    // 1. JOYSTICK COMPONENT MANAGEMENT
+    final existingJoysticks = camera.viewport.children.whereType<JoystickComponent>().toList();
+    if (!showJoystick) {
+      for (final joy in existingJoysticks) {
+        joy.removeFromParent();
       }
     } else {
-      strikeButton = HudButtonComponent(
-        button: ArcadeButtonFaceComponent(
-          radius: buttonRadius,
+      if (existingJoysticks.isNotEmpty) {
+        joystick = existingJoysticks.first;
+        final knobComp = joystick.knob as CircleComponent;
+        knobComp.radius = knobRadius;
+        knobComp.paint = knobPaint;
+
+        final bgComp = joystick.background as CircleComponent;
+        bgComp.radius = bgRadius;
+        bgComp.paint = bgPaint;
+
+        joystick.margin = joystickMargin;
+
+        for (int i = 1; i < existingJoysticks.length; i++) {
+          existingJoysticks[i].removeFromParent();
+        }
+      } else {
+        joystick = JoystickComponent(
+          knob: CircleComponent(radius: knobRadius, paint: knobPaint),
+          background: CircleComponent(radius: bgRadius, paint: bgPaint),
+          margin: joystickMargin,
+        );
+        camera.viewport.add(joystick);
+      }
+    }
+
+    // 2. SMASH / STRIKE BUTTON MANAGEMENT
+    final existingButtons = camera.viewport.children.whereType<HudButtonComponent>().toList();
+    if (!showSkillButtons) {
+      for (final btn in existingButtons) {
+        btn.removeFromParent();
+      }
+    } else {
+      if (existingButtons.isNotEmpty) {
+        strikeButton = existingButtons.first;
+        if (strikeButton.button is ArcadeButtonFaceComponent) {
+          final btnFace = strikeButton.button as ArcadeButtonFaceComponent;
+          btnFace.updateProperties(
+            radius: buttonRadius,
+            opacity: opacity,
+            paddleSprite: paddleSprite,
+          );
+        }
+        if (strikeButton.buttonDown is ArcadeButtonFaceComponent) {
+          final btnDownFace = strikeButton.buttonDown as ArcadeButtonFaceComponent;
+          btnDownFace.updateProperties(
+            radius: buttonRadius,
+            opacity: opacity,
+            paddleSprite: paddleSprite,
+          );
+        }
+
+        strikeButton.margin = buttonMargin;
+
+        for (int i = 1; i < existingButtons.length; i++) {
+          existingButtons[i].removeFromParent();
+        }
+      } else {
+        strikeButton = HudButtonComponent(
+          button: ArcadeButtonFaceComponent(
+            radius: buttonRadius,
+            opacity: opacity,
+            isPressed: false,
+            paddleSprite: paddleSprite,
+            game: this,
+          ),
+          buttonDown: ArcadeButtonFaceComponent(
+            radius: buttonRadius,
+            opacity: opacity,
+            isPressed: true,
+            paddleSprite: paddleSprite,
+            game: this,
+          ),
+          margin: buttonMargin,
+          onPressed: () {
+            triggerSmashButtonEffect();
+            player1.strike();
+          },
+        );
+        camera.viewport.add(strikeButton);
+      }
+    }
+
+    // 3. SKILL BUTTONS (Left Spin, Right Spin, Dash)
+
+    final existingLeftSpin = camera.viewport.children
+        .whereType<ArcadeSkillButtonComponent>()
+        .where((b) => b.technique == BattleTechnique.leftSpin)
+        .toList();
+    final existingRightSpin = camera.viewport.children
+        .whereType<ArcadeSkillButtonComponent>()
+        .where((b) => b.technique == BattleTechnique.rightSpin)
+        .toList();
+    final existingDash = camera.viewport.children
+        .whereType<ArcadeSkillButtonComponent>()
+        .where((b) => b.technique == BattleTechnique.dash)
+        .toList();
+
+    if (!showSkillButtons) {
+      for (final btn in existingLeftSpin) {
+        btn.removeFromParent();
+      }
+      for (final btn in existingRightSpin) {
+        btn.removeFromParent();
+      }
+      for (final btn in existingDash) {
+        btn.removeFromParent();
+      }
+      leftSpinButton = null;
+      rightSpinButton = null;
+      dashButton = null;
+    } else {
+      if (existingLeftSpin.isNotEmpty) {
+        leftSpinButton = existingLeftSpin.first;
+        leftSpinButton!.updateProperties(
+          radius: skillRadius,
           opacity: opacity,
-          isPressed: false,
-          paddleSprite: paddleSprite,
-          game: this,
-        ),
-        buttonDown: ArcadeButtonFaceComponent(
-          radius: buttonRadius,
+          margin: leftSpinMargin,
+        );
+        for (int i = 1; i < existingLeftSpin.length; i++) {
+          existingLeftSpin[i].removeFromParent();
+        }
+      } else {
+        leftSpinButton = ArcadeSkillButtonComponent(
+          technique: BattleTechnique.leftSpin,
+          radius: skillRadius,
           opacity: opacity,
-          isPressed: true,
-          paddleSprite: paddleSprite,
           game: this,
-        ),
-        margin: buttonMargin,
-        onPressed: () {
-          triggerSmashButtonEffect();
-          player1.strike();
-        },
-      );
-      camera.viewport.add(strikeButton);
+          margin: leftSpinMargin,
+          onTriggered: triggerLeftSpin,
+        );
+        camera.viewport.add(leftSpinButton!);
+      }
+
+      if (existingRightSpin.isNotEmpty) {
+        rightSpinButton = existingRightSpin.first;
+        rightSpinButton!.updateProperties(
+          radius: skillRadius,
+          opacity: opacity,
+          margin: rightSpinMargin,
+        );
+        for (int i = 1; i < existingRightSpin.length; i++) {
+          existingRightSpin[i].removeFromParent();
+        }
+      } else {
+        rightSpinButton = ArcadeSkillButtonComponent(
+          technique: BattleTechnique.rightSpin,
+          radius: skillRadius,
+          opacity: opacity,
+          game: this,
+          margin: rightSpinMargin,
+          onTriggered: triggerRightSpin,
+        );
+        camera.viewport.add(rightSpinButton!);
+      }
+
+      if (existingDash.isNotEmpty) {
+        dashButton = existingDash.first;
+        dashButton!.updateProperties(
+          radius: skillRadius,
+          opacity: opacity,
+          margin: dashMargin,
+        );
+        for (int i = 1; i < existingDash.length; i++) {
+          existingDash[i].removeFromParent();
+        }
+      } else {
+        dashButton = ArcadeSkillButtonComponent(
+          technique: BattleTechnique.dash,
+          radius: skillRadius,
+          opacity: opacity,
+          game: this,
+          margin: dashMargin,
+          onTriggered: triggerDash,
+        );
+        camera.viewport.add(dashButton!);
+      }
     }
   }
 
@@ -675,6 +1074,81 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       if (btn.buttonDown is ArcadeButtonFaceComponent) {
         (btn.buttonDown as ArcadeButtonFaceComponent).triggerTapEffect();
       }
+    }
+  }
+
+  /// Triggers the Left Spin (Cyclone Curve) battle technique (Hotkey K)
+  void triggerLeftSpin() {
+    if (leftSpinButton != null && leftSpinButton!.cooldownRemaining > 0) return;
+    leftSpinButton?.triggerTapEffect();
+    player1.queueTechnique(BattleTechnique.leftSpin);
+    leftSpinButton?.isPrimed = true;
+    rightSpinButton?.isPrimed = false;
+    AudioService.instance.playPaddleHit();
+    if ((ball.position.y - player1.position.y).abs() < 120 && ball.velocity.y > 0) {
+      player1.strike();
+    }
+  }
+
+  /// Triggers the Right Spin (Vortex Hook) battle technique (Hotkey L)
+  void triggerRightSpin() {
+    if (rightSpinButton != null && rightSpinButton!.cooldownRemaining > 0) return;
+    rightSpinButton?.triggerTapEffect();
+    player1.queueTechnique(BattleTechnique.rightSpin);
+    rightSpinButton?.isPrimed = true;
+    leftSpinButton?.isPrimed = false;
+    AudioService.instance.playPaddleHit();
+    if ((ball.position.y - player1.position.y).abs() < 120 && ball.velocity.y > 0) {
+      player1.strike();
+    }
+  }
+
+  /// Triggers the Flash Dash skill technique (Hotkey Shift / I / Dash Button)
+  void triggerDash() {
+    if (dashButton != null && dashButton!.cooldownRemaining > 0) return;
+    final didDash = player1.dash();
+    if (didDash) {
+      dashButton?.triggerTapEffect();
+      dashButton?.startCooldown();
+    }
+  }
+
+  // Backward compatibility trigger methods
+  void triggerThunderDrive() => triggerLeftSpin();
+  void triggerPhantomDink() => triggerRightSpin();
+
+  /// Called when a battle technique is successfully struck and launched into the rally
+  void onTechniqueExecuted(BattleTechnique technique) {
+    if (technique == BattleTechnique.leftSpin) {
+      leftSpinButton?.startCooldown();
+      leftSpinButton?.isPrimed = false;
+      AudioService.instance.playLeftSpin();
+      if (settings?.screenShakeEnabled ?? true) {
+        camera.viewfinder.position = Vector2(640, 364);
+        Future.delayed(const Duration(milliseconds: 60), () {
+          camera.viewfinder.position = Vector2(640, 356);
+        });
+        Future.delayed(const Duration(milliseconds: 120), () {
+          camera.viewfinder.position = Vector2(640, 360);
+        });
+      }
+    } else if (technique == BattleTechnique.rightSpin) {
+      rightSpinButton?.startCooldown();
+      rightSpinButton?.isPrimed = false;
+      AudioService.instance.playRightSpin();
+      if (settings?.screenShakeEnabled ?? true) {
+        camera.viewfinder.position = Vector2(640, 364);
+        Future.delayed(const Duration(milliseconds: 60), () {
+          camera.viewfinder.position = Vector2(640, 356);
+        });
+        Future.delayed(const Duration(milliseconds: 120), () {
+          camera.viewfinder.position = Vector2(640, 360);
+        });
+      }
+    } else if (technique == BattleTechnique.dash) {
+      dashButton?.startCooldown();
+      dashButton?.isPrimed = false;
+      AudioService.instance.playDash();
     }
   }
 

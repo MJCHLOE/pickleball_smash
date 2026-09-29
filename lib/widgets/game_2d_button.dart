@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import '../services/audio_service.dart';
 
 enum GameButtonVariant {
   primary, // Neon Lime face + Deep Emerald bevel (black text)
@@ -53,7 +53,7 @@ class _Game2DButtonState extends State<Game2DButton> {
   void _handleTapDown(TapDownDetails details) {
     if (widget.onPressed == null || widget.isLoading) return;
     setState(() => _isPressed = true);
-    HapticFeedback.selectionClick();
+    AudioService.instance.playButtonTap();
   }
 
   void _handleTapUp(TapUpDetails details) {

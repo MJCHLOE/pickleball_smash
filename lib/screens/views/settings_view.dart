@@ -5,6 +5,7 @@ import '../../services/game_state_manager.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/avatar_picker_dialog.dart';
 import '../../widgets/game_2d_button.dart';
+import '../../widgets/hud_controls_adjuster_modal.dart';
 import '../../widgets/player_avatar.dart';
 import '../auth/login_screen.dart';
 import 'player_stats_modal.dart';
@@ -737,6 +738,97 @@ class _SettingsViewState extends State<SettingsView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // On-Screen HUD Adjuster Quick Launch
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.neonLime.withValues(alpha: 0.18),
+                  AppTheme.electricCyan.withValues(alpha: 0.12),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppTheme.neonLime.withValues(alpha: 0.5)),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 360;
+                if (isNarrow) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.neonLime.withValues(alpha: 0.25),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.gamepad_rounded, color: AppTheme.neonLime, size: 20),
+                          ),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('On-Screen HUD Adjuster', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5)),
+                                Text('Live preview, presets & custom controls', style: TextStyle(color: AppTheme.textMuted, fontSize: 10.5)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Game2DButton(
+                        text: 'CUSTOMIZE HUD & SKILLS',
+                        size: GameButtonSize.small,
+                        variant: GameButtonVariant.primary,
+                        isFullWidth: true,
+                        onPressed: () {
+                          HudControlsAdjusterModal.show(context);
+                        },
+                      ),
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.neonLime.withValues(alpha: 0.25),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.gamepad_rounded, color: AppTheme.neonLime, size: 20),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('On-Screen HUD & Skills Adjuster', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                          Text('Live screen preview, custom layout presets, button sizes & spacing', style: TextStyle(color: AppTheme.textMuted, fontSize: 10.5)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Game2DButton(
+                      text: 'CUSTOMIZE HUD',
+                      size: GameButtonSize.small,
+                      variant: GameButtonVariant.primary,
+                      onPressed: () {
+                        HudControlsAdjusterModal.show(context);
+                      },
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 14),
+
           // 1. Control Scheme
           const Text('Control Scheme', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),

@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flame/game.dart';
 import '../game/pickleball_game.dart';
+import '../models/character_roster.dart';
 import '../models/player_avatar.dart';
+import '../services/audio_service.dart';
 import '../services/game_state_manager.dart';
+import '../services/multiplayer_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/avatar_picker_dialog.dart';
 import '../widgets/game_2d_button.dart';
@@ -13,6 +16,7 @@ import '../widgets/game_2d_text.dart';
 import '../widgets/player_avatar.dart';
 import 'auth/register_screen.dart';
 import 'views/in_game_settings_modal.dart';
+import '../widgets/hud_controls_adjuster_modal.dart';
 import '../widgets/pickleball_rules_modal.dart';
 
 class GamePlayScreen extends StatefulWidget {
@@ -79,17 +83,62 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
       DeviceOrientation.landscapeRight,
     ]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    AudioService.instance.playBgm();
 
     final state = GameStateManager.instance;
     const targetScore = 11; // Standard Pickleball Game is 11 points
-    final isMayaSelected = state.playerAvatarId.toLowerCase().contains('maya');
+    final p1Char = CharacterRoster.getById(state.playerAvatarId);
+    final p1Type = p1Char.type;
+
+    // AI bot opponents select among characters including male2, male3, and female2 (Chloe Frost)
+    CharacterType p2Type;
+    final oppLower = (widget.opponentName ?? '').toLowerCase();
+    if (oppLower.contains('frost') || oppLower.contains('chloe') || oppLower.contains('luna') || oppLower.contains('female2')) {
+      p2Type = CharacterType.female2;
+    } else if (oppLower.contains('smash') || oppLower.contains('sammy')) {
+      p2Type = CharacterType.male3;
+    } else if (oppLower.contains('blaze') || oppLower.contains('rocky') || oppLower.contains('iron') || oppLower.contains('viper')) {
+      p2Type = CharacterType.male2;
+    } else if (oppLower.contains('sarah') || oppLower.contains('maya')) {
+      p2Type = CharacterType.female1;
+    } else {
+      p2Type = CharacterType.male1;
+    }
+
+    final partner1Type = CharacterType.female1;
+    final partner2Type = CharacterType.male2;
+
+    final bool isMultiplayer = widget.matchType == 'multiplayer';
+    final multi = MultiplayerService.instance;
+    final bool isHost = multi.isHost;
+    final room = multi.currentRoom;
+
+    final effectiveTargetScore = (isMultiplayer && room != null) ? room.targetScore : targetScore;
+    final effectiveCourtId = (isMultiplayer && room != null) ? room.courtId : state.equippedCourtId;
+
+    if (isMultiplayer && room != null) {
+      final oppSlot = room.slots.firstWhere(
+        (s) => isHost ? (!s.isHost && !s.isEmpty) : (s.isHost && !s.isEmpty),
+        orElse: () => room.slots.firstWhere((s) => s.playerId != multi.myProfile.playerId, orElse: () => room.slots.first),
+      );
+      final oppChar = CharacterRoster.getById(oppSlot.characterId.isNotEmpty ? oppSlot.characterId : oppSlot.playerAvatar ?? 'alex_classic');
+      p2Type = oppChar.type;
+    }
 
     _game = PickleballGame(
-      targetScore: targetScore,
+      targetScore: effectiveTargetScore,
       settings: state.settings,
       joystickOnLeft: state.settings.joystickOnLeft,
-      player1IsFemale: isMayaSelected,
+      player1IsFemale: p1Type == CharacterType.female1 || p1Type == CharacterType.female2,
+      player1CharacterType: p1Type,
+      player2CharacterType: p2Type,
+      partner1CharacterType: partner1Type,
+      partner2CharacterType: partner2Type,
       isDoubles: widget.isDoubles,
+      courtId: effectiveCourtId,
+      ballId: state.equippedBallId,
+      isMultiplayer: isMultiplayer,
+      isHost: isHost,
       onViolation: (type, desc, ruleDetail) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
@@ -171,6 +220,11 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
               _matchFinished = true;
               _playerWon = won;
             });
+            if (won) {
+              AudioService.instance.playVictory();
+            } else {
+              AudioService.instance.playDefeat();
+            }
             // Record results in state manager
             state.recordMatchResult(
               won: won,
@@ -181,6 +235,20 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
               playerScore: _p1Score,
               opponentScore: _p2Score,
             );
+
+            if (widget.matchType == 'multiplayer') {
+              MultiplayerService.instance.recordOnlineMatch(
+                won: won,
+                opponentName: widget.opponentName ?? 'Online Challenger',
+                opponentCharacter: p2Type.name,
+                myScore: _p1Score,
+                opponentScore: _p2Score,
+                smashes: _smashesCount,
+                aces: 2,
+                durationSeconds: _game.elapsedTime.toInt(),
+                gameMode: widget.isDoubles ? '2v2 Doubles' : '1v1 Singles',
+              );
+            }
 
             _autoRestartTimer?.cancel();
           }
@@ -204,20 +272,25 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
   }
 
   void _togglePause() {
+    AudioService.instance.playButtonTap();
     setState(() {
       _isPaused = !_isPaused;
       if (_isPaused) {
         _game.pauseEngine();
+        AudioService.instance.pauseBgm();
       } else {
         _game.resumeEngine();
+        AudioService.instance.resumeBgm();
       }
     });
   }
 
   void _openInGameSettings() {
+    AudioService.instance.playButtonTap();
     final wasPausedBefore = _isPaused;
     if (!_isPaused) {
       _game.pauseEngine();
+      AudioService.instance.pauseBgm();
       setState(() {
         _isPaused = true;
       });
@@ -237,9 +310,11 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
   }
 
   void _openRulesModal({String? violation}) {
+    AudioService.instance.playButtonTap();
     final wasPausedBefore = _isPaused;
     if (!_isPaused) {
       _game.pauseEngine();
+      AudioService.instance.pauseBgm();
       setState(() {
         _isPaused = true;
       });
@@ -248,6 +323,30 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
     PickleballRulesModal.show(
       context,
       highlightedViolation: violation,
+      onResume: () {
+        if (!wasPausedBefore && mounted) {
+          _togglePause();
+        }
+      },
+    );
+  }
+
+  void _openHudAdjusterModal() {
+    AudioService.instance.playButtonTap();
+    final wasPausedBefore = _isPaused;
+    if (!_isPaused) {
+      _game.pauseEngine();
+      AudioService.instance.pauseBgm();
+      setState(() {
+        _isPaused = true;
+      });
+    }
+
+    HudControlsAdjusterModal.show(
+      context,
+      onSettingsChanged: (newSettings) {
+        _game.applySettings(newSettings);
+      },
       onResume: () {
         if (!wasPausedBefore && mounted) {
           _togglePause();
@@ -357,7 +456,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Container(
-                    width: 360,
+                    constraints: const BoxConstraints(maxWidth: 360),
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: AppTheme.surface,
@@ -402,6 +501,16 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
                         ),
                         const SizedBox(height: 12),
                         Game2DButton(
+                          key: const ValueKey('pause_menu_hud_adjuster_btn'),
+                          onPressed: _openHudAdjusterModal,
+                          text: 'HUD & CONTROLS ADJUSTER',
+                          icon: Icons.gamepad_rounded,
+                          variant: GameButtonVariant.amber,
+                          size: GameButtonSize.medium,
+                          isFullWidth: true,
+                        ),
+                        const SizedBox(height: 12),
+                        Game2DButton(
                           key: const ValueKey('pause_menu_settings_btn'),
                           onPressed: _openInGameSettings,
                           text: 'MATCH SETTINGS',
@@ -436,7 +545,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
                   child: Container(
-                    width: 380,
+                    constraints: const BoxConstraints(maxWidth: 380),
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: AppTheme.surface,
@@ -682,6 +791,31 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                if (widget.matchType == 'multiplayer') ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: AppTheme.neonLime.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.wifi_rounded, color: AppTheme.neonLime, size: 9),
+                        const SizedBox(width: 3),
+                        Text(
+                          '${MultiplayerService.instance.currentPingMs} ms',
+                          style: const TextStyle(
+                            color: AppTheme.neonLime,
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 3),
@@ -1264,6 +1398,25 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
             margin: const EdgeInsets.symmetric(horizontal: 2),
           ),
           InkWell(
+            key: const ValueKey('ingame_hud_adjuster_btn'),
+            onTap: _openHudAdjusterModal,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: const Icon(
+                Icons.gamepad_rounded,
+                color: AppTheme.goldCoin,
+                size: 20,
+              ),
+            ),
+          ),
+          Container(
+            width: 1,
+            height: 20,
+            color: Colors.white24,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+          ),
+          InkWell(
             key: const ValueKey('ingame_settings_btn'),
             onTap: _openInGameSettings,
             borderRadius: BorderRadius.circular(10),
@@ -1324,6 +1477,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
+    AudioService.instance.resumeBgm();
     super.dispose();
   }
 }

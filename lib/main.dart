@@ -77,6 +77,9 @@ class PickleballApp extends StatelessWidget {
       title: 'PICKL',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
+      scrollBehavior: const MaterialScrollBehavior().copyWith(
+        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      ),
       home: initialScreen ?? const DashboardScreen(),
     );
   }

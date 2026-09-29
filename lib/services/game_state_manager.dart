@@ -1,7 +1,11 @@
 import 'package:flutter/foundation.dart';
+import '../models/ball_catalog.dart';
 import '../models/challenge_model.dart';
+import '../models/character_roster.dart';
+import '../models/court_catalog.dart';
 import '../models/tournament_model.dart';
 import '../models/game_settings.dart';
+import 'audio_service.dart';
 import 'database_service.dart';
 
 class GameStateManager extends ChangeNotifier {
@@ -25,6 +29,134 @@ class GameStateManager extends ChangeNotifier {
   int xpToNextLevel = 500;
   int coins = 500;
   int trophies = 0;
+
+  // Unlocked Characters (Default: Alex & Maya free)
+  final Set<String> unlockedCharacterIds = {'alex_classic', 'maya_speed'};
+
+  bool isCharacterUnlocked(String charId) {
+    if (charId == 'alex_classic' || charId == 'maya_speed') return true;
+    return unlockedCharacterIds.contains(charId);
+  }
+
+  bool purchaseCharacter(String charId) {
+    final character = CharacterRoster.getById(charId);
+    if (isCharacterUnlocked(character.id)) {
+      playerAvatarId = character.id;
+      notifyListeners();
+      return true;
+    }
+
+    if (coins < character.price) {
+      return false; // Insufficient coins
+    }
+
+    coins -= character.price;
+    unlockedCharacterIds.add(character.id);
+    playerAvatarId = character.id;
+    AudioService.instance.playCoin();
+    saveCurrentProgress();
+    notifyListeners();
+    return true;
+  }
+
+  bool sellCharacter(String charId) {
+    final character = CharacterRoster.getById(charId);
+    if (!character.isPurchasable) return false; // Cannot sell default characters
+    if (!unlockedCharacterIds.contains(character.id)) return false; // Not owned
+
+    coins += character.sellRefund;
+    unlockedCharacterIds.remove(character.id);
+    if (playerAvatarId == character.id) {
+      playerAvatarId = 'alex_classic';
+    }
+    AudioService.instance.playCoin();
+    saveCurrentProgress();
+    notifyListeners();
+    return true;
+  }
+
+  void equipCharacter(String charId) {
+    if (!isCharacterUnlocked(charId)) return;
+    playerAvatarId = charId;
+    saveCurrentProgress();
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Court Backgrounds (Default: Classic Pro Arena free)
+  // ---------------------------------------------------------------------------
+  final Set<String> unlockedCourtIds = {'court_pro_stadium'};
+  String equippedCourtId = 'court_pro_stadium';
+
+  bool isCourtUnlocked(String courtId) {
+    if (courtId == 'court_pro_stadium') return true;
+    return unlockedCourtIds.contains(courtId);
+  }
+
+  bool purchaseCourt(String courtId) {
+    final court = CourtCatalog.getById(courtId);
+    if (isCourtUnlocked(court.id)) {
+      equipCourt(court.id);
+      return true;
+    }
+
+    if (coins < court.price) {
+      return false; // Insufficient coins
+    }
+
+    coins -= court.price;
+    unlockedCourtIds.add(court.id);
+    equippedCourtId = court.id;
+    AudioService.instance.playCoin();
+    saveCurrentProgress();
+    notifyListeners();
+    return true;
+  }
+
+  void equipCourt(String courtId) {
+    if (!isCourtUnlocked(courtId)) return;
+    equippedCourtId = courtId;
+    saveCurrentProgress();
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pickleballs (Default: Elite Ball free)
+  // ---------------------------------------------------------------------------
+  final Set<String> unlockedBallIds = {'ball_elite'};
+  String equippedBallId = 'ball_elite';
+
+  bool isBallUnlocked(String ballId) {
+    if (ballId == 'ball_elite') return true;
+    return unlockedBallIds.contains(ballId);
+  }
+
+  bool purchaseBall(String ballId) {
+    final ball = BallCatalog.getById(ballId);
+    if (isBallUnlocked(ball.id)) {
+      equipBall(ball.id);
+      return true;
+    }
+
+    if (coins < ball.price) {
+      return false; // Insufficient coins
+    }
+
+    coins -= ball.price;
+    unlockedBallIds.add(ball.id);
+    equippedBallId = ball.id;
+    AudioService.instance.playCoin();
+    saveCurrentProgress();
+    notifyListeners();
+    return true;
+  }
+
+  void equipBall(String ballId) {
+    if (!isBallUnlocked(ballId)) return;
+    equippedBallId = ballId;
+    saveCurrentProgress();
+    notifyListeners();
+  }
 
   // Stats - Individual to each player
   int matchesPlayed = 0;
@@ -61,6 +193,17 @@ class GameStateManager extends ChangeNotifier {
     totalSmashes = 0;
     bestStreak = 0;
     currentStreak = 0;
+    unlockedCharacterIds
+      ..clear()
+      ..addAll(['alex_classic', 'maya_speed']);
+    unlockedCourtIds
+      ..clear()
+      ..add('court_pro_stadium');
+    equippedCourtId = 'court_pro_stadium';
+    unlockedBallIds
+      ..clear()
+      ..add('ball_elite');
+    equippedBallId = 'ball_elite';
     _initDefaultTournaments();
     _initDefaultChallenges();
   }
@@ -251,17 +394,18 @@ class GameStateManager extends ChangeNotifier {
     ];
   }
 
-  void updatePlayerAvatar(String avatarId) {
+  Future<void> updatePlayerAvatar(String avatarId) async {
     playerAvatarId = avatarId;
     if (!isGuest && currentUserId != null) {
-      DatabaseService.instance.updateUserAvatar(currentUserId!, avatarId);
+      await DatabaseService.instance.updateUserAvatar(currentUserId!, avatarId);
     }
-    saveCurrentProgress();
+    await saveCurrentProgress();
     notifyListeners();
   }
 
   void updateSettings(GameSettings newSettings) {
     settings = newSettings;
+    AudioService.instance.onSettingsUpdated();
     saveCurrentProgress();
     notifyListeners();
   }
@@ -274,6 +418,7 @@ class GameStateManager extends ChangeNotifier {
         challenge.isClaimed = true;
         addCoins(challenge.rewardCoins);
         addXp(challenge.rewardXp);
+        AudioService.instance.playCoin();
         saveCurrentProgress();
         notifyListeners();
         return true;
@@ -305,11 +450,16 @@ class GameStateManager extends ChangeNotifier {
 
   void addXp(int amount) {
     playerXp += amount;
+    bool leveledUp = false;
     while (playerXp >= xpToNextLevel) {
       playerXp -= xpToNextLevel;
       playerLevel++;
       xpToNextLevel = (xpToNextLevel * 1.3).round();
       _incrementChallengeProgress('c_career_4', playerLevel, isAbsolute: true);
+      leveledUp = true;
+    }
+    if (leveledUp) {
+      AudioService.instance.playLevelUp();
     }
     saveCurrentProgress();
     notifyListeners();
@@ -514,6 +664,27 @@ class GameStateManager extends ChangeNotifier {
       if (saved['settings'] != null) {
         settings = saved['settings'] as GameSettings;
       }
+      final savedCharacters = saved['unlockedCharacters'] as List<dynamic>?;
+      if (savedCharacters != null && savedCharacters.isNotEmpty) {
+        unlockedCharacterIds
+          ..clear()
+          ..addAll(savedCharacters.map((e) => e.toString()));
+      }
+      final savedCourts = saved['unlockedCourts'] as List<dynamic>?;
+      if (savedCourts != null && savedCourts.isNotEmpty) {
+        unlockedCourtIds
+          ..clear()
+          ..addAll(savedCourts.map((e) => e.toString()));
+      }
+      equippedCourtId = saved['equippedCourt'] as String? ?? 'court_pro_stadium';
+
+      final savedBalls = saved['unlockedBalls'] as List<dynamic>?;
+      if (savedBalls != null && savedBalls.isNotEmpty) {
+        unlockedBallIds
+          ..clear()
+          ..addAll(savedBalls.map((e) => e.toString()));
+      }
+      equippedBallId = saved['equippedBall'] as String? ?? 'ball_elite';
     } else {
       // New registered user!
       // If user played as guest and wanted to save their progress, preserve it!
@@ -584,6 +755,11 @@ class GameStateManager extends ChangeNotifier {
         tournaments: tournaments,
         challenges: challenges,
         settings: settings,
+        unlockedCharacters: unlockedCharacterIds.toList(),
+        unlockedCourts: unlockedCourtIds.toList(),
+        equippedCourt: equippedCourtId,
+        unlockedBalls: unlockedBallIds.toList(),
+        equippedBall: equippedBallId,
       );
     }
   }
@@ -591,6 +767,8 @@ class GameStateManager extends ChangeNotifier {
   void resetAllData() {
     _guestMatchHistory.clear();
     playerAvatarId = 'alex_classic';
+    equippedCourtId = 'court_pro_stadium';
+    equippedBallId = 'ball_elite';
     settings = const GameSettings();
     _initDefaultData();
     saveCurrentProgress();

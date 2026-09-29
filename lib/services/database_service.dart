@@ -20,6 +20,8 @@ class DatabaseService {
   final Map<int, Map<String, dynamic>> _fallbackUsers = {};
   final Map<int, Map<String, dynamic>> _fallbackPlayerData = {};
   final List<Map<String, dynamic>> _fallbackMatchHistory = [];
+  final Map<int, List<Map<String, dynamic>>> _fallbackFriends = {};
+  final Map<int, List<Map<String, dynamic>>> _fallbackFriendRequests = {};
   Map<String, dynamic>? _fallbackActiveSession;
   int _nextFallbackUserId = 1;
 
@@ -60,7 +62,7 @@ class DatabaseService {
 
       final db = await openDatabase(
         path,
-        version: 3,
+        version: 6,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       );
@@ -102,6 +104,11 @@ class DatabaseService {
         tournaments_json TEXT NOT NULL,
         challenges_json TEXT NOT NULL,
         settings_json TEXT NOT NULL,
+        unlocked_characters TEXT DEFAULT 'alex_classic,maya_speed',
+        unlocked_courts TEXT DEFAULT 'court_pro_stadium',
+        equipped_court TEXT DEFAULT 'court_pro_stadium',
+        unlocked_balls TEXT DEFAULT 'ball_elite',
+        equipped_ball TEXT DEFAULT 'ball_elite',
         updated_at TEXT NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
       );
@@ -133,6 +140,39 @@ class DatabaseService {
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
       );
     ''');
+
+    // Friends table
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS friends (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        friend_id TEXT NOT NULL,
+        friend_player_id TEXT NOT NULL,
+        friend_nickname TEXT NOT NULL,
+        friend_avatar_id TEXT NOT NULL,
+        friend_rank TEXT NOT NULL,
+        friend_level INTEGER NOT NULL,
+        friend_win_rate REAL NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      );
+    ''');
+
+    // Friend Requests table
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS friend_requests (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        sender_id TEXT NOT NULL,
+        sender_player_id TEXT NOT NULL,
+        sender_nickname TEXT NOT NULL,
+        sender_avatar_id TEXT NOT NULL,
+        sender_rank TEXT NOT NULL,
+        sender_level INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      );
+    ''');
   }
 
   static Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -160,6 +200,56 @@ class DatabaseService {
       try {
         await db.execute("ALTER TABLE users ADD COLUMN avatar_id TEXT DEFAULT 'alex_classic';");
       } catch (_) {}
+    }
+    if (oldVersion < 4) {
+      try {
+        await db.execute("ALTER TABLE player_data ADD COLUMN unlocked_characters TEXT DEFAULT 'alex_classic,maya_speed';");
+      } catch (_) {}
+    }
+    if (oldVersion < 5) {
+      try {
+        await db.execute("ALTER TABLE player_data ADD COLUMN unlocked_courts TEXT DEFAULT 'court_pro_stadium';");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE player_data ADD COLUMN equipped_court TEXT DEFAULT 'court_pro_stadium';");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE player_data ADD COLUMN unlocked_balls TEXT DEFAULT 'ball_elite';");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE player_data ADD COLUMN equipped_ball TEXT DEFAULT 'ball_elite';");
+      } catch (_) {}
+    }
+    if (oldVersion < 6) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS friends (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          friend_id TEXT NOT NULL,
+          friend_player_id TEXT NOT NULL,
+          friend_nickname TEXT NOT NULL,
+          friend_avatar_id TEXT NOT NULL,
+          friend_rank TEXT NOT NULL,
+          friend_level INTEGER NOT NULL,
+          friend_win_rate REAL NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        );
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS friend_requests (
+          id TEXT PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          sender_id TEXT NOT NULL,
+          sender_player_id TEXT NOT NULL,
+          sender_nickname TEXT NOT NULL,
+          sender_avatar_id TEXT NOT NULL,
+          sender_rank TEXT NOT NULL,
+          sender_level INTEGER NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        );
+      ''');
     }
   }
 
@@ -367,6 +457,11 @@ class DatabaseService {
     required List<Tournament> tournaments,
     required List<ChallengeItem> challenges,
     required GameSettings settings,
+    List<String> unlockedCharacters = const ['alex_classic', 'maya_speed'],
+    List<String> unlockedCourts = const ['court_pro_stadium'],
+    String equippedCourt = 'court_pro_stadium',
+    List<String> unlockedBalls = const ['ball_elite'],
+    String equippedBall = 'ball_elite',
   }) async {
     // Cache in fallback store
     _fallbackPlayerData[userId] = {
@@ -384,6 +479,11 @@ class DatabaseService {
       'tournaments': tournaments,
       'challenges': challenges,
       'settings': settings,
+      'unlockedCharacters': unlockedCharacters,
+      'unlockedCourts': unlockedCourts,
+      'equippedCourt': equippedCourt,
+      'unlockedBalls': unlockedBalls,
+      'equippedBall': equippedBall,
     };
 
     final db = await database;
@@ -411,6 +511,11 @@ class DatabaseService {
             'tournaments_json': tournamentsJson,
             'challenges_json': challengesJson,
             'settings_json': settingsJson,
+            'unlocked_characters': unlockedCharacters.join(','),
+            'unlocked_courts': unlockedCourts.join(','),
+            'equipped_court': equippedCourt,
+            'unlocked_balls': unlockedBalls.join(','),
+            'equipped_ball': equippedBall,
             'updated_at': DateTime.now().toIso8601String(),
           },
           conflictAlgorithm: ConflictAlgorithm.replace,
@@ -475,6 +580,46 @@ class DatabaseService {
             settings = GameSettings.fromMap(sMap);
           } catch (_) {}
 
+          List<String> unlockedCharacters = ['alex_classic', 'maya_speed'];
+          try {
+            final uStr = row['unlocked_characters'] as String?;
+            if (uStr != null && uStr.isNotEmpty) {
+              unlockedCharacters = uStr.split(',').map((s) => s.trim()).toList();
+            }
+          } catch (_) {}
+
+          List<String> unlockedCourts = ['court_pro_stadium'];
+          try {
+            final cStr = row['unlocked_courts'] as String?;
+            if (cStr != null && cStr.isNotEmpty) {
+              unlockedCourts = cStr.split(',').map((s) => s.trim()).toList();
+            }
+          } catch (_) {}
+
+          String equippedCourt = 'court_pro_stadium';
+          try {
+            final ec = row['equipped_court'] as String?;
+            if (ec != null && ec.isNotEmpty) {
+              equippedCourt = ec;
+            }
+          } catch (_) {}
+
+          List<String> unlockedBalls = ['ball_elite'];
+          try {
+            final bStr = row['unlocked_balls'] as String?;
+            if (bStr != null && bStr.isNotEmpty) {
+              unlockedBalls = bStr.split(',').map((s) => s.trim()).toList();
+            }
+          } catch (_) {}
+
+          String equippedBall = 'ball_elite';
+          try {
+            final eb = row['equipped_ball'] as String?;
+            if (eb != null && eb.isNotEmpty) {
+              equippedBall = eb;
+            }
+          } catch (_) {}
+
           return {
             'avatarId': row['avatar_id'] as String? ?? 'alex_classic',
             'playerLevel': row['player_level'] as int,
@@ -490,6 +635,11 @@ class DatabaseService {
             'tournaments': tournaments,
             'challenges': challenges,
             'settings': settings,
+            'unlockedCharacters': unlockedCharacters,
+            'unlockedCourts': unlockedCourts,
+            'equippedCourt': equippedCourt,
+            'unlockedBalls': unlockedBalls,
+            'equippedBall': equippedBall,
           };
         }
       } catch (e) {
@@ -646,6 +796,157 @@ class DatabaseService {
     });
 
     return list.take(limit).toList();
+  }
+
+  /// Searches real registered users by username or Player ID (e.g. #PB-0001)
+  Future<List<Map<String, dynamic>>> searchRegisteredUsers(String query, {int limit = 20}) async {
+    final clean = query.trim().toLowerCase();
+    if (clean.isEmpty) return [];
+
+    final db = await database;
+    if (db != null) {
+      final List<Map<String, dynamic>> results = await db.rawQuery('''
+        SELECT u.id as user_id, u.username, u.avatar_id,
+               COALESCE(pd.player_level, 1) as player_level,
+               COALESCE(pd.matches_played, 0) as matches_played,
+               COALESCE(pd.matches_won, 0) as matches_won,
+               COALESCE(pd.trophies, 0) as trophies
+        FROM users u
+        LEFT JOIN player_data pd ON u.id = pd.user_id
+        WHERE LOWER(u.username) LIKE ? OR '#pb-' || printf('%04d', u.id) LIKE ?
+        ORDER BY pd.trophies DESC, pd.player_level DESC
+        LIMIT ?
+      ''', ['%$clean%', '%$clean%', limit]);
+      return results;
+    }
+
+    // Fallback store
+    final list = <Map<String, dynamic>>[];
+    for (final entry in _fallbackUsers.entries) {
+      final u = entry.value;
+      final userId = entry.key;
+      final username = (u['username'] as String).toLowerCase();
+      final pid = '#pb-${userId.toString().padLeft(4, '0')}';
+      if (username.contains(clean) || pid.contains(clean)) {
+        final pd = _fallbackPlayerData[userId] ?? {};
+        list.add({
+          'user_id': userId,
+          'username': u['username'] as String,
+          'avatar_id': (pd['avatarId'] as String?) ?? (u['avatar_id'] as String?) ?? 'alex_classic',
+          'player_level': (pd['playerLevel'] as num?)?.toInt() ?? 1,
+          'matches_played': (pd['matchesPlayed'] as num?)?.toInt() ?? 0,
+          'matches_won': (pd['matchesWon'] as num?)?.toInt() ?? 0,
+          'trophies': (pd['trophies'] as num?)?.toInt() ?? 0,
+        });
+      }
+    }
+    return list.take(limit).toList();
+  }
+
+  /// Gets saved friends for a user
+  Future<List<Map<String, dynamic>>> getFriends(int userId) async {
+    final db = await database;
+    if (db != null) {
+      return await db.query(
+        'friends',
+        where: 'user_id = ?',
+        whereArgs: [userId],
+        orderBy: 'created_at DESC',
+      );
+    }
+    return List.from(_fallbackFriends[userId] ?? []);
+  }
+
+  /// Saves a real friend to SQLite
+  Future<void> saveFriend(int userId, Map<String, dynamic> friendData) async {
+    final db = await database;
+    if (db != null) {
+      await db.insert('friends', {
+        'user_id': userId,
+        'friend_id': friendData['friend_id'],
+        'friend_player_id': friendData['friend_player_id'],
+        'friend_nickname': friendData['friend_nickname'],
+        'friend_avatar_id': friendData['friend_avatar_id'],
+        'friend_rank': friendData['friend_rank'],
+        'friend_level': friendData['friend_level'],
+        'friend_win_rate': friendData['friend_win_rate'],
+        'created_at': DateTime.now().toIso8601String(),
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      return;
+    }
+    _fallbackFriends.putIfAbsent(userId, () => []);
+    _fallbackFriends[userId]!.removeWhere((f) => f['friend_id'] == friendData['friend_id']);
+    _fallbackFriends[userId]!.insert(0, {
+      ...friendData,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  /// Removes a friend from SQLite
+  Future<void> removeFriend(int userId, String friendId) async {
+    final db = await database;
+    if (db != null) {
+      await db.delete(
+        'friends',
+        where: 'user_id = ? AND (friend_id = ? OR friend_player_id = ?)',
+        whereArgs: [userId, friendId, friendId],
+      );
+      return;
+    }
+    _fallbackFriends[userId]?.removeWhere((f) => f['friend_id'] == friendId || f['friend_player_id'] == friendId);
+  }
+
+  /// Gets pending friend requests for a user
+  Future<List<Map<String, dynamic>>> getFriendRequests(int userId) async {
+    final db = await database;
+    if (db != null) {
+      return await db.query(
+        'friend_requests',
+        where: 'user_id = ?',
+        whereArgs: [userId],
+        orderBy: 'created_at DESC',
+      );
+    }
+    return List.from(_fallbackFriendRequests[userId] ?? []);
+  }
+
+  /// Saves an incoming friend request
+  Future<void> saveFriendRequest(int userId, Map<String, dynamic> reqData) async {
+    final db = await database;
+    if (db != null) {
+      await db.insert('friend_requests', {
+        'id': reqData['id'],
+        'user_id': userId,
+        'sender_id': reqData['sender_id'],
+        'sender_player_id': reqData['sender_player_id'],
+        'sender_nickname': reqData['sender_nickname'],
+        'sender_avatar_id': reqData['sender_avatar_id'],
+        'sender_rank': reqData['sender_rank'],
+        'sender_level': reqData['sender_level'],
+        'created_at': DateTime.now().toIso8601String(),
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      return;
+    }
+    _fallbackFriendRequests.putIfAbsent(userId, () => []);
+    _fallbackFriendRequests[userId]!.removeWhere((r) => r['id'] == reqData['id']);
+    _fallbackFriendRequests[userId]!.insert(0, {
+      ...reqData,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  /// Deletes a friend request
+  Future<void> deleteFriendRequest(int userId, String requestId) async {
+    final db = await database;
+    if (db != null) {
+      await db.delete(
+        'friend_requests',
+        where: 'user_id = ? AND id = ?',
+        whereArgs: [userId, requestId],
+      );
+      return;
+    }
+    _fallbackFriendRequests[userId]?.removeWhere((r) => r['id'] == requestId);
   }
 
   // Close database

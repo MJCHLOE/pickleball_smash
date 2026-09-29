@@ -7,6 +7,7 @@ import '../../services/game_state_manager.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/avatar_picker_dialog.dart';
 import '../../widgets/game_2d_button.dart';
+import '../../widgets/hud_controls_adjuster_modal.dart';
 import '../../widgets/player_avatar.dart';
 
 class InGameSettingsModal extends StatefulWidget {
@@ -550,6 +551,58 @@ class _InGameSettingsModalState extends State<InGameSettingsModal> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Quick Launch: Full HUD Adjuster
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppTheme.neonLime.withValues(alpha: 0.18),
+                AppTheme.electricCyan.withValues(alpha: 0.12),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppTheme.neonLime.withValues(alpha: 0.5)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.neonLime.withValues(alpha: 0.25),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.gamepad_rounded, color: AppTheme.neonLime, size: 20),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('On-Screen HUD Adjuster', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text('Custom size, margins, skill cluster & live screen preview', style: TextStyle(color: AppTheme.textMuted, fontSize: 10.5)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Game2DButton(
+                text: 'ADJUST',
+                size: GameButtonSize.small,
+                variant: GameButtonVariant.primary,
+                onPressed: () {
+                  HudControlsAdjusterModal.show(
+                    context,
+                    onSettingsChanged: (newSettings) {
+                      _update(newSettings);
+                    },
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
         // Handedness
         const Text('Joystick Placement', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
         const SizedBox(height: 6),
@@ -761,6 +814,29 @@ class _InGameSettingsModalState extends State<InGameSettingsModal> {
                   ],
                 ),
               ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.trophyAmber.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.trophyAmber.withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('🪙', style: TextStyle(fontSize: 12)),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${state.coins}',
+                      style: const TextStyle(
+                        color: AppTheme.trophyAmber,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -774,27 +850,54 @@ class _InGameSettingsModalState extends State<InGameSettingsModal> {
           runSpacing: 8,
           children: PlayerAvatar.presetAvatars.take(6).map((av) {
             final isSel = state.playerAvatarId == av.id;
+            final isUnlocked = state.isCharacterUnlocked(av.id);
+
             return InkWell(
               onTap: () {
-                state.updatePlayerAvatar(av.id);
-                AudioService.instance.playPaddleHit();
+                if (!isUnlocked) {
+                  AvatarPickerDialog.show(context);
+                } else {
+                  state.updatePlayerAvatar(av.id);
+                  AudioService.instance.playPaddleHit();
+                }
               },
               borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isSel ? AppTheme.neonLime : Colors.transparent,
-                    width: 2,
+              child: Stack(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isSel ? AppTheme.neonLime : (isUnlocked ? Colors.transparent : Colors.amber.withValues(alpha: 0.5)),
+                        width: 2,
+                      ),
+                    ),
+                    child: PlayerAvatarWidget(
+                      avatar: av,
+                      size: 40,
+                      showBadge: true,
+                      isSelected: isSel,
+                    ),
                   ),
-                ),
-                child: PlayerAvatarWidget(
-                  avatar: av,
-                  size: 40,
-                  showBadge: true,
-                  isSelected: isSel,
-                ),
+                  if (!isUnlocked)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          color: Colors.black87,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.lock_rounded,
+                          color: AppTheme.trophyAmber,
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             );
           }).toList(),

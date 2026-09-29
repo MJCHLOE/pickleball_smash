@@ -2,7 +2,11 @@ import 'dart:math';
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+import '../../models/ball_catalog.dart';
+import '../../models/battle_technique.dart';
+import '../../models/multiplayer_models.dart';
 import '../../services/audio_service.dart';
+import '../../services/multiplayer_service.dart';
 import '../pickleball_game.dart';
 import 'player.dart';
 
@@ -59,10 +63,31 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
   static const double topBaselineY = 50.0;
   static const double bottomBaselineY = 670.0;
 
-  BallComponent() {
+  BallInfo _ballInfo;
+  BallInfo get ballInfo => _ballInfo;
+
+  final List<Offset> _trailPositions = [];
+  double _trailTimer = 0.0;
+  BattleTechnique activeTechniqueType = BattleTechnique.none;
+  double spin = 0.0; // -1.0 = Left Spin (curves left, kicks left), +1.0 = Right Spin (curves right, kicks right)
+  double curveStrength = 0.0; // Lateral acceleration px/s^2 (Magnus effect)
+  double ballRotationAngle = 0.0; // Perforation visual rotation angle in radians
+
+  BallComponent({String? ballId})
+      : _ballInfo = BallCatalog.getById(ballId ?? 'ball_elite') {
     radius = 11.0;
     anchor = Anchor.center;
-    paint = Paint()..color = const Color(0xFFCCFF00); // Neon Pickleball Chartreuse
+    paint = Paint()..color = _ballInfo.gradientColors[1];
+  }
+
+  void applyBall(String id) {
+    _ballInfo = BallCatalog.getById(id);
+    paint = Paint()..color = _ballInfo.gradientColors[1];
+  }
+
+  void applyBallInfo(BallInfo info) {
+    _ballInfo = info;
+    paint = Paint()..color = _ballInfo.gradientColors[1];
   }
 
   @override
@@ -83,6 +108,11 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     z = 16.0;
     zVelocity = 0.0;
     squashFactor = 1.0;
+    _trailPositions.clear();
+    activeTechniqueType = BattleTechnique.none;
+    spin = 0.0;
+    curveStrength = 0.0;
+    ballRotationAngle = 0.0;
 
     try {
       final serverComp = currentGame.activeServerComponent;
@@ -109,7 +139,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     zVelocity = 210.0; // Launch smooth parabolic serve arc over net
     squashFactor = 1.0;
 
-    AudioService.instance.playPaddleHit();
+    AudioService.instance.playServe();
 
     // Exact parabolic flight time to court floor bounce (z = 0)
     final double tBounce = (zVelocity + sqrt(zVelocity * zVelocity + 4 * 170.0 * z)) / 340.0;
@@ -147,6 +177,25 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     } catch (_) {}
 
     currentGame.onServeStateChanged?.call(false, currentGame.serverPlayer, currentGame.servingSide);
+
+    if (currentGame.isMultiplayer) {
+      MultiplayerService.instance.broadcastPacket(
+        MultiplayerPacket(
+          type: PacketType.ballStrike,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          senderId: MultiplayerService.instance.myProfile.playerId,
+          data: {
+            'x': position.x,
+            'y': position.y,
+            'vx': velocity.x,
+            'vy': velocity.y,
+            'z': z,
+            'zVelocity': zVelocity,
+            'spin': spin,
+          },
+        ),
+      );
+    }
   }
 
   /// Legacy reset helper
@@ -187,7 +236,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
             z = 16.0 * (1.0 - dropProgress);
             if (dropProgress >= 1.0 && !_cpuServeBounced) {
               _cpuServeBounced = true;
-              AudioService.instance.playPaddleHit();
+              AudioService.instance.playFloorBounce();
               _bounceEffectRadius = 6.0;
             }
           } else {
@@ -214,9 +263,29 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       return;
     }
 
+    // Apply aerodynamic curving force (Magnus effect)
+    if (spin != 0.0 && curveStrength > 0.0) {
+      velocity.x += curveStrength * spin * dt;
+      ballRotationAngle += spin * 24.0 * dt;
+    }
+
     // Move ball along 2D court floor trajectory
     position += velocity * dt;
     _timeSinceLastBounce += dt;
+
+    // Track motion particle trail
+    if (!isWaitingForServe && speed > 50) {
+      _trailTimer += dt;
+      if (_trailTimer >= 0.02) {
+        _trailTimer = 0.0;
+        _trailPositions.insert(0, Offset(position.x, position.y - z));
+        if (_trailPositions.length > 8) {
+          _trailPositions.removeLast();
+        }
+      }
+    } else {
+      _trailPositions.clear();
+    }
 
     // 3D Altitude & Gravity
     zVelocity -= gravity * dt;
@@ -281,11 +350,23 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     // 3. Out of Bounds safety check if ball flies far past baseline/sideline without return
     if (position.y < topBaselineY - 90 || position.y > bottomBaselineY + 90 ||
         position.x < courtLeftX - 90 || position.x > courtRightX + 90) {
-      final bool hitterWasP1 = (velocity.y < 0);
-      currentGame.handleRallyWon(
-        winnerIsPlayerOne: !hitterWasP1,
-        faultReason: 'FAULT: Out of Bounds (${hitterWasP1 ? 'Player 1' : 'Player 2'})',
-      );
+      if (bounceCountCurrentSide >= 1) {
+        // Ball had already legally bounced on current side; receiver failed to return it!
+        final bool isP1Side = position.y >= netY;
+        currentGame.handleRallyWon(
+          winnerIsPlayerOne: !isP1Side,
+          faultReason: isP1Side
+              ? 'FAULT: Double Bounce (Ball rolled dead on your court!)'
+              : 'FAULT: Double Bounce (Opponent failed to return!)',
+        );
+      } else {
+        // Ball flew past court on the fly without bouncing
+        final bool hitterWasP1 = (velocity.y < 0);
+        currentGame.handleRallyWon(
+          winnerIsPlayerOne: !hitterWasP1,
+          faultReason: 'FAULT: Out of Bounds (${hitterWasP1 ? 'Player 1' : 'Player 2'})',
+        );
+      }
     }
   }
 
@@ -294,9 +375,17 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     _timeSinceLastBounce = 0.0;
 
     // 1. Audio feedback for ball bouncing on floor
-    AudioService.instance.playPaddleHit();
+    AudioService.instance.playFloorBounce();
     _bounceEffectRadius = 6.0;
     squashFactor = 0.72; // Squashes on impact with court floor
+
+    // 1.5. Heavy sidespin kicks the ball sharply sideways on the floor bounce
+    if (spin != 0.0) {
+      velocity.x += 160.0 * spin;
+      spin = 0.0;
+      curveStrength = 0.0;
+    }
+    activeTechniqueType = BattleTechnique.none;
 
     // 2. Parabolic bounce restitution (generous pop-up arc for continuous play)
     if (zVelocity.abs() > 35.0) {
@@ -311,8 +400,18 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
 
     final bool isP1Side = position.y >= netY;
 
-    // Double Bounce violation removed per user request:
-    // Ball can bounce multiple times on the court without fault, keeping rallies live!
+    // Double Bounce Fault Rule (Pickleball Rule 4.A):
+    // Ball can bounce AT MOST once on a side. If it bounces a second time without being struck,
+    // the receiver on this side committed a double bounce fault!
+    if (bounceCountCurrentSide >= 2) {
+      currentGame.handleRallyWon(
+        winnerIsPlayerOne: !isP1Side,
+        faultReason: isP1Side
+            ? 'FAULT: Double Bounce (Ball bounced twice on your court!)'
+            : 'FAULT: Double Bounce (Opponent failed to return!)',
+      );
+      return;
+    }
 
     // 4. Check Service Rules on first bounce if it's the Serve (rallyHitCount == 0 && bounceCountCurrentSide == 1)
     if (currentGame.rallyHitCount == 0 && bounceCountCurrentSide == 1) {
@@ -359,7 +458,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       }
     }
 
-    // 6. Out of Bounds detection on floor bounce
+    // 6. Out of Bounds detection on first floor bounce
     final bool outLeft = position.x < courtLeftX - 5;
     final bool outRight = position.x > courtRightX + 5;
     final bool outTop = position.y < topBaselineY - 10;
@@ -371,6 +470,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
         winnerIsPlayerOne: !hitterWasP1,
         faultReason: 'FAULT: Out of Bounds (${hitterWasP1 ? 'Player 1' : 'Player 2'})',
       );
+      return;
     }
   }
 
@@ -392,7 +492,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     // 2. Draw expanding ripple ring on the floor when the ball bounces
     if (_bounceEffectRadius > 0) {
       final ringPaint = Paint()
-        ..color = const Color(0xFF76FF03).withValues(alpha: (1.0 - (_bounceEffectRadius / 30)).clamp(0.0, 1.0))
+        ..color = _ballInfo.rippleColor.withValues(alpha: (1.0 - (_bounceEffectRadius / 30)).clamp(0.0, 1.0))
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.5;
       canvas.drawOval(
@@ -405,27 +505,110 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       );
     }
 
-    // 3. Draw 3D Pickleball elevated by altitude z with Squash & Stretch
+    // 3. Draw particle motion trail
+    for (int i = 0; i < _trailPositions.length; i++) {
+      final p = _trailPositions[i];
+      final rel = Offset(p.dx - position.x, p.dy - position.y);
+      final progress = 1.0 - (i / _trailPositions.length);
+      final trailAlpha = (progress * 0.55).clamp(0.0, 1.0);
+      final trailRad = radius * (0.35 + 0.45 * progress);
+
+      // Special particle visual styles for active techniques!
+      if (activeTechniqueType == BattleTechnique.leftSpin) {
+        // 🌪️ Cyclone Left Spin: Emerald & mint wind vortex trail
+        final cyclonePaint = Paint()
+          ..color = (i % 2 == 0 ? const Color(0xFF10B981) : const Color(0xFF34D399))
+              .withValues(alpha: (trailAlpha * 1.6).clamp(0.0, 1.0))
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(rel, trailRad * 1.35, cyclonePaint);
+
+        // Counter-clockwise orbiting wind wisps
+        final angle = -ballRotationAngle + (i * 0.4);
+        final wispOffset = rel + Offset(cos(angle) * trailRad * 0.6, sin(angle) * trailRad * 0.6);
+        canvas.drawCircle(
+          wispOffset,
+          trailRad * 0.45,
+          Paint()..color = Colors.white.withValues(alpha: trailAlpha * 0.85),
+        );
+      } else if (activeTechniqueType == BattleTechnique.rightSpin) {
+        // ⚡ Vortex Right Spin: Electric violet & purple plasma trail
+        final vortexPaint = Paint()
+          ..color = (i % 2 == 0 ? const Color(0xFF8B5CF6) : const Color(0xFFA855F7))
+              .withValues(alpha: (trailAlpha * 1.6).clamp(0.0, 1.0))
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(rel, trailRad * 1.35, vortexPaint);
+
+        // Clockwise orbiting plasma spark
+        final angle = ballRotationAngle + (i * 0.4);
+        final sparkOffset = rel + Offset(cos(angle) * trailRad * 0.6, sin(angle) * trailRad * 0.6);
+        canvas.drawCircle(
+          sparkOffset,
+          trailRad * 0.45,
+          Paint()..color = const Color(0xFFE9D5FF).withValues(alpha: trailAlpha * 0.85),
+        );
+      } else {
+        final trailPaint = Paint()
+          ..color = _ballInfo.sparkColor.withValues(alpha: trailAlpha)
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(rel, trailRad, trailPaint);
+
+        if (_ballInfo.tier == BallTier.legendary ||
+            _ballInfo.tier == BallTier.mythic ||
+            _ballInfo.tier == BallTier.special) {
+          canvas.drawCircle(
+            rel,
+            trailRad * 1.35,
+            Paint()
+              ..color = _ballInfo.glowColor.withValues(alpha: trailAlpha * 0.45)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.5,
+          );
+        }
+      }
+    }
+
+    // 4. Draw 3D Pickleball elevated by altitude z with Squash & Stretch
     canvas.save();
     canvas.translate(0, -z);
     canvas.scale(2.0 - squashFactor, squashFactor);
+
+    // Glowing aura for higher tier balls or active battle technique
+    if (activeTechniqueType == BattleTechnique.leftSpin) {
+      final leftAura = Paint()
+        ..color = const Color(0xFF10B981).withValues(alpha: 0.65)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7);
+      canvas.drawCircle(Offset.zero, radius + 4.5, leftAura);
+    } else if (activeTechniqueType == BattleTechnique.rightSpin) {
+      final rightAura = Paint()
+        ..color = const Color(0xFF8B5CF6).withValues(alpha: 0.65)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7);
+      canvas.drawCircle(Offset.zero, radius + 4.5, rightAura);
+    } else if (_ballInfo.tier != BallTier.elite) {
+      final glowPaint = Paint()
+        ..color = _ballInfo.glowColor.withValues(alpha: 0.35)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+      canvas.drawCircle(Offset.zero, radius + 2.5, glowPaint);
+    }
 
     final ballPaint = Paint()
       ..shader = RadialGradient(
         center: const Alignment(-0.35, -0.35),
         radius: 0.85,
-        colors: const [Color(0xFFE8FF59), Color(0xFFCCFF00), Color(0xFF99CC00)],
+        colors: _ballInfo.gradientColors,
       ).createShader(Rect.fromCircle(center: Offset.zero, radius: radius));
     canvas.drawCircle(Offset.zero, radius, ballPaint);
 
-    // 4. Draw pickleball holes / perforations
-    final holePaint = Paint()..color = const Color(0xFF7CB305);
+    // 5. Draw pickleball holes / perforations with dynamic sidespin rotation
+    canvas.save();
+    canvas.rotate(ballRotationAngle);
+    final holePaint = Paint()..color = _ballInfo.holeColor;
     const double holeRad = 1.7;
     canvas.drawCircle(const Offset(-4, -4), holeRad, holePaint);
     canvas.drawCircle(const Offset(4, -4), holeRad, holePaint);
     canvas.drawCircle(const Offset(-4, 4), holeRad, holePaint);
     canvas.drawCircle(const Offset(4, 4), holeRad, holePaint);
     canvas.drawCircle(const Offset(0, 0), holeRad, holePaint);
+    canvas.restore();
 
     canvas.restore();
   }
@@ -516,59 +699,123 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     );
     bounceCountCurrentSide = 0;
 
-    // Launch parabolic return trajectory
+    // Check battle technique for Player 1 (or AI counter during rally)
+    BattleTechnique executedTechnique = BattleTechnique.none;
+    if (isPlayerOne && !player.isAI) {
+      executedTechnique = player.activeTechnique;
+      player.clearTechnique();
+    } else if (!isPlayerOne && player.isAI && currentGame.rallyHitCount > 1) {
+      final roll = Random().nextDouble();
+      if (roll < 0.12) {
+        executedTechnique = BattleTechnique.leftSpin;
+      } else if (roll < 0.22) {
+        executedTechnique = BattleTechnique.rightSpin;
+      }
+    }
+    activeTechniqueType = executedTechnique;
+
     z = max(z, 8.0);
-    zVelocity = 210.0;
-    squashFactor = 1.12;
-
-    // Calculate exact flight time until the ball contacts the floor (z = 0)
-    // 170 * t^2 - zVelocity * t - z = 0
-    final double tBounce = (zVelocity + sqrt(zVelocity * zVelocity + 4 * 170.0 * z)) / 340.0;
-
-    // Calculate landing target (targetX, targetY) guaranteed to be inside opponent's court
-    final diff = position - player.position;
     double targetX;
     double targetY;
+    double tBounce;
 
-    if (isPlayerOne && !player.isAI) {
-      // Player 1 (Human) hitting to Player 2 (opponent side: Y in [50, 360])
-      // Steering: player horizontal movement + paddle offset
-      final aimOffset = (player.horizontalMovement * 160.0) + (diff.x * 0.8);
-      targetX = (640.0 + aimOffset).clamp(450.0, 830.0);
+    if (executedTechnique == BattleTechnique.leftSpin) {
+      // 🌪️ CYCLONE CURVE (Spin on the Left):
+      // Ball arcs wide across the court, curving dramatically to the LEFT!
+      // When it bounces, it kicks sharply to the left, pulling the opponent off-court!
+      spin = -1.0;
+      curveStrength = 360.0; // Lateral Magnus acceleration to the left
+      zVelocity = 205.0;
+      squashFactor = 1.25;
 
-      // Depth steering: UP key / forward joystick = deep; DOWN / back = short / dink
-      double vInput = 0.0;
-      if (player.joystick != null && !player.joystick!.delta.isZero()) {
-        vInput = player.joystick!.relativeDelta.y;
+      tBounce = (zVelocity + sqrt(zVelocity * zVelocity + 4 * 170.0 * z)) / 340.0;
+
+      if (isPlayerOne) {
+        targetX = 470.0; // Deep left sideline
+        targetY = 135.0;
+        currentGame.onAnnouncement?.call('🌪️ CYCLONE CURVE!', 'Wicked left sidespin curve!');
+        currentGame.onTechniqueExecuted(BattleTechnique.leftSpin);
       } else {
-        vInput = player.vAxis.toDouble();
+        targetX = 470.0;
+        targetY = 595.0;
+        currentGame.onAnnouncement?.call('🌪️ CPU CYCLONE CURVE!', 'Watch out! Violent left spin curve!');
+        currentGame.onTechniqueExecuted(BattleTechnique.leftSpin);
       }
-      // Target Y base is 195.0 (mid service court, deep past kitchen 280)
-      // vInput < 0 is UP/forward -> deeper shot towards baseline (130.0)
-      // vInput > 0 is DOWN/backward -> shorter dink near kitchen (270.0)
-      targetY = (195.0 + vInput * 65.0).clamp(115.0, 275.0);
-    } else if (isPlayerOne && player.isAI) {
-      // Expert AI Teammate (Team 1 Partner) hitting to Team 2
-      // Tactically targets the open court opposite to opponent position
-      final oppPos = currentGame.player2.position;
-      final targetLeft = oppPos.x > 640.0;
-      final baseAim = targetLeft ? 520.0 : 760.0;
-      final aimOffset = (diff.x * 0.4) + ((Random().nextDouble() - 0.5) * 50.0);
-      targetX = (baseAim + aimOffset).clamp(440.0, 840.0);
-      // Alternate between deep baseline drives and soft drops
-      final isDeep = (currentGame.rallyHitCount % 3 != 0);
-      targetY = isDeep ? 145.0 : 255.0;
+
+      final double lateralAcc = spin * curveStrength;
+      final double v0X = (targetX - position.x - 0.5 * lateralAcc * tBounce * tBounce) / tBounce;
+      final double v0Y = (targetY - position.y) / tBounce;
+      velocity = Vector2(v0X, v0Y);
+      speed = velocity.length;
+      position += velocity.normalized() * 10;
+      return;
+    } else if (executedTechnique == BattleTechnique.rightSpin) {
+      // ⚡ VORTEX HOOK (Spin to the Right):
+      // Ball arcs wide across the court, curving dramatically to the RIGHT!
+      // When it bounces, it kicks sharply to the right, pulling the opponent off-court!
+      spin = 1.0;
+      curveStrength = 360.0; // Lateral Magnus acceleration to the right
+      zVelocity = 205.0;
+      squashFactor = 1.25;
+
+      tBounce = (zVelocity + sqrt(zVelocity * zVelocity + 4 * 170.0 * z)) / 340.0;
+
+      if (isPlayerOne) {
+        targetX = 810.0; // Deep right sideline
+        targetY = 135.0;
+        currentGame.onAnnouncement?.call('⚡ VORTEX HOOK!', 'Fierce right sidespin hook!');
+        currentGame.onTechniqueExecuted(BattleTechnique.rightSpin);
+      } else {
+        targetX = 810.0;
+        targetY = 595.0;
+        currentGame.onAnnouncement?.call('⚡ CPU VORTEX HOOK!', 'Watch out! Violent right spin hook!');
+        currentGame.onTechniqueExecuted(BattleTechnique.rightSpin);
+      }
+
+      final double lateralAcc = spin * curveStrength;
+      final double v0X = (targetX - position.x - 0.5 * lateralAcc * tBounce * tBounce) / tBounce;
+      final double v0Y = (targetY - position.y) / tBounce;
+      velocity = Vector2(v0X, v0Y);
+      speed = velocity.length;
+      position += velocity.normalized() * 10;
+      return;
     } else {
-      // Expert AI Opponent (Team 2 CPU) hitting to Team 1
-      // Tactically targets the open court opposite to human player position
-      final oppPos = currentGame.player1.position;
-      final targetLeft = oppPos.x > 640.0;
-      final baseAim = targetLeft ? 520.0 : 760.0;
-      final aimOffset = (diff.x * 0.4) + ((Random().nextDouble() - 0.5) * 50.0);
-      targetX = (baseAim + aimOffset).clamp(440.0, 840.0);
-      // Alternate between deep baseline drives and soft kitchen drops
-      final isDeep = (currentGame.rallyHitCount % 3 != 0);
-      targetY = isDeep ? 585.0 : 465.0;
+      // Standard return trajectory - reset any spin
+      spin = 0.0;
+      curveStrength = 0.0;
+      zVelocity = 210.0;
+      squashFactor = 1.12;
+      tBounce = (zVelocity + sqrt(zVelocity * zVelocity + 4 * 170.0 * z)) / 340.0;
+
+      final diff = position - player.position;
+      if (isPlayerOne && !player.isAI) {
+        final aimOffset = (player.horizontalMovement * 160.0) + (diff.x * 0.8);
+        targetX = (640.0 + aimOffset).clamp(450.0, 830.0);
+
+        double vInput = 0.0;
+        if (player.joystick != null && !player.joystick!.delta.isZero()) {
+          vInput = player.joystick!.relativeDelta.y;
+        } else {
+          vInput = player.vAxis.toDouble();
+        }
+        targetY = (195.0 + vInput * 65.0).clamp(115.0, 275.0);
+      } else if (isPlayerOne && player.isAI) {
+        final oppPos = currentGame.player2.position;
+        final targetLeft = oppPos.x > 640.0;
+        final baseAim = targetLeft ? 520.0 : 760.0;
+        final aimOffset = (diff.x * 0.4) + ((Random().nextDouble() - 0.5) * 50.0);
+        targetX = (baseAim + aimOffset).clamp(440.0, 840.0);
+        final isDeep = (currentGame.rallyHitCount % 3 != 0);
+        targetY = isDeep ? 145.0 : 255.0;
+      } else {
+        final oppPos = currentGame.player1.position;
+        final targetLeft = oppPos.x > 640.0;
+        final baseAim = targetLeft ? 520.0 : 760.0;
+        final aimOffset = (diff.x * 0.4) + ((Random().nextDouble() - 0.5) * 50.0);
+        targetX = (baseAim + aimOffset).clamp(440.0, 840.0);
+        final isDeep = (currentGame.rallyHitCount % 3 != 0);
+        targetY = isDeep ? 585.0 : 465.0;
+      }
     }
 
     // Derive precise velocity so the ball lands and bounces at (targetX, targetY) inside the court
@@ -580,6 +827,25 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
 
     // Displace slightly forward along velocity to prevent immediate re-collision
     position += velocity.normalized() * 10;
+
+    if (currentGame.isMultiplayer) {
+      MultiplayerService.instance.broadcastPacket(
+        MultiplayerPacket(
+          type: PacketType.ballStrike,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          senderId: MultiplayerService.instance.myProfile.playerId,
+          data: {
+            'x': position.x,
+            'y': position.y,
+            'vx': velocity.x,
+            'vy': velocity.y,
+            'z': z,
+            'zVelocity': zVelocity,
+            'spin': spin,
+          },
+        ),
+      );
+    }
   }
 }
 

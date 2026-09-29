@@ -157,6 +157,20 @@ class PlayerAvatarWidget extends StatelessWidget {
 
     // 3. Sprite asset if provided
     if (av.assetPath != null && av.assetPath!.isNotEmpty) {
+      if (av.assetPath!.contains('charselectidle')) {
+        return ClipRect(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            widthFactor: 0.5,
+            child: Image.asset(
+              av.assetPath!,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.none,
+              errorBuilder: (context, error, stackTrace) => _fallbackInitialsOrIcon(av),
+            ),
+          ),
+        );
+      }
       return Image.asset(
         av.assetPath!,
         fit: BoxFit.cover,

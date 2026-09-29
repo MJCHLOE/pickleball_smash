@@ -10,7 +10,7 @@ class GameSettings {
   final bool hapticsEnabled;
   final String soundProfile; // 'Arcade Retro', 'Stadium Live', 'Muted Night'
 
-  // Controller Settings
+  // Controller & HUD Customization Settings
   final String controlScheme; // 'joystick', 'dpad', 'drag'
   final bool joystickOnLeft;
   final double joystickExpand; // 0.7 to 1.6 (scale size of joystick)
@@ -20,6 +20,55 @@ class GameSettings {
   final String joystickColor; // 'Neon Lime', 'Electric Cyan', 'Hot Pink', 'Trophy Gold', 'Pure White'
   final bool hapticOnHit;
   final bool autoServe; // Auto-serves after countdown if player doesn't tap
+  final bool showJoystick; // Toggle on-screen joystick display
+  final bool showSkillButtons; // Toggle on-screen skills display
+  final double joystickMarginX; // Horizontal offset from screen edge (12 to 120)
+  final double joystickMarginY; // Vertical offset from screen bottom (12 to 120)
+  final double skillButtonScale; // Skill button scale multiplier (0.65 to 1.6)
+  final double skillMarginX; // Horizontal offset for skill buttons (12 to 120)
+  final double skillMarginY; // Vertical offset for skill buttons (12 to 120)
+  final double skillSpacing; // Spacing between skill cluster buttons (60 to 140)
+  final String controlsPreset; // 'Mobile Legends (Default)', 'Default Arcade', 'Compact', 'Pro Wide', 'Left-Handed', 'Custom'
+
+  // Mobile Legends: Bang Bang (MLBB) Default Controller Layout Constants
+  static const double mlbbJoystickX = 0.16;
+  static const double mlbbJoystickY = 0.78;
+  static const double mlbbSmashX = 0.86;
+  static const double mlbbSmashY = 0.80;
+  static const double mlbbLeftSpinX = 0.72;
+  static const double mlbbLeftSpinY = 0.82;
+  static const double mlbbRightSpinX = 0.76;
+  static const double mlbbRightSpinY = 0.67;
+  static const double mlbbDashX = 0.86;
+  static const double mlbbDashY = 0.63;
+
+  // Classic Arcade 2x2 Layout Constants
+  static const double arcadeJoystickX = 0.14;
+  static const double arcadeJoystickY = 0.80;
+  static const double arcadeSmashX = 0.88;
+  static const double arcadeSmashY = 0.82;
+  static const double arcadeLeftSpinX = 0.76;
+  static const double arcadeLeftSpinY = 0.82;
+  static const double arcadeRightSpinX = 0.88;
+  static const double arcadeRightSpinY = 0.68;
+  static const double arcadeDashX = 0.76;
+  static const double arcadeDashY = 0.68;
+
+  // Free Drag & Drop Positioning (Normalized 0.0 to 1.0 screen coordinates)
+  final bool freePositioning;
+  final double joystickPosX;
+  final double joystickPosY;
+  final double smashPosX;
+  final double smashPosY;
+  final double leftSpinPosX;
+  final double leftSpinPosY;
+  final double rightSpinPosX;
+  final double rightSpinPosY;
+  final double dashPosX;
+  final double dashPosY;
+
+  // Gameplay & Scoring Rules
+  final String scoringMode; // 'rally' (Major League / Arcade) or 'sideOut' (Traditional USA Pickleball)
 
   // Deprecated/compatibility aliases
   double get controllerOpacity => transparentCapacity;
@@ -57,6 +106,27 @@ class GameSettings {
     this.joystickColor = 'Neon Lime',
     this.hapticOnHit = true,
     this.autoServe = false,
+    this.showJoystick = true,
+    this.showSkillButtons = true,
+    this.joystickMarginX = 36.0,
+    this.joystickMarginY = 36.0,
+    this.skillButtonScale = 1.0,
+    this.skillMarginX = 36.0,
+    this.skillMarginY = 36.0,
+    this.skillSpacing = 90.0,
+    this.controlsPreset = 'Mobile Legends (Default)',
+    this.freePositioning = true,
+    this.joystickPosX = mlbbJoystickX,
+    this.joystickPosY = mlbbJoystickY,
+    this.smashPosX = mlbbSmashX,
+    this.smashPosY = mlbbSmashY,
+    this.leftSpinPosX = mlbbLeftSpinX,
+    this.leftSpinPosY = mlbbLeftSpinY,
+    this.rightSpinPosX = mlbbRightSpinX,
+    this.rightSpinPosY = mlbbRightSpinY,
+    this.dashPosX = mlbbDashX,
+    this.dashPosY = mlbbDashY,
+    this.scoringMode = 'rally',
     // Graphics
     this.graphicsQuality = 'High',
     this.targetFps = 60,
@@ -89,6 +159,27 @@ class GameSettings {
     String? joystickColor,
     bool? hapticOnHit,
     bool? autoServe,
+    bool? showJoystick,
+    bool? showSkillButtons,
+    double? joystickMarginX,
+    double? joystickMarginY,
+    double? skillButtonScale,
+    double? skillMarginX,
+    double? skillMarginY,
+    double? skillSpacing,
+    String? controlsPreset,
+    bool? freePositioning,
+    double? joystickPosX,
+    double? joystickPosY,
+    double? smashPosX,
+    double? smashPosY,
+    double? leftSpinPosX,
+    double? leftSpinPosY,
+    double? rightSpinPosX,
+    double? rightSpinPosY,
+    double? dashPosX,
+    double? dashPosY,
+    String? scoringMode,
     // Deprecated compatibility parameters (ignored or redirected)
     double? joystickSensitivity,
     double? controllerOpacity,
@@ -124,6 +215,27 @@ class GameSettings {
       joystickColor: joystickColor ?? this.joystickColor,
       hapticOnHit: hapticOnHit ?? this.hapticOnHit,
       autoServe: autoServe ?? this.autoServe,
+      showJoystick: showJoystick ?? this.showJoystick,
+      showSkillButtons: showSkillButtons ?? this.showSkillButtons,
+      joystickMarginX: joystickMarginX ?? this.joystickMarginX,
+      joystickMarginY: joystickMarginY ?? this.joystickMarginY,
+      skillButtonScale: skillButtonScale ?? this.skillButtonScale,
+      skillMarginX: skillMarginX ?? this.skillMarginX,
+      skillMarginY: skillMarginY ?? this.skillMarginY,
+      skillSpacing: skillSpacing ?? this.skillSpacing,
+      controlsPreset: controlsPreset ?? this.controlsPreset,
+      freePositioning: freePositioning ?? this.freePositioning,
+      joystickPosX: joystickPosX ?? this.joystickPosX,
+      joystickPosY: joystickPosY ?? this.joystickPosY,
+      smashPosX: smashPosX ?? this.smashPosX,
+      smashPosY: smashPosY ?? this.smashPosY,
+      leftSpinPosX: leftSpinPosX ?? this.leftSpinPosX,
+      leftSpinPosY: leftSpinPosY ?? this.leftSpinPosY,
+      rightSpinPosX: rightSpinPosX ?? this.rightSpinPosX,
+      rightSpinPosY: rightSpinPosY ?? this.rightSpinPosY,
+      dashPosX: dashPosX ?? this.dashPosX,
+      dashPosY: dashPosY ?? this.dashPosY,
+      scoringMode: scoringMode ?? this.scoringMode,
       // Graphics
       graphicsQuality: graphicsQuality ?? this.graphicsQuality,
       targetFps: targetFps ?? this.targetFps,
@@ -158,6 +270,27 @@ class GameSettings {
       'joystickColor': joystickColor,
       'hapticOnHit': hapticOnHit ? 1 : 0,
       'autoServe': autoServe ? 1 : 0,
+      'showJoystick': showJoystick ? 1 : 0,
+      'showSkillButtons': showSkillButtons ? 1 : 0,
+      'joystickMarginX': joystickMarginX,
+      'joystickMarginY': joystickMarginY,
+      'skillButtonScale': skillButtonScale,
+      'skillMarginX': skillMarginX,
+      'skillMarginY': skillMarginY,
+      'skillSpacing': skillSpacing,
+      'controlsPreset': controlsPreset,
+      'freePositioning': freePositioning ? 1 : 0,
+      'joystickPosX': joystickPosX,
+      'joystickPosY': joystickPosY,
+      'smashPosX': smashPosX,
+      'smashPosY': smashPosY,
+      'leftSpinPosX': leftSpinPosX,
+      'leftSpinPosY': leftSpinPosY,
+      'rightSpinPosX': rightSpinPosX,
+      'rightSpinPosY': rightSpinPosY,
+      'dashPosX': dashPosX,
+      'dashPosY': dashPosY,
+      'scoringMode': scoringMode,
       // Legacy backward compatibility keys
       'joystickSensitivity': 1.0,
       'controllerOpacity': transparentCapacity,
@@ -198,6 +331,27 @@ class GameSettings {
       joystickColor: map['joystickColor'] as String? ?? 'Neon Lime',
       hapticOnHit: (map['hapticOnHit'] as int? ?? 1) == 1,
       autoServe: (map['autoServe'] as int? ?? 0) == 1,
+      showJoystick: (map['showJoystick'] as int? ?? 1) == 1,
+      showSkillButtons: (map['showSkillButtons'] as int? ?? 1) == 1,
+      joystickMarginX: (map['joystickMarginX'] as num?)?.toDouble() ?? 36.0,
+      joystickMarginY: (map['joystickMarginY'] as num?)?.toDouble() ?? 36.0,
+      skillButtonScale: (map['skillButtonScale'] as num?)?.toDouble() ?? 1.0,
+      skillMarginX: (map['skillMarginX'] as num?)?.toDouble() ?? 36.0,
+      skillMarginY: (map['skillMarginY'] as num?)?.toDouble() ?? 36.0,
+      skillSpacing: (map['skillSpacing'] as num?)?.toDouble() ?? 90.0,
+      controlsPreset: map['controlsPreset'] as String? ?? 'Mobile Legends (Default)',
+      freePositioning: (map['freePositioning'] as int? ?? 1) == 1,
+      joystickPosX: (map['joystickPosX'] as num?)?.toDouble() ?? mlbbJoystickX,
+      joystickPosY: (map['joystickPosY'] as num?)?.toDouble() ?? mlbbJoystickY,
+      smashPosX: (map['smashPosX'] as num?)?.toDouble() ?? mlbbSmashX,
+      smashPosY: (map['smashPosY'] as num?)?.toDouble() ?? mlbbSmashY,
+      leftSpinPosX: (map['leftSpinPosX'] as num?)?.toDouble() ?? mlbbLeftSpinX,
+      leftSpinPosY: (map['leftSpinPosY'] as num?)?.toDouble() ?? mlbbLeftSpinY,
+      rightSpinPosX: (map['rightSpinPosX'] as num?)?.toDouble() ?? mlbbRightSpinX,
+      rightSpinPosY: (map['rightSpinPosY'] as num?)?.toDouble() ?? mlbbRightSpinY,
+      dashPosX: (map['dashPosX'] as num?)?.toDouble() ?? mlbbDashX,
+      dashPosY: (map['dashPosY'] as num?)?.toDouble() ?? mlbbDashY,
+      scoringMode: map['scoringMode'] as String? ?? 'rally',
       // Graphics
       graphicsQuality: map['graphicsQuality'] as String? ?? 'High',
       targetFps: (map['targetFps'] as num?)?.toInt() ?? 60,

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/multiplayer_models.dart';
+import '../services/audio_service.dart';
 import '../services/game_state_manager.dart';
 import '../theme/app_theme.dart';
 import '../widgets/avatar_picker_dialog.dart';
+import '../widgets/game_2d_button.dart';
 import '../widgets/game_2d_text.dart';
 import '../widgets/player_avatar.dart';
 import '../widgets/smooth_lights_background.dart';
@@ -11,6 +14,13 @@ import 'views/tournament_view.dart';
 import 'views/challenges_view.dart';
 import 'views/settings_view.dart';
 import 'views/player_stats_modal.dart';
+import '../widgets/battle_invitation_dialog.dart';
+import '../widgets/friends_modal.dart';
+import '../widgets/inventory_modal.dart';
+import '../widgets/player_profile_modal.dart';
+import '../widgets/shop_modal.dart';
+import '../services/multiplayer_service.dart';
+import 'battle_room_screen.dart';
 import 'game_play_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -27,6 +37,402 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _lockPortraitOrientation();
+    AudioService.instance.playBgm();
+    MultiplayerService.instance.incomingInvitationNotifier.addListener(_onInvitationChanged);
+  }
+
+  @override
+  void dispose() {
+    MultiplayerService.instance.incomingInvitationNotifier.removeListener(_onInvitationChanged);
+    super.dispose();
+  }
+
+  void _onInvitationChanged() {
+    final invite = MultiplayerService.instance.incomingInvitationNotifier.value;
+    if (invite != null && mounted) {
+      BattleInvitationDialog.show(context, invite);
+    }
+  }
+
+  void _openBattleRoom() async {
+    AudioService.instance.playButtonTap();
+    await _showBattleRoomLauncher(context);
+  }
+
+  Future<void> _showBattleRoomLauncher(BuildContext context) async {
+    final multi = MultiplayerService.instance;
+    final codeCtrl = TextEditingController();
+    final rootNav = Navigator.of(context);
+    multi.startLocalBeaconDiscovery();
+
+    String detectedIp = '127.0.0.1';
+    multi.getLocalIpAddress().then((ip) {
+      if (ip != null) detectedIp = ip;
+    });
+
+    MultiplayerConnectionMode selectedMode = MultiplayerConnectionMode.lanHotspot;
+    bool isConnecting = false;
+    String? connectionError;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Container(
+          padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          decoration: const BoxDecoration(
+            color: Color(0xFF0F172A),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border(top: BorderSide(color: AppTheme.electricCyan, width: 2)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  const Icon(Icons.sports_tennis_rounded, color: AppTheme.electricCyan, size: 24),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'MULTIPLAYER BATTLE',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: AppTheme.textMuted),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Mode Selector Tabs (Hotspot/Wi-Fi vs Online Cloud)
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.surfaceBorder),
+                ),
+                padding: const EdgeInsets.all(4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setSheetState(() => selectedMode = MultiplayerConnectionMode.lanHotspot),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: selectedMode == MultiplayerConnectionMode.lanHotspot
+                                ? AppTheme.electricCyan.withValues(alpha: 0.25)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: selectedMode == MultiplayerConnectionMode.lanHotspot
+                                  ? AppTheme.electricCyan
+                                  : Colors.transparent,
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.wifi_tethering_rounded, size: 16, color: AppTheme.electricCyan),
+                              SizedBox(width: 6),
+                              Text(
+                                'Hotspot / Wi-Fi (Offline)',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setSheetState(() => selectedMode = MultiplayerConnectionMode.onlineCloud),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: selectedMode == MultiplayerConnectionMode.onlineCloud
+                                ? AppTheme.neonLime.withValues(alpha: 0.25)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: selectedMode == MultiplayerConnectionMode.onlineCloud
+                                  ? AppTheme.neonLime
+                                  : Colors.transparent,
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.cloud_sync_rounded, size: 16, color: AppTheme.neonLime),
+                              SizedBox(width: 6),
+                              Text(
+                                'Online Cloud (Play Store)',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              if (connectionError != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.redAccent),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          connectionError!,
+                          style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              // Create / Host Button
+              Game2DButton(
+                onPressed: isConnecting
+                    ? null
+                    : () async {
+                        Navigator.of(ctx).pop();
+                        await multi.createRoom(mode: selectedMode);
+                        rootNav.push(
+                          MaterialPageRoute(builder: (c) => const BattleRoomScreen()),
+                        );
+                      },
+                text: selectedMode == MultiplayerConnectionMode.lanHotspot
+                    ? 'HOST HOTSPOT / WI-FI ROOM'
+                    : 'HOST ONLINE CLOUD ROOM',
+                icon: selectedMode == MultiplayerConnectionMode.lanHotspot
+                    ? Icons.wifi_tethering_rounded
+                    : Icons.cloud_upload_rounded,
+                variant: selectedMode == MultiplayerConnectionMode.lanHotspot
+                    ? GameButtonVariant.primary
+                    : GameButtonVariant.cyan,
+                size: GameButtonSize.medium,
+              ),
+
+              const SizedBox(height: 16),
+
+              // Discovered Local Rooms (Hotspot/Wi-Fi mode)
+              if (selectedMode == MultiplayerConnectionMode.lanHotspot) ...[
+                const Text(
+                  'NEARBY HOTSPOT / WI-FI GAMES (AUTO-DISCOVERED)',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                ValueListenableBuilder<List<DiscoveredLocalRoom>>(
+                  valueListenable: multi.discoveredRoomsNotifier,
+                  builder: (context, rooms, _) {
+                    if (rooms.isEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B).withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.surfaceBorder),
+                        ),
+                        child: const Row(
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.electricCyan),
+                            ),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Listening for rooms on your hotspot or Wi-Fi network...',
+                                style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return Column(
+                      children: rooms.map((r) {
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppTheme.electricCyan.withValues(alpha: 0.5)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.wifi_rounded, color: AppTheme.electricCyan, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      r.roomName,
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                    Text(
+                                      '${r.hostAddress} • ${r.gameMode} • ${r.targetScore} PTS',
+                                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Game2DButton(
+                                onPressed: isConnecting
+                                    ? null
+                                    : () async {
+                                        final sheetNav = Navigator.of(ctx);
+                                        setSheetState(() {
+                                          isConnecting = true;
+                                          connectionError = null;
+                                        });
+                                        final err = await multi.joinRoom(
+                                          hostAddress: r.hostAddress,
+                                          roomCode: r.roomCode,
+                                          port: r.port,
+                                          mode: MultiplayerConnectionMode.lanHotspot,
+                                        );
+                                        if (err != null) {
+                                          setSheetState(() {
+                                            isConnecting = false;
+                                            connectionError = err;
+                                          });
+                                        } else {
+                                          sheetNav.pop();
+                                          rootNav.push(
+                                            MaterialPageRoute(builder: (c) => const BattleRoomScreen()),
+                                          );
+                                        }
+                                      },
+                                text: 'JOIN',
+                                icon: Icons.login_rounded,
+                                variant: GameButtonVariant.cyan,
+                                size: GameButtonSize.small,
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
+                const SizedBox(height: 14),
+              ],
+
+              // Manual Join Field
+              Text(
+                selectedMode == MultiplayerConnectionMode.lanHotspot
+                    ? 'OR ENTER HOST IP / ROOM CODE DIRECTLY'
+                    : 'OR JOIN ONLINE ROOM BY 4-DIGIT CODE',
+                style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: codeCtrl,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: InputDecoration(
+                        hintText: selectedMode == MultiplayerConnectionMode.lanHotspot
+                            ? 'e.g. 192.168.43.1 or PB-8842'
+                            : 'e.g. PB-8842',
+                        hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                        filled: true,
+                        fillColor: const Color(0xFF1E293B),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppTheme.surfaceBorder),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Game2DButton(
+                    onPressed: isConnecting
+                        ? null
+                        : () async {
+                            final input = codeCtrl.text.trim();
+                            if (input.isEmpty) return;
+
+                            final sheetNav = Navigator.of(ctx);
+                            setSheetState(() {
+                              isConnecting = true;
+                              connectionError = null;
+                            });
+
+                            final hostAddr = input.contains('.') ? input : detectedIp;
+                            final err = await multi.joinRoom(
+                              hostAddress: hostAddr,
+                              roomCode: input,
+                              mode: selectedMode,
+                            );
+
+                            if (err != null) {
+                              setSheetState(() {
+                                isConnecting = false;
+                                connectionError = err;
+                              });
+                            } else {
+                              sheetNav.pop();
+                              rootNav.push(
+                                MaterialPageRoute(builder: (c) => const BattleRoomScreen()),
+                              );
+                            }
+                          },
+                    text: isConnecting ? 'CONNECTING...' : 'JOIN',
+                    icon: Icons.login_rounded,
+                    variant: GameButtonVariant.cyan,
+                    size: GameButtonSize.small,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    multi.stopLocalBeaconDiscovery();
   }
 
   void _lockPortraitOrientation() {
@@ -113,7 +519,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           // Player Avatar & Info - Tap to view individual stats and records
           Expanded(
             child: InkWell(
-              onTap: () => PlayerStatsModal.show(context),
+              onTap: () => PlayerProfileModal.show(context),
               borderRadius: BorderRadius.circular(14),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 2.0),
@@ -208,7 +614,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 4),
+          if (MediaQuery.sizeOf(context).width >= 380) ...[
+            const SizedBox(width: 4),
+            // Friends & Social Hub Icon Button
+            IconButton(
+              key: const ValueKey('dashboard_friends_btn'),
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.all(6),
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              icon: const Icon(Icons.people_alt_rounded, color: AppTheme.electricCyan, size: 20),
+              tooltip: 'Friends & Social Hub',
+              onPressed: () {
+                AudioService.instance.playButtonTap();
+                FriendsModal.show(context);
+              },
+            ),
+          ],
+          const SizedBox(width: 2),
           // Leaderboard Icon Button
           IconButton(
             visualDensity: VisualDensity.compact,
@@ -216,17 +638,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             icon: const Icon(Icons.leaderboard_rounded, color: AppTheme.neonLime, size: 20),
             tooltip: 'All Players Leaderboard',
-            onPressed: () => PlayerStatsModal.show(context, initialTabIndex: 1),
+            onPressed: () {
+              AudioService.instance.playButtonTap();
+              PlayerStatsModal.show(context, initialTabIndex: 1);
+            },
           ),
+          if (MediaQuery.sizeOf(context).width >= 520) ...[
+            const SizedBox(width: 2),
+            // Locker & Inventory Icon Button
+            IconButton(
+              key: const ValueKey('dashboard_inventory_btn'),
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.all(6),
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              icon: const Icon(Icons.inventory_2_rounded, color: AppTheme.electricCyan, size: 20),
+              tooltip: 'Locker & Inventory',
+              onPressed: () {
+                AudioService.instance.playButtonTap();
+                InventoryModal.show(context);
+              },
+            ),
+            const SizedBox(width: 2),
+            // Smash Pro Shop Icon Button
+            IconButton(
+              key: const ValueKey('dashboard_shop_btn'),
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.all(6),
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              icon: const Icon(Icons.storefront_rounded, color: AppTheme.goldCoin, size: 20),
+              tooltip: 'Smash Pro Shop',
+              onPressed: () {
+                AudioService.instance.playButtonTap();
+                ShopModal.show(context);
+              },
+            ),
+          ],
           const SizedBox(width: 2),
           // Currencies Chips
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildCurrencyChip(
-                icon: Icons.monetization_on_rounded,
-                iconColor: AppTheme.goldCoin,
-                value: '${state.coins}',
+              InkWell(
+                onTap: () => ShopModal.show(context),
+                borderRadius: BorderRadius.circular(10),
+                child: _buildCurrencyChip(
+                  icon: Icons.monetization_on_rounded,
+                  iconColor: AppTheme.goldCoin,
+                  value: '${state.coins}',
+                ),
               ),
               const SizedBox(width: 4),
               _buildCurrencyChip(
@@ -377,6 +836,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         elevation: 0,
         height: 65,
         onDestinationSelected: (index) {
+          AudioService.instance.playButtonTap();
           setState(() {
             _selectedTabIndex = index;
           });
@@ -417,6 +877,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return HomeView(
           onPlayQuickMatch: () => _navigateToGame(matchType: 'quick', isDoubles: false),
           onPlayDoublesMatch: () => _navigateToGame(matchType: 'doubles', isDoubles: true),
+          onOpenBattleRoom: _openBattleRoom,
+          onOpenFriends: () => FriendsModal.show(context),
+          onOpenProfile: () => PlayerProfileModal.show(context),
           onOpenTournament: () {
             setState(() {
               _selectedTabIndex = 1;
