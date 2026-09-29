@@ -61,6 +61,15 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
   String? _violationRuleDetail;
   Timer? _violationTimer;
 
+  @visibleForTesting
+  void setViolationForTest(String type, String desc, String ruleDetail) {
+    setState(() {
+      _violationType = type;
+      _violationDescription = desc;
+      _violationRuleDetail = ruleDetail;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -286,16 +295,24 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
                           child: _buildTopLeftScoreBoard(context, state, opponent, title, maxWidth: scoreboardWidth),
                         ),
 
-                        // 2. Top-Center: Dedicated Violation Display & Serve Prompt
+                        // 2. Top-Center: Status Display & Serve Prompt
                         Align(
                           alignment: Alignment.topCenter,
-                          child: _buildTopCenterViolationDisplay(context, maxWidth: centerMaxWidth),
+                          child: _buildTopCenterStatusDisplay(context, maxWidth: centerMaxWidth),
                         ),
 
-                        // 3. Top-Right: Settings, Rules, and Pause in ONE Unified Control
+                        // 3. Top-Right: Settings, Rules, and Pause, with Violation Display underneath
                         Align(
                           alignment: Alignment.topRight,
-                          child: _buildTopRightUnifiedControls(),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildTopRightUnifiedControls(),
+                              if (_violationType != null)
+                                _buildRightSideViolationDisplay(context, maxWidth: math.min(280.0, availableWidth * 0.42)),
+                            ],
+                          ),
                         ),
                       ],
                     );
@@ -311,11 +328,19 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
                               child: _buildTopLeftScoreBoard(context, state, opponent, title, maxWidth: availableWidth - 140.0),
                             ),
                             const SizedBox(width: 6),
-                            _buildTopRightUnifiedControls(),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildTopRightUnifiedControls(),
+                                if (_violationType != null)
+                                  _buildRightSideViolationDisplay(context, maxWidth: math.min(240.0, availableWidth * 0.5)),
+                              ],
+                            ),
                           ],
                         ),
                         const SizedBox(height: 4),
-                        _buildTopCenterViolationDisplay(context, maxWidth: availableWidth - 12.0),
+                        _buildTopCenterStatusDisplay(context, maxWidth: availableWidth - 12.0),
                       ],
                     );
                   }
@@ -747,110 +772,117 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
     );
   }
 
-  Widget _buildTopCenterViolationDisplay(BuildContext context, {double? maxWidth}) {
-    final double defaultMaxWidth = maxWidth ?? math.min(360.0, MediaQuery.of(context).size.width * 0.46);
+  Widget _buildRightSideViolationDisplay(BuildContext context, {double? maxWidth}) {
+    if (_violationType == null) return const SizedBox.shrink();
+    final double defaultMaxWidth = maxWidth ?? math.min(280.0, MediaQuery.of(context).size.width * 0.42);
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 1. Violation Warning Box (Highest priority alert, interactive tap to view rule)
-        if (_violationType != null)
-          GestureDetector(
-            onTap: () => _openRulesModal(violation: _violationType),
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: defaultMaxWidth,
-              ),
-              margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.94),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppTheme.fireOrange, width: 2.0),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.fireOrange.withValues(alpha: 0.55),
-                    blurRadius: 12,
-                    spreadRadius: 1,
+    return GestureDetector(
+      onTap: () => _openRulesModal(violation: _violationType),
+      child: Container(
+        key: const ValueKey('violation_display_box'),
+        constraints: BoxConstraints(
+          maxWidth: defaultMaxWidth,
+        ),
+        margin: const EdgeInsets.only(top: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.94),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppTheme.fireOrange, width: 2.0),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.fireOrange.withValues(alpha: 0.55),
+              blurRadius: 12,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: AppTheme.fireOrange, size: 16),
+                  const SizedBox(width: 5),
+                  Text(
+                    'VIOLATION: $_violationType',
+                    style: const TextStyle(
+                      color: AppTheme.fireOrange,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12.5,
+                      letterSpacing: 0.6,
+                    ),
                   ),
                 ],
               ),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Column(
+              if (_violationDescription != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  _violationDescription!,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.right,
+                ),
+              ],
+              if (_violationRuleDetail != null) ...[
+                const SizedBox(height: 1),
+                Text(
+                  _violationRuleDetail!,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 9,
+                  ),
+                  textAlign: TextAlign.right,
+                ),
+              ],
+              const SizedBox(height: 3),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.fireOrange.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: AppTheme.fireOrange.withValues(alpha: 0.55)),
+                ),
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.warning_amber_rounded, color: AppTheme.fireOrange, size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          'VIOLATION: $_violationType',
-                          style: const TextStyle(
-                            color: AppTheme.fireOrange,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 13,
-                            letterSpacing: 0.6,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (_violationDescription != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        _violationDescription!,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                    if (_violationRuleDetail != null) ...[
-                      const SizedBox(height: 1),
-                      Text(
-                        _violationRuleDetail!,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 9.5,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                    const SizedBox(height: 3),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.fireOrange.withValues(alpha: 0.22),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: AppTheme.fireOrange.withValues(alpha: 0.55)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.touch_app_rounded, color: AppTheme.fireOrange, size: 11),
-                          SizedBox(width: 4),
-                          Text(
-                            'TAP TO INSPECT RULE',
-                            style: TextStyle(
-                              color: AppTheme.fireOrange,
-                              fontSize: 8.5,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.4,
-                            ),
-                          ),
-                        ],
+                    Icon(Icons.touch_app_rounded, color: AppTheme.fireOrange, size: 11),
+                    SizedBox(width: 4),
+                    Text(
+                      'TAP TO INSPECT RULE',
+                      style: TextStyle(
+                        color: AppTheme.fireOrange,
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.4,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-          )
-        // 2. Rally & Side-out Announcements (when in play)
-        else if (_announcementTitle != null && !_isWaitingForServe)
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopCenterStatusDisplay(BuildContext context, {double? maxWidth}) {
+    final double defaultMaxWidth = maxWidth ?? math.min(360.0, MediaQuery.of(context).size.width * 0.46);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 1. Rally & Side-out Announcements (when in play)
+        if (_announcementTitle != null && !_isWaitingForServe)
           Container(
             constraints: BoxConstraints(
               maxWidth: defaultMaxWidth,

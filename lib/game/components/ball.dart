@@ -38,6 +38,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
   }
   double _serveBobTime = 0.0;
   double _serveTimer = 0.0;
+  bool _cpuServeBounced = false;
 
   // Bounce tracking:
   // 0 = in air (volley if struck)
@@ -78,6 +79,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     speed = initialSpeed;
     bounceCountCurrentSide = 0;
     _serveTimer = 0.0;
+    _cpuServeBounced = false;
     z = 16.0;
     zVelocity = 0.0;
     squashFactor = 1.0;
@@ -176,9 +178,37 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
         final bool autoServeEnabled = currentGame.settings?.autoServe ?? false;
         final double threshold = isCpu ? 1.2 : (autoServeEnabled ? 1.8 : double.infinity);
 
-        if (_serveTimer >= threshold) {
-          executeServe(isPlayerOne: serverComp.isPlayerOne);
-          serverComp.strike();
+        if (isCpu) {
+          // Drop Serve for AI / Bot: Ball drops to the court floor, bounces once, and CPU strikes on the bounce!
+          if (_serveTimer < 0.45) {
+            z = 16.0;
+          } else if (_serveTimer < 0.8) {
+            final dropProgress = ((_serveTimer - 0.45) / 0.35).clamp(0.0, 1.0);
+            z = 16.0 * (1.0 - dropProgress);
+            if (dropProgress >= 1.0 && !_cpuServeBounced) {
+              _cpuServeBounced = true;
+              AudioService.instance.playPaddleHit();
+              _bounceEffectRadius = 6.0;
+            }
+          } else {
+            final riseProgress = ((_serveTimer - 0.8) / 0.4).clamp(0.0, 1.0);
+            z = sin(riseProgress * pi * 0.5) * 14.0;
+          }
+
+          if (_serveTimer >= threshold) {
+            _cpuServeBounced = false;
+            executeServe(isPlayerOne: serverComp.isPlayerOne);
+            serverComp.strike();
+          }
+        } else {
+          _serveBobTime += dt;
+          final bob = sin(_serveBobTime * 6) * 3;
+          z = 16.0 + bob;
+
+          if (_serveTimer >= threshold) {
+            executeServe(isPlayerOne: serverComp.isPlayerOne);
+            serverComp.strike();
+          }
         }
       } catch (_) {}
       return;
@@ -468,6 +498,12 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     }
 
     // 3. LEGAL HIT (Groundstroke, Dink, or Open-Play Volley outside Kitchen)
+    // 3. Mandatory Floor Bounce: Ball MUST bounce on the court floor before any hit!
+    if (bounceCountCurrentSide == 0) {
+      return; // Ball has not bounced yet! Cannot hit out of the air.
+    }
+
+    // 4. LEGAL HIT (Groundstroke or Dink after floor bounce)
     AudioService.instance.playPaddleHit();
     currentGame.rallyHitCount++;
     currentGame.continuousRallyStreak++;

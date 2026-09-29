@@ -4,8 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pickleball_smash/main.dart';
+import 'package:pickleball_smash/models/ball_catalog.dart';
+import 'package:pickleball_smash/models/character_roster.dart';
+import 'package:pickleball_smash/models/court_catalog.dart';
+import 'package:pickleball_smash/models/battle_technique.dart';
 import 'package:pickleball_smash/models/game_settings.dart';
 import 'package:pickleball_smash/models/player_avatar.dart';
+import 'package:pickleball_smash/game/components/arcade_skill_button_component.dart';
+import 'package:pickleball_smash/widgets/inventory_modal.dart';
+import 'package:pickleball_smash/widgets/shop_modal.dart';
 import 'package:pickleball_smash/screens/auth/login_screen.dart';
 import 'package:pickleball_smash/screens/auth/register_screen.dart';
 import 'package:pickleball_smash/screens/dashboard_screen.dart';
@@ -18,6 +25,7 @@ import 'package:pickleball_smash/game/components/player.dart';
 import 'package:pickleball_smash/game/components/background.dart';
 import 'package:pickleball_smash/game/components/arcade_button_component.dart';
 import 'package:pickleball_smash/screens/views/in_game_settings_modal.dart';
+import 'package:pickleball_smash/screens/views/home_view.dart';
 import 'package:pickleball_smash/screens/views/settings_view.dart';
 import 'package:pickleball_smash/services/database_service.dart';
 import 'package:pickleball_smash/services/game_state_manager.dart';
@@ -449,8 +457,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final historyBtn = find.text('Match History');
-      expect(historyBtn, findsOneWidget);
-
+      await tester.ensureVisible(historyBtn);
       await tester.tap(historyBtn);
       await tester.pumpAndSettle();
 
@@ -967,12 +974,12 @@ void main() {
 
       // 3. Login as Player Alpha, set custom gallery/file photo, and save
       await state.loginWithUser(userAlphaId, userAlphaName);
-      state.updatePlayerAvatar('C:/photos/alpha_gallery_pic.png');
+      await state.updatePlayerAvatar('C:/photos/alpha_gallery_pic.png');
       expect(state.playerAvatarId, 'C:/photos/alpha_gallery_pic.png');
 
       // 4. Login as Player Beta, set different custom gallery/file photo, and save
       await state.loginWithUser(userBetaId, userBetaName);
-      state.updatePlayerAvatar('/storage/emulated/0/DCIM/beta_camera.jpg');
+      await state.updatePlayerAvatar('/storage/emulated/0/DCIM/beta_camera.jpg');
       expect(state.playerAvatarId, '/storage/emulated/0/DCIM/beta_camera.jpg');
 
       // 5. Verify direct database records
@@ -990,7 +997,7 @@ void main() {
       expect(state.playerAvatarId, '/storage/emulated/0/DCIM/beta_camera.jpg');
 
       // 8. Verify Leaderboard reflects both distinct avatars
-      final leaderboard = await db.getAllPlayersLeaderboard(limit: 500);
+      final leaderboard = await db.getAllPlayersLeaderboard(limit: 5000);
       final alphaInBoard = leaderboard.firstWhere((p) => p['user_id'] == userAlphaId);
       final betaInBoard = leaderboard.firstWhere((p) => p['user_id'] == userBetaId);
       expect(alphaInBoard['avatar_id'], 'C:/photos/alpha_gallery_pic.png');
@@ -1481,9 +1488,10 @@ void main() {
       expect(game.p1Score, 0);
     });
 
-    test('Multiple floor bounces do NOT trigger Double Bounce fault and ball remains in play', () {
+    test('Multiple floor bounces trigger Double Bounce fault and score is awarded to opponent', () {
       String? lastViolation;
       final game = PickleballGame(
+        settings: const GameSettings(scoringMode: 'rally'),
         onViolation: (type, desc, rule) {
           lastViolation = type;
         },
@@ -1506,16 +1514,14 @@ void main() {
       expect(game.ball.bounceCountCurrentSide, 1);
       expect(lastViolation, isNull);
 
-      // Advance time and simulate 2nd floor bounce
+      // Advance time and simulate 2nd floor bounce on P1's court without player striking
       game.ball.update(0.3);
       game.ball.z = 0.0;
       game.ball.zVelocity = -180.0;
       game.ball.update(0.016);
 
-      // Double bounce removed: rally does NOT fault or end!
-      expect(game.ball.bounceCountCurrentSide, 2);
-      expect(lastViolation, isNull);
-      expect(game.isGameOver, isFalse);
+      // Double bounce fault triggered: opponent (Player 2) scores point!
+      expect(game.p2Score, 1);
     });
 
     test('Expert AI calculates predictive trajectory, covers court, and strikes smoothly', () {
@@ -2594,5 +2600,1093 @@ void main() {
       face.update(0.5);
       expect(face.tapEffectProgress, 0.0);
     });
+
+    test('Mandatory floor bounce: ball cannot be hit out of the air by either human player or AI', () {
+      final game = PickleballGame();
+      final p1 = PlayerComponent(isPlayerOne: true)..customGame = game;
+      final cpu = PlayerComponent(isPlayerOne: false, isAI: true)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+      game.player1 = p1;
+      game.player2 = cpu;
+      game.ball = ball;
+      game.isWaitingForServe = false;
+      ball.isWaitingForServe = false;
+      game.rallyHitCount = 2; // Open play
+
+      // Ball approaching P1 in air (bounceCountCurrentSide == 0) outside kitchen
+      p1.position = Vector2(640.0, 560.0);
+      ball.position = Vector2(640.0, 560.0);
+      ball.velocity = Vector2(0.0, 260.0);
+      ball.bounceCountCurrentSide = 0; // In air!
+
+      final initialRally = game.rallyHitCount;
+      p1.strike();
+
+      // Ball must NOT be hit because it hasn't bounced on the floor yet!
+      expect(game.rallyHitCount, initialRally, reason: 'Human cannot hit ball before floor bounce');
+
+      // Now ball bounces on floor (bounceCountCurrentSide == 1)
+      ball.bounceCountCurrentSide = 1;
+      p1.strike();
+
+      // Ball is struck and propelled forward!
+      expect(game.rallyHitCount, initialRally + 1, reason: 'Human successfully hits ball after floor bounce');
+      expect(ball.velocity.y < 0, true, reason: 'Ball propelled back toward CPU');
+
+      // Now ball flies towards CPU in air (bounceCountCurrentSide == 0)
+      cpu.position = Vector2(640.0, 140.0);
+      ball.position = Vector2(640.0, 140.0);
+      ball.bounceCountCurrentSide = 0; // Not bounced on CPU side yet!
+      final hitsBeforeCpu = game.rallyHitCount;
+
+      cpu.update(0.016);
+      expect(game.rallyHitCount, hitsBeforeCpu, reason: 'CPU AI does not strike before floor bounce');
+
+      // Ball bounces on CPU side
+      ball.bounceCountCurrentSide = 1;
+      cpu.update(0.016);
+      expect(game.rallyHitCount, hitsBeforeCpu + 1, reason: 'CPU AI strikes after floor bounce');
+    });
+
+    testWidgets('GamePlayScreen renders violation display on the right side directly underneath settings controls', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 480);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: GamePlayScreen(matchType: 'quick'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final state = tester.state<State<GamePlayScreen>>(find.byType(GamePlayScreen));
+      expect(find.byKey(const ValueKey('violation_display_box')), findsNothing);
+
+      // Trigger a violation
+      final dynamic dynState = state;
+      dynState.setViolationForTest('TWO-BOUNCE RULE', 'Ball must bounce before return!', 'Rule 2.A');
+      await tester.pump();
+
+      // Verify the violation display renders with the right key and text
+      expect(find.byKey(const ValueKey('violation_display_box')), findsOneWidget);
+      expect(find.text('VIOLATION: TWO-BOUNCE RULE'), findsOneWidget);
+
+      // Verify geometry: violation box must be on the right half of the screen
+      final violationOffset = tester.getTopLeft(find.byKey(const ValueKey('violation_display_box')));
+      final settingsOffset = tester.getTopLeft(find.byKey(const ValueKey('ingame_settings_btn')));
+
+      expect(violationOffset.dx, greaterThan(400.0), reason: 'Violation must be on the right side of the screen');
+      expect(violationOffset.dy, greaterThan(settingsOffset.dy), reason: 'Violation must be positioned underneath the settings controls');
+    });
+  });
+
+  group('Male2 and Male3 Characters, Coin Purchase & Resale, and AI Usage Tests', () {
+    test('CharacterRoster defines Alex, Maya, Marcus (2000 coins), and Jax (2500 coins)', () {
+      expect(CharacterRoster.alex.price, 0);
+      expect(CharacterRoster.alex.sellRefund, 0);
+      expect(CharacterRoster.alex.isDefaultUnlocked, true);
+      expect(CharacterRoster.alex.type, CharacterType.male1);
+      expect(CharacterRoster.alex.spriteFolder, 'male1_sprite');
+
+      expect(CharacterRoster.maya.price, 0);
+      expect(CharacterRoster.maya.sellRefund, 0);
+      expect(CharacterRoster.maya.isDefaultUnlocked, true);
+      expect(CharacterRoster.maya.type, CharacterType.female1);
+      expect(CharacterRoster.maya.spriteFolder, 'female1_sprite');
+
+      expect(CharacterRoster.marcus.price, 2000);
+      expect(CharacterRoster.marcus.sellRefund, 1000);
+      expect(CharacterRoster.marcus.isDefaultUnlocked, false);
+      expect(CharacterRoster.marcus.type, CharacterType.male2);
+      expect(CharacterRoster.marcus.spriteFolder, 'male2_sprite');
+
+      expect(CharacterRoster.jax.price, 2500);
+      expect(CharacterRoster.jax.sellRefund, 1250);
+      expect(CharacterRoster.jax.isDefaultUnlocked, false);
+      expect(CharacterRoster.jax.type, CharacterType.male3);
+      expect(CharacterRoster.jax.spriteFolder, 'male3_sprite');
+
+      expect(CharacterRoster.chloe.price, 2200);
+      expect(CharacterRoster.chloe.sellRefund, 1100);
+      expect(CharacterRoster.chloe.isDefaultUnlocked, false);
+      expect(CharacterRoster.chloe.type, CharacterType.female2);
+      expect(CharacterRoster.chloe.spriteFolder, 'female2_sprite');
+
+      expect(CharacterRoster.getById('male2_blaze'), CharacterRoster.marcus);
+      expect(CharacterRoster.getById('male3_thunder'), CharacterRoster.jax);
+      expect(CharacterRoster.getById('female2_frost'), CharacterRoster.chloe);
+      expect(CharacterRoster.getById('alex_classic'), CharacterRoster.alex);
+      expect(CharacterRoster.getById('maya_speed'), CharacterRoster.maya);
+
+      expect(CharacterRoster.getByType(CharacterType.male2), CharacterRoster.marcus);
+      expect(CharacterRoster.getByType(CharacterType.male3), CharacterRoster.jax);
+      expect(CharacterRoster.getByType(CharacterType.female2), CharacterRoster.chloe);
+      expect(CharacterRoster.getByType(CharacterType.male1), CharacterRoster.alex);
+      expect(CharacterRoster.getByType(CharacterType.female1), CharacterRoster.maya);
+    });
+
+    test('GameStateManager character purchase, unlock, equip, and resale logic', () {
+      final state = GameStateManager.instance;
+      state.loginAsGuest();
+      state.coins = 500;
+
+      // Default unlocked
+      expect(state.isCharacterUnlocked('alex_classic'), true);
+      expect(state.isCharacterUnlocked('maya_speed'), true);
+      expect(state.isCharacterUnlocked('male2_blaze'), false);
+      expect(state.isCharacterUnlocked('male3_thunder'), false);
+      expect(state.isCharacterUnlocked('female2_frost'), false);
+
+      // Attempting to buy Marcus (2000 coins) with 500 coins fails
+      final buyMarcusFail = state.purchaseCharacter('male2_blaze');
+      expect(buyMarcusFail, false);
+      expect(state.coins, 500);
+      expect(state.isCharacterUnlocked('male2_blaze'), false);
+
+      // Give enough coins and buy Marcus
+      state.coins = 3000;
+      final buyMarcusSuccess = state.purchaseCharacter('male2_blaze');
+      expect(buyMarcusSuccess, true);
+      expect(state.coins, 1000); // 3000 - 2000
+      expect(state.isCharacterUnlocked('male2_blaze'), true);
+      expect(state.playerAvatarId, 'male2_blaze');
+
+      // Selling Marcus Blaze refunds 1000 coins
+      final sellMarcus = state.sellCharacter('male2_blaze');
+      expect(sellMarcus, true);
+      expect(state.coins, 2000); // 1000 + 1000 refund
+      expect(state.isCharacterUnlocked('male2_blaze'), false);
+      expect(state.playerAvatarId, 'alex_classic'); // Reverts to Alex
+
+      // Cannot sell default characters
+      expect(state.sellCharacter('alex_classic'), false);
+      expect(state.sellCharacter('maya_speed'), false);
+
+      // Cannot sell non-owned character
+      expect(state.sellCharacter('male3_thunder'), false);
+
+      // Buying Jax Thunder (2500 coins)
+      state.coins = 2500;
+      final buyJax = state.purchaseCharacter('male3_thunder');
+      expect(buyJax, true);
+      expect(state.coins, 0); // 2500 - 2500
+      expect(state.isCharacterUnlocked('male3_thunder'), true);
+      expect(state.playerAvatarId, 'male3_thunder');
+
+      // Buying Chloe Frost (2200 coins)
+      state.coins = 2200;
+      final buyChloe = state.purchaseCharacter('female2_frost');
+      expect(buyChloe, true);
+      expect(state.coins, 0); // 2200 - 2200
+      expect(state.isCharacterUnlocked('female2_frost'), true);
+      expect(state.playerAvatarId, 'female2_frost');
+
+      // Selling Chloe refunds 1100 coins
+      final sellChloe = state.sellCharacter('female2_frost');
+      expect(sellChloe, true);
+      expect(state.coins, 1100);
+      expect(state.isCharacterUnlocked('female2_frost'), false);
+
+      // Selling Jax Thunder refunds 1250 coins (1100 + 1250 = 2350)
+      final sellJax = state.sellCharacter('male3_thunder');
+      expect(sellJax, true);
+      expect(state.coins, 2350);
+      expect(state.isCharacterUnlocked('male3_thunder'), false);
+      expect(state.playerAvatarId, 'alex_classic');
+    });
+
+    test('PlayerComponent loads and animates male2 and male3 without error', () async {
+      final game = PickleballGame();
+      final p1 = PlayerComponent(isPlayerOne: true, characterType: CharacterType.male2)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false, characterType: CharacterType.male3)..customGame = game;
+      final partner1 = PlayerComponent(isPlayerOne: true, characterType: CharacterType.male3, playerSlot: 2)..customGame = game;
+      final partner2 = PlayerComponent(isPlayerOne: false, characterType: CharacterType.male2, playerSlot: 2)..customGame = game;
+
+      game.player1 = p1;
+      game.player2 = p2;
+      game.player1Partner = partner1;
+      game.player2Partner = partner2;
+      game.ball = BallComponent()..customGame = game;
+
+      expect(p1.characterType, CharacterType.male2);
+      expect(p1.isFemale, false);
+      expect(p2.characterType, CharacterType.male3);
+      expect(p2.isFemale, false);
+      expect(partner1.characterType, CharacterType.male3);
+      expect(partner2.characterType, CharacterType.male2);
+
+      final pFemale2 = PlayerComponent(isPlayerOne: false, characterType: CharacterType.female2)..customGame = game;
+      expect(pFemale2.characterType, CharacterType.female2);
+      expect(pFemale2.isFemale, true);
+
+      // Striking triggers animations smoothly
+      expect(() => p1.strike(), returnsNormally);
+      expect(() => p2.strike(), returnsNormally);
+      expect(() => pFemale2.strike(), returnsNormally);
+      expect(() => p1.update(0.016), returnsNormally);
+      expect(() => p2.update(0.016), returnsNormally);
+      expect(() => pFemale2.update(0.016), returnsNormally);
+    });
+
+    testWidgets('AvatarPickerDialog displays character roster with prices and allows buying and selling', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 700);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final state = GameStateManager.instance;
+      state.loginAsGuest();
+      state.coins = 3000;
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: AvatarPickerDialog(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Court Champions (Buy & Sell)'), findsOneWidget);
+      expect(find.text('Alex Smash'), findsOneWidget);
+      expect(find.text('Maya Swift'), findsOneWidget);
+      expect(find.text('Marcus Blaze'), findsOneWidget);
+      expect(find.text('Jax Thunder'), findsOneWidget);
+
+      // Verify prices displayed
+      expect(find.text('Price: 🪙2000'), findsOneWidget);
+      expect(find.text('Price: 🪙2500'), findsOneWidget);
+
+      // Buy Marcus Blaze
+      final buyMarcusBtn = find.text('BUY (🪙2000)');
+      expect(buyMarcusBtn, findsOneWidget);
+      await tester.ensureVisible(buyMarcusBtn);
+      await tester.tap(buyMarcusBtn);
+      await tester.pumpAndSettle();
+
+      expect(state.isCharacterUnlocked('male2_blaze'), true);
+      expect(state.playerAvatarId, 'male2_blaze');
+      expect(state.coins, 1000);
+
+      // Now Marcus Blaze shows SELL (+🪙1000)
+      final sellMarcusBtn = find.text('SELL (+🪙1000)');
+      expect(sellMarcusBtn, findsOneWidget);
+
+      // Tap SELL opens confirmation dialog
+      await tester.ensureVisible(sellMarcusBtn);
+      await tester.tap(sellMarcusBtn);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sell Marcus Blaze?'), findsOneWidget);
+      expect(find.text('+1000 Coins'), findsOneWidget);
+
+      // Confirm sale
+      await tester.tap(find.text('CONFIRM SALE'));
+      await tester.pumpAndSettle();
+
+      expect(state.isCharacterUnlocked('male2_blaze'), false);
+      expect(state.coins, 2000); // 1000 + 1000 refund
+      expect(state.playerAvatarId, 'alex_classic');
+    });
+  });
+
+  group('Shop, Inventory, Pixel Courts, and Ball Tier Effects Tests', () {
+    setUp(() {
+      final state = GameStateManager.instance;
+      state.loginAsGuest();
+      state.coins = 5000;
+      state.unlockedCourtIds.clear();
+      state.unlockedCourtIds.add('court_pro_stadium');
+      state.equippedCourtId = 'court_pro_stadium';
+      state.unlockedBallIds.clear();
+      state.unlockedBallIds.add('ball_elite');
+      state.equippedBallId = 'ball_elite';
+    });
+
+    test('CourtCatalog defines at least 5 pixel courts including Sunset Beach Resort', () {
+      expect(CourtCatalog.allCourts.length, greaterThanOrEqualTo(5));
+
+      // 1. Classic Pro Arena
+      final pro = CourtCatalog.proStadium;
+      expect(pro.id, 'court_pro_stadium');
+      expect(pro.price, 0);
+      expect(pro.isDefaultUnlocked, true);
+      expect(pro.environment, CourtEnvironment.stadium);
+
+      // 2. Sunset Beach Resort (Beach Area)
+      final beach = CourtCatalog.beachResort;
+      expect(beach.id, 'court_beach_resort');
+      expect(beach.price, 1500);
+      expect(beach.environment, CourtEnvironment.beach);
+      expect(beach.name, contains('Beach'));
+
+      // 3. Neon Cyber Arcade
+      final cyber = CourtCatalog.cyberArcade;
+      expect(cyber.id, 'court_cyber_arcade');
+      expect(cyber.price, 1800);
+      expect(cyber.environment, CourtEnvironment.cyber);
+
+      // 4. Emerald Forest Park
+      final forest = CourtCatalog.forestPark;
+      expect(forest.id, 'court_forest_park');
+      expect(forest.price, 2200);
+      expect(forest.environment, CourtEnvironment.forest);
+
+      // 5. Volcanic Magma Stadium
+      final magma = CourtCatalog.magmaStadium;
+      expect(magma.id, 'court_magma_stadium');
+      expect(magma.price, 2800);
+      expect(magma.environment, CourtEnvironment.magma);
+
+      // ID resolver lookup
+      expect(CourtCatalog.getById('court_beach_resort').environment, CourtEnvironment.beach);
+      expect(CourtCatalog.getById('beach').environment, CourtEnvironment.beach);
+      expect(CourtCatalog.getById('cyber').environment, CourtEnvironment.cyber);
+      expect(CourtCatalog.getById('forest').environment, CourtEnvironment.forest);
+      expect(CourtCatalog.getById('magma').environment, CourtEnvironment.magma);
+      expect(CourtCatalog.getById('unknown').environment, CourtEnvironment.stadium);
+    });
+
+    test('BallCatalog defines all 5 requested balls with distinct effects and tiers', () {
+      expect(BallCatalog.allBalls.length, 5);
+
+      // 1. Elite Ball
+      final elite = BallCatalog.elite;
+      expect(elite.id, 'ball_elite');
+      expect(elite.name, 'Elite Ball');
+      expect(elite.tier, BallTier.elite);
+      expect(elite.price, 0);
+      expect(elite.isDefaultUnlocked, true);
+
+      // 2. Special Ball
+      final special = BallCatalog.special;
+      expect(special.id, 'ball_special');
+      expect(special.name, 'Special Ball');
+      expect(special.tier, BallTier.special);
+      expect(special.price, 1200);
+
+      // 3. Epic Ball
+      final epic = BallCatalog.epic;
+      expect(epic.id, 'ball_epic');
+      expect(epic.name, 'Epic Ball');
+      expect(epic.tier, BallTier.epic);
+      expect(epic.price, 1800);
+
+      // 4. Mythic Ball
+      final mythic = BallCatalog.mythic;
+      expect(mythic.id, 'ball_mythic');
+      expect(mythic.name, 'Mythic Ball');
+      expect(mythic.tier, BallTier.mythic);
+      expect(mythic.price, 2400);
+
+      // 5. Legendary Ball
+      final legendary = BallCatalog.legendary;
+      expect(legendary.id, 'ball_legendary');
+      expect(legendary.name, 'Legendary Ball');
+      expect(legendary.tier, BallTier.legendary);
+      expect(legendary.price, 3000);
+
+      // ID resolver lookup
+      expect(BallCatalog.getById('ball_elite').tier, BallTier.elite);
+      expect(BallCatalog.getById('special').tier, BallTier.special);
+      expect(BallCatalog.getById('epic').tier, BallTier.epic);
+      expect(BallCatalog.getById('mythic').tier, BallTier.mythic);
+      expect(BallCatalog.getById('legendary').tier, BallTier.legendary);
+    });
+
+    test('GameStateManager court and ball purchasing, unlocking, and equipping logic', () {
+      final state = GameStateManager.instance;
+      state.coins = 2000;
+
+      // Default state
+      expect(state.isCourtUnlocked('court_pro_stadium'), true);
+      expect(state.equippedCourtId, 'court_pro_stadium');
+      expect(state.isCourtUnlocked('court_beach_resort'), false);
+
+      expect(state.isBallUnlocked('ball_elite'), true);
+      expect(state.equippedBallId, 'ball_elite');
+      expect(state.isBallUnlocked('ball_legendary'), false);
+
+      // Unaffordable purchase fails
+      final buyLegendaryFail = state.purchaseBall('ball_legendary'); // costs 3000, have 2000
+      expect(buyLegendaryFail, false);
+      expect(state.isBallUnlocked('ball_legendary'), false);
+      expect(state.coins, 2000);
+
+      // Affordable purchase succeeds
+      final buyBeachSuccess = state.purchaseCourt('court_beach_resort'); // costs 1500
+      expect(buyBeachSuccess, true);
+      expect(state.isCourtUnlocked('court_beach_resort'), true);
+      expect(state.equippedCourtId, 'court_beach_resort');
+      expect(state.coins, 500);
+
+      // Equipping previously unlocked item
+      state.equipCourt('court_pro_stadium');
+      expect(state.equippedCourtId, 'court_pro_stadium');
+      state.equipCourt('court_beach_resort');
+      expect(state.equippedCourtId, 'court_beach_resort');
+
+      // Ball purchase and equip
+      state.coins = 1500;
+      final buySpecialSuccess = state.purchaseBall('ball_special'); // costs 1200
+      expect(buySpecialSuccess, true);
+      expect(state.isBallUnlocked('ball_special'), true);
+      expect(state.equippedBallId, 'ball_special');
+      expect(state.coins, 300);
+
+      state.equipBall('ball_elite');
+      expect(state.equippedBallId, 'ball_elite');
+      state.equipBall('ball_special');
+      expect(state.equippedBallId, 'ball_special');
+    });
+
+    testWidgets('ShopModal renders 3 tabs and handles item purchase and equip interactions', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final state = GameStateManager.instance;
+      state.coins = 4000;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => Center(
+                child: ElevatedButton(
+                  key: const ValueKey('open_shop_btn'),
+                  onPressed: () => ShopModal.show(ctx),
+                  child: const Text('Open Shop'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Open shop
+      await tester.tap(find.byKey(const ValueKey('open_shop_btn')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ShopModal), findsOneWidget);
+      expect(find.text('SMASH PRO SHOP'), findsOneWidget);
+      expect(find.text('CHARACTERS'), findsOneWidget);
+      expect(find.text('COURTS'), findsOneWidget);
+      expect(find.text('BALLS'), findsOneWidget);
+
+      // Alex is obtained/equipped
+      expect(find.text('Alex Smash'), findsOneWidget);
+      expect(find.text('EQUIPPED'), findsAtLeast(1));
+
+      // Switch to COURTS tab
+      await tester.tap(find.text('COURTS'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sunset Beach Resort'), findsOneWidget);
+      expect(find.text('Neon Cyber Arcade'), findsOneWidget);
+
+      // Buy Sunset Beach Resort in shop
+      final buyBeachBtn = find.descendant(
+        of: find.byKey(const ValueKey('shop_court_court_beach_resort')),
+        matching: find.text('🪙 1500'),
+      );
+      expect(buyBeachBtn, findsOneWidget);
+      await tester.tap(buyBeachBtn);
+      await tester.pumpAndSettle();
+
+      expect(state.isCourtUnlocked('court_beach_resort'), true);
+      expect(state.equippedCourtId, 'court_beach_resort');
+
+      // Switch to BALLS tab
+      await tester.tap(find.text('BALLS'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Elite Ball'), findsOneWidget);
+      expect(find.text('Special Ball'), findsOneWidget);
+      expect(find.text('Epic Ball'), findsOneWidget);
+      expect(find.text('Mythic Ball'), findsOneWidget);
+      expect(find.text('Legendary Ball'), findsOneWidget);
+    });
+
+    testWidgets('ShopModal displays character front views, showcases Chloe Frost and supports pose inspection', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1000, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final state = GameStateManager.instance;
+      state.coins = 5000;
+      state.unlockedCharacterIds.remove('female2_frost');
+      state.equipCharacter('alex_classic');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => Center(
+                child: ElevatedButton(
+                  key: const ValueKey('open_shop_btn_f2'),
+                  onPressed: () => ShopModal.show(ctx),
+                  child: const Text('Open Shop'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('open_shop_btn_f2')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ShopModal), findsOneWidget);
+
+      // Verify first characters in list
+      expect(find.text('Alex Smash'), findsOneWidget);
+      expect(find.text('Maya Swift'), findsOneWidget);
+
+      // Verify default spotlight shows equipped character (Alex)
+      expect(find.text('FRONT VIEW SPOTLIGHT: ALEX SMASH'), findsOneWidget);
+
+      // Drag ListView up to reveal Chloe Frost
+      await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+      await tester.pumpAndSettle();
+      expect(find.text('Chloe Frost'), findsOneWidget);
+
+      // Tap Chloe Frost to spotlight her front view
+      await tester.tap(find.byKey(const ValueKey('shop_char_female2_frost')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('FRONT VIEW SPOTLIGHT: CHLOE FROST'), findsOneWidget);
+
+      // Toggle pose chips
+      expect(find.text('Run'), findsOneWidget);
+      await tester.tap(find.text('Run'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Smash'), findsOneWidget);
+      await tester.tap(find.text('Smash'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Idle'), findsOneWidget);
+      await tester.tap(find.text('Idle'));
+      await tester.pumpAndSettle();
+
+      // Purchase Chloe Frost
+      final buyChloeBtn = find.descendant(
+        of: find.byKey(const ValueKey('shop_char_female2_frost')),
+        matching: find.text('🪙 2200'),
+      );
+      expect(buyChloeBtn, findsOneWidget);
+      await tester.tap(buyChloeBtn);
+      await tester.pumpAndSettle();
+
+      expect(state.isCharacterUnlocked('female2_frost'), true);
+      expect(state.playerAvatarId, 'female2_frost');
+    });
+
+    testWidgets('InventoryModal renders active loadout and equipment management', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final state = GameStateManager.instance;
+      state.unlockedCourtIds.add('court_beach_resort');
+      state.equippedCourtId = 'court_beach_resort';
+      state.unlockedBallIds.add('ball_special');
+      state.equippedBallId = 'ball_special';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => Center(
+                child: ElevatedButton(
+                  key: const ValueKey('open_inv_btn'),
+                  onPressed: () => InventoryModal.show(ctx),
+                  child: const Text('Open Inventory'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Open inventory
+      await tester.tap(find.byKey(const ValueKey('open_inv_btn')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(InventoryModal), findsOneWidget);
+      expect(find.text('LOCKER & INVENTORY'), findsOneWidget);
+      expect(find.text('ACTIVE LOADOUT:'), findsOneWidget);
+
+      // Switch to COURTS tab
+      await tester.tap(find.text('COURTS'));
+      await tester.pumpAndSettle();
+
+      // Classic Pro is unlocked and has EQUIP button
+      final equipProBtn = find.descendant(
+        of: find.byKey(const ValueKey('inv_court_court_pro_stadium')),
+        matching: find.text('EQUIP'),
+      );
+      expect(equipProBtn, findsOneWidget);
+
+      await tester.tap(equipProBtn);
+      await tester.pumpAndSettle();
+
+      expect(state.equippedCourtId, 'court_pro_stadium');
+
+      // Switch to BALLS tab
+      await tester.tap(find.text('BALLS'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Elite Ball'), findsAtLeast(1));
+      expect(find.text('Special Ball'), findsAtLeast(1));
+    });
+
+    test('Background component configures equipped court theme and pixel environment details', () {
+      // Beach
+      final bgBeach = Background(courtId: 'court_beach_resort');
+      expect(bgBeach.courtInfo.environment, CourtEnvironment.beach);
+      expect(bgBeach.courtInfo.name, 'Sunset Beach Resort');
+
+      // Cyber
+      final bgCyber = Background(courtId: 'court_cyber_arcade');
+      expect(bgCyber.courtInfo.environment, CourtEnvironment.cyber);
+
+      // Magma
+      final bgMagma = Background(courtId: 'court_magma_stadium');
+      expect(bgMagma.courtInfo.environment, CourtEnvironment.magma);
+
+      // Forest
+      final bgForest = Background(courtId: 'court_forest_park');
+      expect(bgForest.courtInfo.environment, CourtEnvironment.forest);
+
+      // Verify procedural drawing runs without throws
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      bgBeach.render(canvas);
+      bgCyber.render(canvas);
+      bgMagma.render(canvas);
+      bgForest.render(canvas);
+      recorder.endRecording();
+    });
+
+    test('BallComponent renders custom gradient, glow, ripple, and motion particles', () {
+      // Legendary 24K Solar Gold
+      final ballLeg = BallComponent(ballId: 'ball_legendary');
+      expect(ballLeg.ballInfo.tier, BallTier.legendary);
+      expect(ballLeg.ballInfo.name, 'Legendary Ball');
+
+      // Mythic Cosmic
+      final ballMyth = BallComponent(ballId: 'ball_mythic');
+      expect(ballMyth.ballInfo.tier, BallTier.mythic);
+
+      // Epic Molten Inferno
+      final ballEpic = BallComponent(ballId: 'ball_epic');
+      expect(ballEpic.ballInfo.tier, BallTier.epic);
+
+      // Special Plasma
+      final ballSpec = BallComponent(ballId: 'ball_special');
+      expect(ballSpec.ballInfo.tier, BallTier.special);
+
+      // Verify rendering on canvas without exceptions
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      ballLeg.render(canvas);
+      ballMyth.render(canvas);
+      ballEpic.render(canvas);
+      ballSpec.render(canvas);
+      recorder.endRecording();
+    });
+
+    testWidgets('HomeView renders PRO SHOP & LOCKER banner with quick launch actions', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: HomeView(
+              onPlayQuickMatch: () {},
+              onOpenTournament: () {},
+              onOpenChallenges: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('PRO SHOP & LOCKER'), findsOneWidget);
+      expect(find.byKey(const ValueKey('home_open_shop_btn')), findsOneWidget);
+      expect(find.byKey(const ValueKey('home_open_inventory_btn')), findsOneWidget);
+
+      // Open shop from HomeView banner
+      await tester.tap(find.byKey(const ValueKey('home_open_shop_btn')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ShopModal), findsOneWidget);
+    });
+  });
+
+  group('Battle Techniques & Arcade Skill Buttons Tests', () {
+    test('TechniqueCatalog defines leftSpin and rightSpin metadata correctly', () {
+      expect(TechniqueCatalog.leftSpin.technique, BattleTechnique.leftSpin);
+      expect(TechniqueCatalog.leftSpin.name, 'Cyclone Curve');
+      expect(TechniqueCatalog.leftSpin.icon, '🌪️');
+      expect(TechniqueCatalog.leftSpin.hotkey, 'K');
+      expect(TechniqueCatalog.leftSpin.cooldownSeconds, 6.0);
+
+      expect(TechniqueCatalog.rightSpin.technique, BattleTechnique.rightSpin);
+      expect(TechniqueCatalog.rightSpin.name, 'Vortex Hook');
+      expect(TechniqueCatalog.rightSpin.icon, '⚡');
+      expect(TechniqueCatalog.rightSpin.hotkey, 'L');
+      expect(TechniqueCatalog.rightSpin.cooldownSeconds, 6.0);
+
+      expect(TechniqueCatalog.dash.technique, BattleTechnique.dash);
+      expect(TechniqueCatalog.dash.name, 'Flash Dash');
+      expect(TechniqueCatalog.dash.icon, '💨');
+      expect(TechniqueCatalog.dash.hotkey, 'SHIFT');
+      expect(TechniqueCatalog.dash.cooldownSeconds, 3.5);
+
+      expect(TechniqueCatalog.get(BattleTechnique.leftSpin).id, 'left_spin');
+      expect(TechniqueCatalog.get(BattleTechnique.rightSpin).id, 'right_spin');
+      expect(TechniqueCatalog.get(BattleTechnique.dash).id, 'flash_dash');
+      expect(TechniqueCatalog.get(BattleTechnique.none).id, 'left_spin');
+    });
+
+    test('ArcadeSkillButtonComponent renders, triggers tap effects, and respects cooldowns', () {
+      bool tapped = false;
+      final btn = ArcadeSkillButtonComponent(
+        technique: BattleTechnique.leftSpin,
+        radius: 28.0,
+        opacity: 0.9,
+        onTriggered: () {
+          tapped = true;
+        },
+      );
+
+      expect(btn.cooldownRemaining, 0.0);
+      expect(btn.isPrimed, false);
+
+      // Trigger tap
+      btn.triggerTapEffect();
+      expect(btn.tapEffectProgress, 1.0);
+      btn.onTriggered?.call();
+      expect(tapped, true);
+
+      btn.update(0.1);
+      expect(btn.tapEffectProgress < 1.0, true);
+
+      // Start cooldown
+      btn.startCooldown();
+      expect(btn.cooldownRemaining, 6.0);
+
+      // Advance time
+      btn.update(3.0);
+      expect(btn.cooldownRemaining, closeTo(3.0, 0.01));
+
+      // Reset cooldown
+      btn.resetCooldown();
+      expect(btn.cooldownRemaining, 0.0);
+
+      // Render to canvas
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      btn.isPrimed = true;
+      btn.render(canvas);
+
+      btn.startCooldown();
+      btn.render(canvas);
+      final pic = recorder.endRecording();
+      expect(pic, isNotNull);
+    });
+
+    test('PlayerComponent queues techniques, primes aura, and auto-expires prime timer', () {
+      final game = PickleballGame(joystickOnLeft: true, targetScore: 11, isDoubles: false);
+      final player = PlayerComponent(isPlayerOne: true, isFemale: false)..customGame = game;
+      game.player1 = player;
+      game.ball = BallComponent()..customGame = game;
+
+      expect(player.activeTechnique, BattleTechnique.none);
+      expect(player.techniquePrimeTimer, 0.0);
+
+      // Queue Left Spin
+      player.queueTechnique(BattleTechnique.leftSpin);
+      expect(player.activeTechnique, BattleTechnique.leftSpin);
+      expect(player.techniquePrimeTimer, 4.5);
+
+      // Advance by 2 seconds
+      player.update(2.0);
+      expect(player.activeTechnique, BattleTechnique.leftSpin);
+      expect(player.techniquePrimeTimer, closeTo(2.5, 0.01));
+
+      // Advance past 4.5 seconds -> auto-clears
+      player.update(2.6);
+      expect(player.activeTechnique, BattleTechnique.none);
+      expect(player.techniquePrimeTimer, 0.0);
+
+      // Clear technique manual call
+      player.queueTechnique(BattleTechnique.rightSpin);
+      expect(player.activeTechnique, BattleTechnique.rightSpin);
+      player.clearTechnique();
+      expect(player.activeTechnique, BattleTechnique.none);
+    });
+
+    test('BallComponent executes Left Spin with aerodynamic left curving and floor kick', () {
+      String? announcedTitle;
+      final game = PickleballGame(
+        joystickOnLeft: true,
+        targetScore: 11,
+        isDoubles: false,
+        onAnnouncement: (title, subtitle) {
+          announcedTitle = title;
+        },
+      );
+      final p1 = PlayerComponent(isPlayerOne: true, isFemale: false)..customGame = game;
+      final cpu = PlayerComponent(isPlayerOne: false, isFemale: false, isAI: true)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+
+      game.player1 = p1;
+      game.player2 = cpu;
+      game.ball = ball;
+      game.isWaitingForServe = false;
+
+      // Initially ball is far away on opponent side
+      ball.position = Vector2(640, 200);
+      p1.position = Vector2(640, 600);
+      ball.velocity = Vector2(0, 200);
+      game.rallyHitCount = 2;
+
+      // Queue Left Spin (Cyclone Curve) on player 1 while ball is far away -> primed!
+      p1.queueTechnique(BattleTechnique.leftSpin);
+      expect(p1.activeTechnique, BattleTechnique.leftSpin);
+
+      // Ball arrives and bounces on player's side
+      ball.position = Vector2(640, 580);
+      ball.bounceCountCurrentSide = 1; // Legal bounce occurred
+
+      // Execute hit
+      ball.processPlayerHit(p1);
+
+      expect(p1.activeTechnique, BattleTechnique.none);
+      expect(ball.activeTechniqueType, BattleTechnique.leftSpin);
+      expect(ball.spin, -1.0);
+      expect(ball.curveStrength > 0, true);
+      expect(announcedTitle, '🌪️ CYCLONE CURVE!');
+
+      // As ball updates in flight, velocity.x curves to the left (decreasing X)
+      final initialVx = ball.velocity.x;
+      ball.update(0.1);
+      expect(ball.velocity.x < initialVx, true);
+      expect(ball.ballRotationAngle != 0.0, true);
+    });
+
+    test('BallComponent executes Right Spin with aerodynamic right curving and floor kick', () {
+      String? announcedTitle;
+      final game = PickleballGame(
+        joystickOnLeft: true,
+        targetScore: 11,
+        isDoubles: false,
+        onAnnouncement: (title, subtitle) {
+          announcedTitle = title;
+        },
+      );
+      final p1 = PlayerComponent(isPlayerOne: true, isFemale: false)..customGame = game;
+      final cpu = PlayerComponent(isPlayerOne: false, isFemale: false, isAI: true)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+
+      game.player1 = p1;
+      game.player2 = cpu;
+      game.ball = ball;
+      game.isWaitingForServe = false;
+
+      // Initially ball is far away
+      ball.position = Vector2(640, 200);
+      p1.position = Vector2(640, 600);
+      ball.velocity = Vector2(0, 200);
+      game.rallyHitCount = 2;
+
+      // Queue Right Spin (Vortex Hook) on player 1 while ball is far away -> primed!
+      p1.queueTechnique(BattleTechnique.rightSpin);
+      expect(p1.activeTechnique, BattleTechnique.rightSpin);
+
+      // Now ball arrives and bounces on player's side
+      ball.position = Vector2(640, 580);
+      ball.bounceCountCurrentSide = 1;
+
+      // Execute hit
+      ball.processPlayerHit(p1);
+
+      expect(p1.activeTechnique, BattleTechnique.none);
+      expect(ball.activeTechniqueType, BattleTechnique.rightSpin);
+      expect(ball.spin, 1.0);
+      expect(ball.curveStrength > 0, true);
+      expect(announcedTitle, '⚡ VORTEX HOOK!');
+
+      // As ball updates in flight, velocity.x curves to the right (increasing X)
+      final initialVx = ball.velocity.x;
+      ball.update(0.1);
+      expect(ball.velocity.x > initialVx, true);
+      expect(ball.ballRotationAngle != 0.0, true);
+    });
+
+    test('BallComponent renders custom technique particles and auras without error', () {
+      final game = PickleballGame(joystickOnLeft: true, targetScore: 11, isDoubles: false);
+      final ball = BallComponent()..customGame = game;
+      game.ball = ball;
+
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+
+      // 1. Render with Left Spin
+      ball.activeTechniqueType = BattleTechnique.leftSpin;
+      ball.ballRotationAngle = 1.2;
+      ball.render(canvas);
+
+      // 2. Render with Right Spin
+      ball.activeTechniqueType = BattleTechnique.rightSpin;
+      ball.ballRotationAngle = 2.4;
+      ball.render(canvas);
+
+      final pic = recorder.endRecording();
+      expect(pic, isNotNull);
+    });
+
+    test('PickleballGame creates skill buttons in viewport and handles cooldowns and screen shake', () {
+      final game = PickleballGame(joystickOnLeft: true, targetScore: 11, isDoubles: false);
+      game.player1 = PlayerComponent(isPlayerOne: true)..customGame = game;
+      game.player2 = PlayerComponent(isPlayerOne: false, isAI: true)..customGame = game;
+      game.ball = BallComponent()..customGame = game;
+      game.background = Background();
+      game.applySettings(const GameSettings(joystickOnLeft: true));
+
+      expect(game.leftSpinButton, isNotNull);
+      expect(game.rightSpinButton, isNotNull);
+      expect(game.dashButton, isNotNull);
+
+      expect(game.camera.viewport.children.contains(game.leftSpinButton!), true);
+      expect(game.camera.viewport.children.contains(game.rightSpinButton!), true);
+      expect(game.camera.viewport.children.contains(game.dashButton!), true);
+
+      // Trigger Left Spin via game method
+      game.triggerLeftSpin();
+      expect(game.player1.activeTechnique, BattleTechnique.leftSpin);
+      expect(game.leftSpinButton!.isPrimed, true);
+
+      // Execute technique triggers cooldown
+      game.onTechniqueExecuted(BattleTechnique.leftSpin);
+      expect(game.leftSpinButton!.cooldownRemaining, 6.0);
+      expect(game.leftSpinButton!.isPrimed, false);
+
+      // Trigger Right Spin
+      game.triggerRightSpin();
+      expect(game.player1.activeTechnique, BattleTechnique.rightSpin);
+      expect(game.rightSpinButton!.isPrimed, true);
+
+      game.onTechniqueExecuted(BattleTechnique.rightSpin);
+      expect(game.rightSpinButton!.cooldownRemaining, 6.0);
+      expect(game.rightSpinButton!.isPrimed, false);
+
+      // Trigger Dash
+      game.triggerDash();
+      expect(game.dashButton!.cooldownRemaining, 3.5);
+
+      // Reset match clears cooldowns
+      game.resetForNewMatch();
+      expect(game.leftSpinButton!.cooldownRemaining, 0.0);
+      expect(game.rightSpinButton!.cooldownRemaining, 0.0);
+      expect(game.dashButton!.cooldownRemaining, 0.0);
+
+      // Settings change updates joystick hand and repositions skill buttons in-place
+      game.applySettings(const GameSettings(controlsPreset: 'Default Arcade', joystickOnLeft: false));
+      expect(game.leftSpinButton!.margin?.left, 126.0);
+      expect(game.rightSpinButton!.margin?.left, 36.0);
+      expect(game.dashButton!.margin?.left, 126.0);
+    });
+
+    test('PlayerComponent executes Dash with speed boost, afterimages, dust particles, and cooldown', () {
+      final game = PickleballGame(joystickOnLeft: true, targetScore: 11, isDoubles: false);
+      final player = PlayerComponent(isPlayerOne: true, isFemale: false)..customGame = game;
+      game.player1 = player;
+      game.ball = BallComponent()..customGame = game;
+
+      player.position = Vector2(640, 600);
+      expect(player.isDashing, false);
+      expect(player.dashCooldown, 0.0);
+      expect(player.afterimages.isEmpty, true);
+      expect(player.dashParticles.isEmpty, true);
+
+      // Dash towards right
+      final success = player.dash(customDirection: Vector2(1, 0));
+      expect(success, true);
+      expect(player.isDashing, true);
+      expect(player.dashTimer, 0.22);
+      expect(player.dashCooldown, 3.5);
+      expect(player.currentVelocity.x, 750.0);
+      expect(player.dashParticles.isNotEmpty, true);
+      expect(player.afterimages.isNotEmpty, true);
+
+      // Updating position during dash moves player at dashSpeed (750 px/s)
+      final initialX = player.position.x;
+      player.update(0.1);
+      expect(player.position.x > initialX + 60.0, true);
+      expect(player.isDashing, true);
+
+      // Trying to dash again while on cooldown is rejected
+      final secondDash = player.dash(customDirection: Vector2(-1, 0));
+      expect(secondDash, false);
+
+      // Advance until dash ends
+      player.update(0.15);
+      expect(player.isDashing, false);
+
+      // Render canvas with afterimages, particles, and streaks without throwing
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      player.render(canvas);
+      final pic = recorder.endRecording();
+      expect(pic, isNotNull);
+    });
+
+    test('PlayerComponent dash cancels immediately when striking and AI executes dash during rally', () {
+      final game = PickleballGame(joystickOnLeft: true, targetScore: 11, isDoubles: false);
+      final p1 = PlayerComponent(isPlayerOne: true, isFemale: false)..customGame = game;
+      final cpu = PlayerComponent(isPlayerOne: false, isFemale: false, isAI: true)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+
+      game.player1 = p1;
+      game.player2 = cpu;
+      game.ball = ball;
+      game.isWaitingForServe = false;
+
+      // 1. Human dash cancelled on strike
+      p1.position = Vector2(640, 600);
+      p1.dash(customDirection: Vector2(0, -1));
+      expect(p1.isDashing, true);
+
+      p1.strike();
+      expect(p1.isDashing, false);
+
+      // 2. CPU AI executes dash when ball is far away on CPU side
+      cpu.position = Vector2(400, 150);
+      ball.position = Vector2(850, 250);
+      ball.velocity = Vector2(100, -250); // Flying towards CPU side
+      ball.bounceCountCurrentSide = 1;
+
+      expect(cpu.isDashing, false);
+      cpu.update(0.016); // CPU detects target distance > 140 and dashes!
+      expect(cpu.isDashing, true);
+      expect(cpu.dashCooldown > 0, true);
+    });
   });
 }
+

@@ -395,8 +395,8 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     final distY = (ball.position.y - position.y).abs();
     final distX = (ball.position.x - position.x).abs();
     if (ball.velocity.y > 0 && distY < 115 && distX < 95) {
-      // Expert timing: strike once bounced or at ground level
-      if (ball.bounceCountCurrentSide >= 1 || ball.z <= 12.0) {
+      // Ball must bounce first on the court floor before striking
+      if (ball.bounceCountCurrentSide >= 1) {
         strike();
       }
     }
@@ -509,8 +509,8 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     final distX = (ball.position.x - position.x).abs();
 
     if (ball.velocity.y < 0 && distY < 115 && distX < 95) {
-      // Expert timing: strike once bounced or at ground level
-      if (ball.bounceCountCurrentSide >= 1 || ball.z <= 12.0) {
+      // Ball must bounce first on the court floor before striking
+      if (ball.bounceCountCurrentSide >= 1) {
         strike();
       }
     }
@@ -575,6 +575,11 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   }
 
   void strike() {
+    // AI / bot players MUST let the ball bounce on the court floor once before they hit!
+    if (isAI && !currentGame.isWaitingForServe && currentGame.ball.bounceCountCurrentSide == 0) {
+      return; // Do NOT swing, animate slash, or hit before the floor bounce
+    }
+
     if (isPlayerOne && !isAI) {
       currentGame.triggerSmashButtonEffect();
     }
