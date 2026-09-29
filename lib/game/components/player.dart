@@ -127,6 +127,18 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   final List<DashDustParticle> dashParticles = [];
   double _footstepTimer = 0.22;
 
+  // Reusable cached paints for zero-allocation 60 FPS rendering
+  static final Paint _shadowOuterPaint = Paint()..color = const Color(0x45000000);
+  static final Paint _shadowInnerPaint = Paint()..color = const Color(0x60000000);
+  final Paint _afterimagePaint = Paint();
+  final Paint _ghostPaint = Paint()..style = PaintingStyle.fill;
+  final Paint _particlePaint = Paint()..style = PaintingStyle.fill;
+  final Paint _streakPaint = Paint()..style = PaintingStyle.stroke..strokeWidth = 2.2;
+  final Paint _auraPaint = Paint()..style = PaintingStyle.stroke..strokeWidth = 3.0;
+  final Paint _glowPaint = Paint()..style = PaintingStyle.fill;
+  final Paint _fallbackHeadPaint = Paint()..color = const Color(0xFFFFE0B2);
+  final Paint _fallbackBodyPaint = Paint();
+
   Vector2 getFacingDirectionVector() {
     switch (currentDirection) {
       case PlayerDirection.front:
@@ -197,21 +209,25 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       });
     }
 
-    // Spawn burst of dust particles behind dash direction
-    final backAngle = math.atan2(-dashDirection.y, -dashDirection.x);
-    for (int i = 0; i < 7; i++) {
-      final angle = backAngle + (math.Random().nextDouble() - 0.5) * 1.0;
-      final pSpeed = 40.0 + math.Random().nextDouble() * 80.0;
-      dashParticles.add(
-        DashDustParticle(
-          position: position.clone(),
-          velocity: Vector2(math.cos(angle), math.sin(angle)) * pSpeed,
-          life: 0.30 + math.Random().nextDouble() * 0.15,
-          maxLife: 0.45,
-          radius: 2.5 + math.Random().nextDouble() * 3.0,
-          color: const Color(0xFFBAE6FD).withAlpha(180),
-        ),
-      );
+    // Spawn burst of dust particles behind dash direction (only if particles enabled)
+    final bool enableParticles = currentGame.settings?.particlesEnabled ?? true;
+    if (enableParticles) {
+      final backAngle = math.atan2(-dashDirection.y, -dashDirection.x);
+      final count = (currentGame.settings?.graphicsQuality == 'Low') ? 3 : 6;
+      for (int i = 0; i < count; i++) {
+        final angle = backAngle + (math.Random().nextDouble() - 0.5) * 1.0;
+        final pSpeed = 40.0 + math.Random().nextDouble() * 80.0;
+        dashParticles.add(
+          DashDustParticle(
+            position: position.clone(),
+            velocity: Vector2(math.cos(angle), math.sin(angle)) * pSpeed,
+            life: 0.30 + math.Random().nextDouble() * 0.15,
+            maxLife: 0.45,
+            radius: 2.5 + math.Random().nextDouble() * 3.0,
+            color: const Color(0xFFBAE6FD).withAlpha(180),
+          ),
+        );
+      }
     }
 
     // Capture initial afterimage
@@ -226,6 +242,11 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   }
 
   void _captureAfterimage() {
+    final maxAfterimages = (currentGame.settings?.graphicsQuality == 'Low') ? 2 : 4;
+    while (afterimages.length >= maxAfterimages) {
+      afterimages.removeAt(0);
+    }
+
     Sprite? currentSprite;
     try {
       if (animation != null && animation!.frames.isNotEmpty) {
@@ -530,21 +551,25 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     }
 
     // Update afterimages decay
-    for (int i = afterimages.length - 1; i >= 0; i--) {
-      final img = afterimages[i];
-      img.opacity -= dt * 3.2;
-      if (img.opacity <= 0.0) {
-        afterimages.removeAt(i);
+    if (afterimages.isNotEmpty) {
+      for (int i = afterimages.length - 1; i >= 0; i--) {
+        final img = afterimages[i];
+        img.opacity -= dt * 3.2;
+        if (img.opacity <= 0.0) {
+          afterimages.removeAt(i);
+        }
       }
     }
 
     // Update dash dust particles
-    for (int i = dashParticles.length - 1; i >= 0; i--) {
-      final p = dashParticles[i];
-      p.life -= dt;
-      p.position += p.velocity * dt;
-      if (p.life <= 0) {
-        dashParticles.removeAt(i);
+    if (dashParticles.isNotEmpty) {
+      for (int i = dashParticles.length - 1; i >= 0; i--) {
+        final p = dashParticles[i];
+        p.life -= dt;
+        p.position += p.velocity * dt;
+        if (p.life <= 0) {
+          dashParticles.removeAt(i);
+        }
       }
     }
     
@@ -627,28 +652,31 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
           changeDirection(newDirection);
           position.add(currentVelocity * dt);
 
-          // Retro arcade walking footstep SFX & foot dust
+          // Retro arcade walking footstep SFX & foot dust (only if particles enabled)
           if (!isDashing && currentState != PlayerState.slash) {
             _footstepTimer += dt;
             if (_footstepTimer >= 0.26) {
               _footstepTimer = 0.0;
               AudioService.instance.playFootstep();
-              dashParticles.add(
-                DashDustParticle(
-                  position: Vector2(
-                    position.x + (math.Random().nextDouble() - 0.5) * 12.0,
-                    position.y + size.y * 0.38,
+              final bool enableParticles = currentGame.settings?.particlesEnabled ?? true;
+              if (enableParticles && dashParticles.length < 8) {
+                dashParticles.add(
+                  DashDustParticle(
+                    position: Vector2(
+                      position.x + (math.Random().nextDouble() - 0.5) * 12.0,
+                      position.y + size.y * 0.38,
+                    ),
+                    velocity: Vector2(
+                      (math.Random().nextDouble() - 0.5) * 18.0,
+                      (math.Random().nextDouble() - 0.5) * 10.0,
+                    ),
+                    life: 0.20,
+                    maxLife: 0.20,
+                    radius: 1.6 + math.Random().nextDouble() * 1.4,
+                    color: const Color(0xFFE2E8F0).withAlpha(130),
                   ),
-                  velocity: Vector2(
-                    (math.Random().nextDouble() - 0.5) * 18.0,
-                    (math.Random().nextDouble() - 0.5) * 10.0,
-                  ),
-                  life: 0.20,
-                  maxLife: 0.20,
-                  radius: 1.6 + math.Random().nextDouble() * 1.4,
-                  color: const Color(0xFFE2E8F0).withAlpha(130),
-                ),
-              );
+                );
+              }
             }
           }
         } else {
@@ -937,7 +965,8 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       aiVelocity.lerp(targetVel, (dt * 12.0).clamp(0.0, 1.0));
       position += aiVelocity * dt;
 
-      if (!isDashing && math.Random().nextDouble() < 0.18) {
+      final bool enableParticles = currentGame.settings?.particlesEnabled ?? true;
+      if (enableParticles && !isDashing && dashParticles.length < 8 && math.Random().nextDouble() < 0.18) {
         dashParticles.add(
           DashDustParticle(
             position: Vector2(position.x + (math.Random().nextDouble() - 0.5) * 10.0, position.y + size.y * 0.38),
@@ -1158,7 +1187,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
           width: size.x * 0.62,
           height: size.y * 0.20,
         ),
-        Paint()..color = const Color(0x45000000),
+        _shadowOuterPaint,
       );
       // Denser contact inner shadow
       canvas.drawOval(
@@ -1167,7 +1196,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
           width: size.x * 0.40,
           height: size.y * 0.12,
         ),
-        Paint()..color = const Color(0x60000000),
+        _shadowInnerPaint,
       );
     }
 
@@ -1177,7 +1206,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       final drawX = relOffset.x;
       final drawY = relOffset.y;
       if (img.sprite != null) {
-        final imgPaint = Paint()
+        _afterimagePaint
           ..colorFilter = ColorFilter.mode(
             img.tint.withAlpha((img.opacity * 190).round()),
             BlendMode.srcATop,
@@ -1187,32 +1216,28 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
           canvas,
           position: Vector2(drawX, drawY),
           size: size,
-          overridePaint: imgPaint,
+          overridePaint: _afterimagePaint,
         );
       } else {
-        final ghostPaint = Paint()
-          ..color = img.tint.withAlpha((img.opacity * 140).round())
-          ..style = PaintingStyle.fill;
-        canvas.drawCircle(Offset(size.x / 2 + drawX, size.y * 0.55 + drawY), size.x * 0.35, ghostPaint);
+        _ghostPaint.color = img.tint.withAlpha((img.opacity * 140).round());
+        canvas.drawCircle(Offset(size.x / 2 + drawX, size.y * 0.55 + drawY), size.x * 0.35, _ghostPaint);
       }
     }
 
     // 3. Render dash dust particles
-    for (final p in dashParticles) {
-      final relOffset = p.position - position;
-      final pAlpha = (p.life / p.maxLife).clamp(0.0, 1.0);
-      final pPaint = Paint()
-        ..color = p.color.withAlpha((pAlpha * 220).round())
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(Offset(size.x / 2 + relOffset.x, size.y * 0.85 + relOffset.y), p.radius * pAlpha, pPaint);
+    final bool enableParticles = currentGame.settings?.particlesEnabled ?? true;
+    if (enableParticles && dashParticles.isNotEmpty) {
+      for (final p in dashParticles) {
+        final relOffset = p.position - position;
+        final pAlpha = (p.life / p.maxLife).clamp(0.0, 1.0);
+        _particlePaint.color = p.color.withAlpha((pAlpha * 220).round());
+        canvas.drawCircle(Offset(size.x / 2 + relOffset.x, size.y * 0.85 + relOffset.y), p.radius * pAlpha, _particlePaint);
+      }
     }
 
     // 4. Render speed streak lines while dashing
     if (isDashing) {
-      final streakPaint = Paint()
-        ..color = (isPlayerOne ? const Color(0xFF38BDF8) : const Color(0xFFF472B6)).withAlpha(200)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.2;
+      _streakPaint.color = (isPlayerOne ? const Color(0xFF38BDF8) : const Color(0xFFF472B6)).withAlpha(200);
       final backDir = -dashDirection;
       for (int i = -1; i <= 1; i++) {
         final startOffset = Offset(
@@ -1223,7 +1248,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
           startOffset.dx + backDir.x * 28.0,
           startOffset.dy + backDir.y * 28.0,
         );
-        canvas.drawLine(startOffset, endOffset, streakPaint);
+        canvas.drawLine(startOffset, endOffset, _streakPaint);
       }
     }
 
@@ -1233,33 +1258,28 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     } else {
       // Stylized fallback character rendering so player is NEVER invisible
       final bodyColor = isPlayerOne ? const Color(0xFF00E5FF) : const Color(0xFFFF5252);
-      final headColor = const Color(0xFFFFE0B2);
-      canvas.drawCircle(Offset(size.x / 2, size.y * 0.25), size.x * 0.2, Paint()..color = headColor);
+      _fallbackBodyPaint.color = bodyColor;
+      canvas.drawCircle(Offset(size.x / 2, size.y * 0.25), size.x * 0.2, _fallbackHeadPaint);
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(center: Offset(size.x / 2, size.y * 0.6), width: size.x * 0.5, height: size.y * 0.5),
           const Radius.circular(6),
         ),
-        Paint()..color = bodyColor,
+        _fallbackBodyPaint,
       );
     }
 
-    // 3. Render active battle technique primed aura
+    // 6. Render active battle technique primed aura
     if (activeTechnique != BattleTechnique.none) {
       final pulse = math.sin((currentGame.elapsedTime) * 10.0) * 3.0;
       final isLeft = activeTechnique == BattleTechnique.leftSpin;
       final auraColor = isLeft ? const Color(0xFF10B981) : const Color(0xFFA855F7);
 
-      final auraPaint = Paint()
-        ..color = auraColor.withAlpha(140)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3.0;
-      canvas.drawCircle(Offset(size.x / 2, size.y * 0.55), size.x * 0.45 + pulse, auraPaint);
+      _auraPaint.color = auraColor.withAlpha(140);
+      canvas.drawCircle(Offset(size.x / 2, size.y * 0.55), size.x * 0.45 + pulse, _auraPaint);
 
-      final glowPaint = Paint()
-        ..color = auraColor.withAlpha(50)
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(Offset(size.x / 2, size.y * 0.55), size.x * 0.42 + pulse, glowPaint);
+      _glowPaint.color = auraColor.withAlpha(50);
+      canvas.drawCircle(Offset(size.x / 2, size.y * 0.55), size.x * 0.42 + pulse, _glowPaint);
     }
   }
 }

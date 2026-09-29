@@ -603,8 +603,10 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
 
   @override
   void update(double dt) {
-    super.update(dt);
-    elapsedTime += dt;
+    // Clamp delta time to prevent spiral-of-death and physical hitching on low-end devices
+    final clampedDt = dt.clamp(0.001, 0.05);
+    super.update(clampedDt);
+    elapsedTime += clampedDt;
 
     if (isMultiplayer) {
       _networkTickTimer += dt;

@@ -368,15 +368,18 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // The Flame Game
+          // The Flame Game (Isolated in RepaintBoundary to prevent Flutter UI overlay repaints from invalidating canvas)
           Positioned.fill(
-            child: GameWidget(game: _game),
+            child: RepaintBoundary(
+              child: GameWidget(game: _game),
+            ),
           ),
 
           // Top In-Game Header: Top-Left Scoreboard, Top-Center Violation/Serve, Top-Right Unified Controls
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: RepaintBoundary(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final availableWidth = constraints.maxWidth;
@@ -447,6 +450,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
               ),
             ),
           ),
+        ),
 
           // Pause Menu Overlay
           if (_isPaused && !_matchFinished)

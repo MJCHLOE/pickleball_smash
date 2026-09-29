@@ -16,6 +16,13 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     if (customGame != null) return customGame!;
     return game;
   }
+  PickleballGame? get currentGameOrNull {
+    if (customGame != null) return customGame;
+    try {
+      if (isMounted) return game;
+    } catch (_) {}
+    return null;
+  }
 
   Vector2 velocity = Vector2.zero();
   final double initialSpeed = 280.0;
@@ -73,21 +80,44 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
   double curveStrength = 0.0; // Lateral acceleration px/s^2 (Magnus effect)
   double ballRotationAngle = 0.0; // Perforation visual rotation angle in radians
 
+  // Reusable cached paints for zero-allocation 60 FPS rendering on low-end devices
+  Paint? _cachedBallPaint;
+  final Paint _shadowPaint = Paint();
+  final Paint _ripplePaint = Paint()..style = PaintingStyle.stroke..strokeWidth = 2.5;
+  final Paint _trailFillPaint = Paint()..style = PaintingStyle.fill;
+  final Paint _trailStrokePaint = Paint()..style = PaintingStyle.stroke..strokeWidth = 1.5;
+  final Paint _wispPaint = Paint()..style = PaintingStyle.fill;
+  final Paint _auraFillPaint = Paint()..style = PaintingStyle.fill;
+  final Paint _holePaint = Paint()..style = PaintingStyle.fill;
+
   BallComponent({String? ballId})
       : _ballInfo = BallCatalog.getById(ballId ?? 'ball_elite') {
     radius = 11.0;
     anchor = Anchor.center;
     paint = Paint()..color = _ballInfo.gradientColors[1];
+    _updateCachedBallPaint();
+  }
+
+  void _updateCachedBallPaint() {
+    _cachedBallPaint = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(-0.35, -0.35),
+        radius: 0.85,
+        colors: _ballInfo.gradientColors,
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: radius));
+    _holePaint.color = _ballInfo.holeColor;
   }
 
   void applyBall(String id) {
     _ballInfo = BallCatalog.getById(id);
     paint = Paint()..color = _ballInfo.gradientColors[1];
+    _updateCachedBallPaint();
   }
 
   void applyBallInfo(BallInfo info) {
     _ballInfo = info;
     paint = Paint()..color = _ballInfo.gradientColors[1];
+    _updateCachedBallPaint();
   }
 
   @override
@@ -274,12 +304,15 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     _timeSinceLastBounce += dt;
 
     // Track motion particle trail
-    if (!isWaitingForServe && speed > 50) {
+    final settings = currentGameOrNull?.settings;
+    final bool enableParticles = settings?.particlesEnabled ?? true;
+    if (enableParticles && !isWaitingForServe && speed > 50) {
       _trailTimer += dt;
       if (_trailTimer >= 0.02) {
         _trailTimer = 0.0;
+        final maxTrail = (settings?.graphicsQuality == 'Low') ? 4 : 8;
         _trailPositions.insert(0, Offset(position.x, position.y - z));
-        if (_trailPositions.length > 8) {
+        if (_trailPositions.length > maxTrail) {
           _trailPositions.removeLast();
         }
       }
@@ -476,93 +509,80 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
 
   @override
   void render(Canvas canvas) {
+    final settings = currentGameOrNull?.settings;
+
     // 1. Draw realistic floor shadow at ground level beneath the ball
-    final shadowScale = (1.0 - (z / 220.0).clamp(0.0, 0.45));
-    final shadowAlpha = ((1.0 - (z / 250.0).clamp(0.0, 0.6)) * 0.45);
-    final shadowPaint = Paint()..color = Colors.black.withValues(alpha: shadowAlpha);
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: const Offset(0, 4),
-        width: radius * 2.2 * shadowScale,
-        height: radius * 1.1 * shadowScale,
-      ),
-      shadowPaint,
-    );
+    final bool enableShadows = settings?.shadowsEnabled ?? true;
+    if (enableShadows) {
+      final shadowScale = (1.0 - (z / 220.0).clamp(0.0, 0.45));
+      final shadowAlpha = ((1.0 - (z / 250.0).clamp(0.0, 0.6)) * 0.45);
+      _shadowPaint.color = Colors.black.withValues(alpha: shadowAlpha);
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: const Offset(0, 4),
+          width: radius * 2.2 * shadowScale,
+          height: radius * 1.1 * shadowScale,
+        ),
+        _shadowPaint,
+      );
+    }
 
     // 2. Draw expanding ripple ring on the floor when the ball bounces
     if (_bounceEffectRadius > 0) {
-      final ringPaint = Paint()
-        ..color = _ballInfo.rippleColor.withValues(alpha: (1.0 - (_bounceEffectRadius / 30)).clamp(0.0, 1.0))
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5;
+      _ripplePaint.color = _ballInfo.rippleColor.withValues(alpha: (1.0 - (_bounceEffectRadius / 30)).clamp(0.0, 1.0));
       canvas.drawOval(
         Rect.fromCenter(
           center: const Offset(0, 4),
           width: _bounceEffectRadius * 2.2,
           height: _bounceEffectRadius * 1.1,
         ),
-        ringPaint,
+        _ripplePaint,
       );
     }
 
     // 3. Draw particle motion trail
-    for (int i = 0; i < _trailPositions.length; i++) {
-      final p = _trailPositions[i];
-      final rel = Offset(p.dx - position.x, p.dy - position.y);
-      final progress = 1.0 - (i / _trailPositions.length);
-      final trailAlpha = (progress * 0.55).clamp(0.0, 1.0);
-      final trailRad = radius * (0.35 + 0.45 * progress);
+    final bool enableParticles = settings?.particlesEnabled ?? true;
+    if (enableParticles && _trailPositions.isNotEmpty) {
+      for (int i = 0; i < _trailPositions.length; i++) {
+        final p = _trailPositions[i];
+        final rel = Offset(p.dx - position.x, p.dy - position.y);
+        final progress = 1.0 - (i / _trailPositions.length);
+        final trailAlpha = (progress * 0.55).clamp(0.0, 1.0);
+        final trailRad = radius * (0.35 + 0.45 * progress);
 
-      // Special particle visual styles for active techniques!
-      if (activeTechniqueType == BattleTechnique.leftSpin) {
-        // 🌪️ Cyclone Left Spin: Emerald & mint wind vortex trail
-        final cyclonePaint = Paint()
-          ..color = (i % 2 == 0 ? const Color(0xFF10B981) : const Color(0xFF34D399))
-              .withValues(alpha: (trailAlpha * 1.6).clamp(0.0, 1.0))
-          ..style = PaintingStyle.fill;
-        canvas.drawCircle(rel, trailRad * 1.35, cyclonePaint);
+        // Special particle visual styles for active techniques!
+        if (activeTechniqueType == BattleTechnique.leftSpin) {
+          // 🌪️ Cyclone Left Spin: Emerald & mint wind vortex trail
+          _trailFillPaint.color = (i % 2 == 0 ? const Color(0xFF10B981) : const Color(0xFF34D399))
+              .withValues(alpha: (trailAlpha * 1.6).clamp(0.0, 1.0));
+          canvas.drawCircle(rel, trailRad * 1.35, _trailFillPaint);
 
-        // Counter-clockwise orbiting wind wisps
-        final angle = -ballRotationAngle + (i * 0.4);
-        final wispOffset = rel + Offset(cos(angle) * trailRad * 0.6, sin(angle) * trailRad * 0.6);
-        canvas.drawCircle(
-          wispOffset,
-          trailRad * 0.45,
-          Paint()..color = Colors.white.withValues(alpha: trailAlpha * 0.85),
-        );
-      } else if (activeTechniqueType == BattleTechnique.rightSpin) {
-        // ⚡ Vortex Right Spin: Electric violet & purple plasma trail
-        final vortexPaint = Paint()
-          ..color = (i % 2 == 0 ? const Color(0xFF8B5CF6) : const Color(0xFFA855F7))
-              .withValues(alpha: (trailAlpha * 1.6).clamp(0.0, 1.0))
-          ..style = PaintingStyle.fill;
-        canvas.drawCircle(rel, trailRad * 1.35, vortexPaint);
+          // Counter-clockwise orbiting wind wisps
+          final angle = -ballRotationAngle + (i * 0.4);
+          final wispOffset = rel + Offset(cos(angle) * trailRad * 0.6, sin(angle) * trailRad * 0.6);
+          _wispPaint.color = Colors.white.withValues(alpha: trailAlpha * 0.85);
+          canvas.drawCircle(wispOffset, trailRad * 0.45, _wispPaint);
+        } else if (activeTechniqueType == BattleTechnique.rightSpin) {
+          // ⚡ Vortex Right Spin: Electric violet & purple plasma trail
+          _trailFillPaint.color = (i % 2 == 0 ? const Color(0xFF8B5CF6) : const Color(0xFFA855F7))
+              .withValues(alpha: (trailAlpha * 1.6).clamp(0.0, 1.0));
+          canvas.drawCircle(rel, trailRad * 1.35, _trailFillPaint);
 
-        // Clockwise orbiting plasma spark
-        final angle = ballRotationAngle + (i * 0.4);
-        final sparkOffset = rel + Offset(cos(angle) * trailRad * 0.6, sin(angle) * trailRad * 0.6);
-        canvas.drawCircle(
-          sparkOffset,
-          trailRad * 0.45,
-          Paint()..color = const Color(0xFFE9D5FF).withValues(alpha: trailAlpha * 0.85),
-        );
-      } else {
-        final trailPaint = Paint()
-          ..color = _ballInfo.sparkColor.withValues(alpha: trailAlpha)
-          ..style = PaintingStyle.fill;
-        canvas.drawCircle(rel, trailRad, trailPaint);
+          // Clockwise orbiting plasma spark
+          final angle = ballRotationAngle + (i * 0.4);
+          final sparkOffset = rel + Offset(cos(angle) * trailRad * 0.6, sin(angle) * trailRad * 0.6);
+          _wispPaint.color = const Color(0xFFE9D5FF).withValues(alpha: trailAlpha * 0.85);
+          canvas.drawCircle(sparkOffset, trailRad * 0.45, _wispPaint);
+        } else {
+          _trailFillPaint.color = _ballInfo.sparkColor.withValues(alpha: trailAlpha);
+          canvas.drawCircle(rel, trailRad, _trailFillPaint);
 
-        if (_ballInfo.tier == BallTier.legendary ||
-            _ballInfo.tier == BallTier.mythic ||
-            _ballInfo.tier == BallTier.special) {
-          canvas.drawCircle(
-            rel,
-            trailRad * 1.35,
-            Paint()
-              ..color = _ballInfo.glowColor.withValues(alpha: trailAlpha * 0.45)
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 1.5,
-          );
+          if (_ballInfo.tier == BallTier.legendary ||
+              _ballInfo.tier == BallTier.mythic ||
+              _ballInfo.tier == BallTier.special) {
+            _trailStrokePaint.color = _ballInfo.glowColor.withValues(alpha: trailAlpha * 0.45);
+            canvas.drawCircle(rel, trailRad * 1.35, _trailStrokePaint);
+          }
         }
       }
     }
@@ -572,42 +592,63 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     canvas.translate(0, -z);
     canvas.scale(2.0 - squashFactor, squashFactor);
 
-    // Glowing aura for higher tier balls or active battle technique
+    // Glowing aura for higher tier balls or active battle technique (Optimized: avoid MaskFilter.blur on budget GPUs)
+    final bool useBlur = settings?.graphicsQuality == 'Ultra';
     if (activeTechniqueType == BattleTechnique.leftSpin) {
-      final leftAura = Paint()
-        ..color = const Color(0xFF10B981).withValues(alpha: 0.65)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7);
-      canvas.drawCircle(Offset.zero, radius + 4.5, leftAura);
+      if (useBlur) {
+        _auraFillPaint.color = const Color(0xFF10B981).withValues(alpha: 0.65);
+        _auraFillPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 7);
+        canvas.drawCircle(Offset.zero, radius + 4.5, _auraFillPaint);
+      } else {
+        // High-performance crisp arcade halo
+        _auraFillPaint.maskFilter = null;
+        _auraFillPaint.color = const Color(0xFF10B981).withValues(alpha: 0.25);
+        canvas.drawCircle(Offset.zero, radius + 5.5, _auraFillPaint);
+        _auraFillPaint.color = const Color(0xFF34D399).withValues(alpha: 0.55);
+        canvas.drawCircle(Offset.zero, radius + 2.5, _auraFillPaint);
+      }
     } else if (activeTechniqueType == BattleTechnique.rightSpin) {
-      final rightAura = Paint()
-        ..color = const Color(0xFF8B5CF6).withValues(alpha: 0.65)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7);
-      canvas.drawCircle(Offset.zero, radius + 4.5, rightAura);
+      if (useBlur) {
+        _auraFillPaint.color = const Color(0xFF8B5CF6).withValues(alpha: 0.65);
+        _auraFillPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 7);
+        canvas.drawCircle(Offset.zero, radius + 4.5, _auraFillPaint);
+      } else {
+        // High-performance crisp arcade halo
+        _auraFillPaint.maskFilter = null;
+        _auraFillPaint.color = const Color(0xFF8B5CF6).withValues(alpha: 0.25);
+        canvas.drawCircle(Offset.zero, radius + 5.5, _auraFillPaint);
+        _auraFillPaint.color = const Color(0xFFA855F7).withValues(alpha: 0.55);
+        canvas.drawCircle(Offset.zero, radius + 2.5, _auraFillPaint);
+      }
     } else if (_ballInfo.tier != BallTier.elite) {
-      final glowPaint = Paint()
-        ..color = _ballInfo.glowColor.withValues(alpha: 0.35)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
-      canvas.drawCircle(Offset.zero, radius + 2.5, glowPaint);
+      if (useBlur) {
+        _auraFillPaint.color = _ballInfo.glowColor.withValues(alpha: 0.35);
+        _auraFillPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+        canvas.drawCircle(Offset.zero, radius + 2.5, _auraFillPaint);
+      } else {
+        _auraFillPaint.maskFilter = null;
+        _auraFillPaint.color = _ballInfo.glowColor.withValues(alpha: 0.30);
+        canvas.drawCircle(Offset.zero, radius + 3.0, _auraFillPaint);
+      }
     }
 
-    final ballPaint = Paint()
+    _cachedBallPaint ??= Paint()
       ..shader = RadialGradient(
         center: const Alignment(-0.35, -0.35),
         radius: 0.85,
         colors: _ballInfo.gradientColors,
       ).createShader(Rect.fromCircle(center: Offset.zero, radius: radius));
-    canvas.drawCircle(Offset.zero, radius, ballPaint);
+    canvas.drawCircle(Offset.zero, radius, _cachedBallPaint!);
 
     // 5. Draw pickleball holes / perforations with dynamic sidespin rotation
     canvas.save();
     canvas.rotate(ballRotationAngle);
-    final holePaint = Paint()..color = _ballInfo.holeColor;
     const double holeRad = 1.7;
-    canvas.drawCircle(const Offset(-4, -4), holeRad, holePaint);
-    canvas.drawCircle(const Offset(4, -4), holeRad, holePaint);
-    canvas.drawCircle(const Offset(-4, 4), holeRad, holePaint);
-    canvas.drawCircle(const Offset(4, 4), holeRad, holePaint);
-    canvas.drawCircle(const Offset(0, 0), holeRad, holePaint);
+    canvas.drawCircle(const Offset(-4, -4), holeRad, _holePaint);
+    canvas.drawCircle(const Offset(4, -4), holeRad, _holePaint);
+    canvas.drawCircle(const Offset(-4, 4), holeRad, _holePaint);
+    canvas.drawCircle(const Offset(4, 4), holeRad, _holePaint);
+    canvas.drawCircle(const Offset(0, 0), holeRad, _holePaint);
     canvas.restore();
 
     canvas.restore();

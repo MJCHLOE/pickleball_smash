@@ -20,6 +20,17 @@ class ArcadeSkillButtonComponent extends HudMarginComponent with TapCallbacks {
   bool isPrimed = false;
   double tapEffectProgress = 0.0;
 
+  // Reusable cached paints for zero-allocation rendering
+  final Paint _auraPaint = Paint()..style = PaintingStyle.stroke..strokeWidth = 3.5;
+  final Paint _ripplePaint = Paint()..style = PaintingStyle.stroke;
+  final Paint _sparkPaint = Paint()..strokeWidth = 2.0;
+  final Paint _casingPaint = Paint()..style = PaintingStyle.fill;
+  final Paint _bevelPaint = Paint()..style = PaintingStyle.fill;
+  final Paint _facePaint = Paint()..style = PaintingStyle.fill;
+  final Paint _highlightPaint = Paint()..style = PaintingStyle.fill;
+  final Paint _cdOverlayPaint = Paint()..style = PaintingStyle.fill;
+  final Paint _cdRingPaint = Paint()..style = PaintingStyle.stroke..strokeWidth = 2.5;
+
   ArcadeSkillButtonComponent({
     required this.technique,
     this.radius = 28.0,
@@ -94,26 +105,20 @@ class ArcadeSkillButtonComponent extends HudMarginComponent with TapCallbacks {
     // 1. Primed / Ready Pulsing Aura
     if (isReady && isPrimed) {
       final pulse = math.sin((game?.elapsedTime ?? 0.0) * 8.0) * 3.0;
-      final auraPaint = Paint()
-        ..color = info.glowColor.withAlpha((alphaVal * 0.55).round())
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3.5;
-      canvas.drawCircle(Offset(cx, cy), radius + 5.0 + pulse, auraPaint);
+      _auraPaint.color = info.glowColor.withAlpha((alphaVal * 0.55).round());
+      canvas.drawCircle(Offset(cx, cy), radius + 5.0 + pulse, _auraPaint);
     }
 
     // 2. Dynamic Tap Explosion & Shockwave
     if (tapEffectProgress > 0.0) {
       final expandDist = (1.0 - tapEffectProgress) * 26.0;
-      final ripplePaint = Paint()
+      _ripplePaint
         ..color = info.glowColor.withAlpha((alphaVal * tapEffectProgress * 0.85).round())
-        ..style = PaintingStyle.stroke
         ..strokeWidth = 2.5 * tapEffectProgress;
-      canvas.drawCircle(Offset(cx, cy), radius + 4.0 + expandDist, ripplePaint);
+      canvas.drawCircle(Offset(cx, cy), radius + 4.0 + expandDist, _ripplePaint);
 
       // Starburst sparks
-      final sparkPaint = Paint()
-        ..color = Colors.white.withAlpha((alphaVal * tapEffectProgress).round())
-        ..strokeWidth = 2.0;
+      _sparkPaint.color = Colors.white.withAlpha((alphaVal * tapEffectProgress).round());
       for (int i = 0; i < 6; i++) {
         final angle = (i * math.pi / 3) + ((1.0 - tapEffectProgress) * 0.5);
         final sparkDist = radius + 6.0 + expandDist * 0.8;
@@ -121,50 +126,42 @@ class ArcadeSkillButtonComponent extends HudMarginComponent with TapCallbacks {
         final sy = cy + math.sin(angle) * sparkDist;
         final ex = cx + math.cos(angle) * (sparkDist + 5.0);
         final ey = cy + math.sin(angle) * (sparkDist + 5.0);
-        canvas.drawLine(Offset(sx, sy), Offset(ex, ey), sparkPaint);
+        canvas.drawLine(Offset(sx, sy), Offset(ex, ey), _sparkPaint);
       }
     }
 
     // 3. Dark Outer Bevel Casing Ring
-    final casingPaint = Paint()
-      ..color = const Color(0xFF090D16).withAlpha(alphaVal)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(Offset(cx, cy + 2.0), radius + 3.0, casingPaint);
+    _casingPaint.color = const Color(0xFF090D16).withAlpha(alphaVal);
+    canvas.drawCircle(Offset(cx, cy + 2.0), radius + 3.0, _casingPaint);
 
     // 4. 3D Bevel Extrusion
-    final bevelPaint = Paint()
-      ..color = isReady
-          ? info.bevelColor.withAlpha(alphaVal)
-          : const Color(0xFF334155).withAlpha(alphaVal)
-      ..style = PaintingStyle.fill;
+    _bevelPaint.color = isReady
+        ? info.bevelColor.withAlpha(alphaVal)
+        : const Color(0xFF334155).withAlpha(alphaVal);
     canvas.drawOval(
       Rect.fromCenter(
         center: Offset(cx, cy + bevelHeight),
         width: radius * 2,
         height: radius * 2,
       ),
-      bevelPaint,
+      _bevelPaint,
     );
 
     // 5. Button Face Surface
-    final facePaint = Paint()
-      ..color = isReady
-          ? info.buttonColor.withAlpha(alphaVal)
-          : const Color(0xFF1E293B).withAlpha(alphaVal)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(Offset(cx, cy), radius, facePaint);
+    _facePaint.color = isReady
+        ? info.buttonColor.withAlpha(alphaVal)
+        : const Color(0xFF1E293B).withAlpha(alphaVal);
+    canvas.drawCircle(Offset(cx, cy), radius, _facePaint);
 
     // 6. Top Gloss Highlight Arc
-    final highlightPaint = Paint()
-      ..color = Colors.white.withAlpha(isReady ? (alphaVal * 0.25).round() : 25)
-      ..style = PaintingStyle.fill;
+    _highlightPaint.color = Colors.white.withAlpha(isReady ? (alphaVal * 0.25).round() : 25);
     final highlightPath = Path()
       ..addArc(
         Rect.fromCircle(center: Offset(cx, cy - 2.0), radius: radius * 0.85),
         math.pi * 1.1,
         math.pi * 0.8,
       );
-    canvas.drawPath(highlightPath, highlightPaint);
+    canvas.drawPath(highlightPath, _highlightPaint);
 
     // 7. Icon Badge (⚡ or 🎯)
     final textPainter = TextPainter(
@@ -187,9 +184,7 @@ class ArcadeSkillButtonComponent extends HudMarginComponent with TapCallbacks {
       final sweepRatio = (cooldownRemaining / info.cooldownSeconds).clamp(0.0, 1.0);
 
       // Dark radial sweep overlay
-      final cdOverlayPaint = Paint()
-        ..color = Colors.black.withAlpha((alphaVal * 0.72).round())
-        ..style = PaintingStyle.fill;
+      _cdOverlayPaint.color = Colors.black.withAlpha((alphaVal * 0.72).round());
       final cdPath = Path()
         ..moveTo(cx, cy)
         ..arcTo(
@@ -199,19 +194,16 @@ class ArcadeSkillButtonComponent extends HudMarginComponent with TapCallbacks {
           false,
         )
         ..close();
-      canvas.drawPath(cdPath, cdOverlayPaint);
+      canvas.drawPath(cdPath, _cdOverlayPaint);
 
       // Border progress ring
-      final ringPaint = Paint()
-        ..color = info.glowColor.withAlpha((alphaVal * 0.8).round())
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5;
+      _cdRingPaint.color = info.glowColor.withAlpha((alphaVal * 0.8).round());
       canvas.drawArc(
         Rect.fromCircle(center: Offset(cx, cy), radius: radius - 1.0),
         -math.pi / 2,
         -2 * math.pi * sweepRatio,
         false,
-        ringPaint,
+        _cdRingPaint,
       );
 
       // Countdown seconds text (e.g. 4.2s)

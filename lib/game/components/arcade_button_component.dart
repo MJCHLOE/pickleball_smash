@@ -21,6 +21,18 @@ class ArcadeButtonFaceComponent extends PositionComponent {
   /// Progress of tap burst effect: 1.0 (just tapped) -> 0.0 (idle)
   double tapEffectProgress = 0.0;
 
+  // Reusable cached paints for zero-allocation rendering
+  final Paint _pulsePaint = Paint()..style = PaintingStyle.stroke..strokeWidth = 3.0;
+  final Paint _ripplePaint = Paint()..style = PaintingStyle.stroke;
+  final Paint _sparkPaint = Paint()..style = PaintingStyle.fill;
+  final Paint _casingPaint = Paint()..style = PaintingStyle.fill;
+  final Paint _bevelPaint = Paint()..style = PaintingStyle.fill;
+  final Paint _facePaint = Paint()..style = PaintingStyle.fill;
+  final Paint _rimPaint = Paint()..style = PaintingStyle.stroke..strokeWidth = 1.5;
+  final Paint _flashPaint = Paint()..style = PaintingStyle.fill;
+  final Paint _glossPaint = Paint()..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
+  final Paint _spritePaint = Paint();
+
   ArcadeButtonFaceComponent({
     required this.radius,
     required this.opacity,
@@ -84,11 +96,8 @@ class ArcadeButtonFaceComponent extends PositionComponent {
     // 0. Optional Serve Pulse Glow
     if (isServingPrompt && !isPressed) {
       final pulseRadius = radius + 5.0 + math.sin((game?.elapsedTime ?? 0.0) * 8) * 3.0;
-      final pulsePaint = Paint()
-        ..color = const Color(0xFFCCFF00).withAlpha((alphaVal * 0.45).round())
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3.0;
-      canvas.drawCircle(Offset(cx, cy), pulseRadius, pulsePaint);
+      _pulsePaint.color = const Color(0xFFCCFF00).withAlpha((alphaVal * 0.45).round());
+      canvas.drawCircle(Offset(cx, cy), pulseRadius, _pulsePaint);
     }
 
     // Dynamic Tap Explosion & Ripple Effects
@@ -96,11 +105,10 @@ class ArcadeButtonFaceComponent extends PositionComponent {
       // 1. Expanding Shockwave Ring
       final expandDist = (1.0 - tapEffectProgress) * 34.0;
       final rippleRadius = radius + 4.0 + expandDist;
-      final ripplePaint = Paint()
+      _ripplePaint
         ..color = const Color(0xFF00E5FF).withAlpha((alphaVal * tapEffectProgress * 0.9).round())
-        ..style = PaintingStyle.stroke
         ..strokeWidth = 3.5 * tapEffectProgress;
-      canvas.drawCircle(Offset(cx, cy), rippleRadius, ripplePaint);
+      canvas.drawCircle(Offset(cx, cy), rippleRadius, _ripplePaint);
 
       // 2. Starburst Energy Sparks
       for (int i = 0; i < 8; i++) {
@@ -109,86 +117,78 @@ class ArcadeButtonFaceComponent extends PositionComponent {
         final sx = cx + math.cos(angle) * dist;
         final sy = cy + math.sin(angle) * dist;
         final sparkColor = (i % 2 == 0) ? const Color(0xFFCCFF00) : const Color(0xFFFF3D00);
-        final sparkPaint = Paint()
-          ..color = sparkColor.withAlpha((alphaVal * tapEffectProgress).round())
-          ..style = PaintingStyle.fill;
-        canvas.drawCircle(Offset(sx, sy), 3.5 * tapEffectProgress, sparkPaint);
+        _sparkPaint.color = sparkColor.withAlpha((alphaVal * tapEffectProgress).round());
+        canvas.drawCircle(Offset(sx, sy), 3.5 * tapEffectProgress, _sparkPaint);
       }
     }
 
     // 1. Dark Arcade Housing Casing
-    final casingPaint = Paint()
-      ..color = casingColor.withAlpha((alphaVal * 0.95).round())
-      ..style = PaintingStyle.fill;
+    _casingPaint.color = casingColor.withAlpha((alphaVal * 0.95).round());
     canvas.drawOval(
       Rect.fromCenter(
         center: Offset(cx, cy + (bevelHeight / 2)),
         width: (radius + 3.0) * 2,
         height: (radius + 2.5) * 2 + bevelHeight,
       ),
-      casingPaint,
+      _casingPaint,
     );
 
-    // 2. 3D Bottom Bevel Extrusion
+    // 2. 3D Bottom Bevel Extrusion (Optimized 3-pass cylinder)
     final effectiveBevelColor = isPressed
         ? const Color(0xFF880E0E)
         : bevelColor;
-    final bevelPaint = Paint()
-      ..color = effectiveBevelColor.withAlpha(alphaVal)
-      ..style = PaintingStyle.fill;
+    _bevelPaint.color = effectiveBevelColor.withAlpha(alphaVal);
 
-    final steps = currentBevel.ceil().clamp(1, 10);
-    for (int i = 0; i <= steps; i++) {
-      final dy = (currentBevel * (i / steps));
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: Offset(cx, cy + dy),
-          width: radius * 2,
-          height: radius * 2,
-        ),
-        bevelPaint,
-      );
-    }
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(cx, cy + currentBevel),
+        width: radius * 2,
+        height: radius * 2,
+      ),
+      _bevelPaint,
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(cx - radius, cy, cx + radius, cy + currentBevel),
+      _bevelPaint,
+    );
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(cx, cy),
+        width: radius * 2,
+        height: radius * 2,
+      ),
+      _bevelPaint,
+    );
 
     // 3. Top Button Face
     final faceY = cy - (bevelHeight / 2) + pressY;
     final effectiveFaceColor = isPressed
         ? Color.lerp(faceColor, Colors.black, 0.22)!
         : faceColor;
-    final facePaint = Paint()
-      ..color = effectiveFaceColor.withAlpha(alphaVal)
-      ..style = PaintingStyle.fill;
-
-    canvas.drawCircle(Offset(cx, faceY), radius, facePaint);
+    _facePaint.color = effectiveFaceColor.withAlpha(alphaVal);
+    canvas.drawCircle(Offset(cx, faceY), radius, _facePaint);
 
     // Subtle dark inner edge rim for 2D depth
-    final rimPaint = Paint()
-      ..color = Colors.black.withAlpha((alphaVal * 0.4).round())
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    canvas.drawCircle(Offset(cx, faceY), radius - 0.75, rimPaint);
+    _rimPaint.color = Colors.black.withAlpha((alphaVal * 0.4).round());
+    canvas.drawCircle(Offset(cx, faceY), radius - 0.75, _rimPaint);
 
     // Tap Flash Highlight on Face
     if (tapEffectProgress > 0.0) {
-      final flashPaint = Paint()
-        ..color = Colors.white.withAlpha((alphaVal * tapEffectProgress * 0.55).round())
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(Offset(cx, faceY), radius - 1, flashPaint);
+      _flashPaint.color = Colors.white.withAlpha((alphaVal * tapEffectProgress * 0.55).round());
+      canvas.drawCircle(Offset(cx, faceY), radius - 1, _flashPaint);
     }
 
     // 4. Glossy Top Highlight Arc
     if (!isPressed) {
-      final glossPaint = Paint()
+      _glossPaint
         ..color = Colors.white.withAlpha((alphaVal * 0.45).round())
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
         ..strokeWidth = 2.5 * (radius / 40.0);
 
       final glossRect = Rect.fromCircle(
         center: Offset(cx, faceY),
         radius: radius - 3.5,
       );
-      canvas.drawArc(glossRect, -math.pi * 0.85, math.pi * 0.7, false, glossPaint);
+      canvas.drawArc(glossRect, -math.pi * 0.85, math.pi * 0.7, false, _glossPaint);
     }
 
     // 5. Centered Pixelated 2D Arcade Paddle Sprite
@@ -196,13 +196,12 @@ class ArcadeButtonFaceComponent extends PositionComponent {
     final paddlePos = Vector2(cx - (paddleSize / 2), faceY - (paddleSize / 2));
 
     if (paddleSprite != null) {
-      final spritePaint = Paint()
-        ..color = Colors.white.withAlpha(alphaVal);
+      _spritePaint.color = Colors.white.withAlpha(alphaVal);
       paddleSprite!.render(
         canvas,
         position: paddlePos,
         size: Vector2(paddleSize, paddleSize),
-        overridePaint: spritePaint,
+        overridePaint: _spritePaint,
       );
     } else {
       // Fallback 2D arcade pixelated paddle rendering (for unit tests / initial load)

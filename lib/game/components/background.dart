@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../../models/court_catalog.dart';
@@ -26,6 +27,11 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
 
   Color get apronOuterColor => _apronOuterColor;
 
+  // Cached Picture & Paint for ultra-smooth rendering on low-end devices
+  ui.Picture? _cachedCourtPicture;
+  Rect? _lastRecordedRect;
+  Paint? _cachedFloorPaint;
+
   // 2D Court geometry constants matching gameplay coordinates (Portrait 480x620)
   static const double courtLeftX = 400.0;
   static const double courtRightX = 880.0;
@@ -46,12 +52,26 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
     _applyCourtColors();
   }
 
+  void invalidateCache() {
+    _cachedCourtPicture?.dispose();
+    _cachedCourtPicture = null;
+    _lastRecordedRect = null;
+    _cachedFloorPaint = null;
+  }
+
+  @override
+  void onRemove() {
+    invalidateCache();
+    super.onRemove();
+  }
+
   void applyCourt(String id) {
     _courtInfo = CourtCatalog.getById(id);
     _applyCourtColors();
     if (_courtInfo.environment != CourtEnvironment.stadium) {
       sprite = null;
     }
+    invalidateCache();
   }
 
   void applyCourtInfo(CourtInfo info) {
@@ -60,6 +80,7 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
     if (_courtInfo.environment != CourtEnvironment.stadium) {
       sprite = null;
     }
+    invalidateCache();
   }
 
   void _applyCourtColors() {
@@ -102,6 +123,7 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
   void updateTheme(String theme) {
     if (_courtInfo.environment != CourtEnvironment.stadium) {
       _applyCourtColors();
+      invalidateCache();
       return;
     }
 
@@ -130,6 +152,7 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
       _courtColor = _courtInfo.courtColor;
       _kitchenColor = _courtInfo.kitchenColor;
     }
+    invalidateCache();
   }
 
   @override
@@ -157,20 +180,44 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
       height: viewHeight,
     );
 
+    // 2. Render pixel court using cached ui.Picture for zero-cost per-frame rendering
+    if (sprite != null) {
+      if (_lastRecordedRect != floorRect || _cachedFloorPaint == null) {
+        _lastRecordedRect = floorRect;
+        _cachedFloorPaint = Paint()
+          ..shader = RadialGradient(
+            center: Alignment.center,
+            radius: 0.95,
+            colors: [_apronColor, _apronOuterColor],
+          ).createShader(floorRect);
+      }
+      canvas.drawRect(floorRect, _cachedFloorPaint!);
+      super.render(canvas);
+    } else {
+      if (_cachedCourtPicture == null || _lastRecordedRect != floorRect) {
+        _recordProceduralCourt(floorRect);
+      }
+      canvas.drawPicture(_cachedCourtPicture!);
+    }
+  }
+
+  void _recordProceduralCourt(Rect floorRect) {
+    _cachedCourtPicture?.dispose();
+    _lastRecordedRect = floorRect;
+    final recorder = ui.PictureRecorder();
+    final recCanvas = Canvas(recorder, floorRect);
+
     final floorPaint = Paint()
       ..shader = RadialGradient(
         center: Alignment.center,
         radius: 0.95,
         colors: [_apronColor, _apronOuterColor],
       ).createShader(floorRect);
-    canvas.drawRect(floorRect, floorPaint);
+    recCanvas.drawRect(floorRect, floorPaint);
 
-    // 2. Render pixel court
-    if (sprite != null) {
-      super.render(canvas);
-    } else {
-      _renderProceduralPixelCourt(canvas);
-    }
+    _renderProceduralPixelCourt(recCanvas);
+
+    _cachedCourtPicture = recorder.endRecording();
   }
 
   void _renderProceduralPixelCourt(Canvas canvas) {
