@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../models/battle_technique.dart';
 import '../../models/character_roster.dart';
+import '../../models/game_settings.dart';
 import '../../services/audio_service.dart';
 import '../../services/multiplayer_service.dart';
 import '../pickleball_game.dart';
@@ -52,6 +53,13 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     if (customGame != null) return customGame!;
     return game;
   }
+  PickleballGame? get currentGameOrNull {
+    if (customGame != null) return customGame;
+    try {
+      if (isMounted) return game;
+    } catch (_) {}
+    return null;
+  }
 
   late SpriteAnimation frontRun;
   late SpriteAnimation behindRun;
@@ -75,7 +83,10 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   JoystickComponent? joystick;
   
   final double speed = 280.0;
-  final double aiSpeed = 315.0; // Expert agile speed with smooth acceleration
+  double get aiSpeed {
+    final diff = currentGameOrNull?.settings?.aiDifficulty ?? AIDifficulty.normal;
+    return 315.0 * diff.speedMultiplier;
+  }
   Vector2 currentVelocity = Vector2.zero();
   Vector2 aiVelocity = Vector2.zero();
 
@@ -297,6 +308,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     paint.isAntiAlias = false;
     paint.filterQuality = FilterQuality.none;
     anchor = Anchor.center;
+    priority = isPlayerOne ? 15 : 5;
   }
 
   @override
@@ -544,6 +556,9 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   void update(double dt) {
     super.update(dt);
 
+    // Priority depth sorting relative to net (Y = 360)
+    priority = position.y >= 360.0 ? 15 : 5;
+
     if (techniquePrimeTimer > 0) {
       techniquePrimeTimer = math.max(0.0, techniquePrimeTimer - dt);
       if (techniquePrimeTimer <= 0) {
@@ -776,7 +791,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     double targetX = position.x;
     double targetY = position.y;
     final side = currentGame.p1PartnerCourtSide;
-    final double homeX = (side == 'right') ? 740.0 : 540.0;
+    final double homeX = (side == 'right') ? 760.0 : 520.0;
     const double homeY = 570.0;
 
     if (ball.velocity.y > 0) {
@@ -839,7 +854,8 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
 
       if (ball.velocity.y > 0 && !currentGame.isGameOver && !currentGame.isWaitingForServe) {
         final distToTarget = math.sqrt(diffX * diffX + diffY * diffY);
-        if (distToTarget > 140.0 && ball.bounceCountCurrentSide >= 1 && dashCooldown <= 0 && !isDashing) {
+        final dashThreshold = (currentGame.settings?.aiDifficulty ?? AIDifficulty.normal).dashThreshold;
+        if (distToTarget > dashThreshold && ball.bounceCountCurrentSide >= 1 && dashCooldown <= 0 && !isDashing) {
           dash(customDirection: Vector2(diffX, diffY).normalized());
           currentGame.onAnnouncement?.call('💨 PARTNER DASH!', 'Clutch positioning save!');
         }
@@ -920,12 +936,12 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     double targetX = position.x;
     double targetY = position.y;
 
-    final double homeX = isDoubles ? ((mySide == 'right') ? 565.0 : 715.0) : 640.0;
-    const double homeY = 150.0;
+    final double homeX = isDoubles ? ((mySide == 'right') ? 520.0 : 760.0) : 640.0;
+    const double homeY = 140.0;
 
     if (ball.velocity.y < 0) {
       // Expert Predictive Interception: project future landing coordinate
-      final estY = (ball.bounceCountCurrentSide >= 1) ? ball.position.y : 150.0;
+      final estY = (ball.bounceCountCurrentSide >= 1) ? ball.position.y : 140.0;
       final tReach = ((ball.position.y - estY) / math.max(40.0, -ball.velocity.y)).clamp(0.0, 1.2);
       final predictedX = ball.position.x + ball.velocity.x * tReach;
 
@@ -936,34 +952,36 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       }
 
       if (shouldTrack) {
+        final diffSetting = currentGame.settings?.aiDifficulty ?? AIDifficulty.normal;
+        final spread = (math.Random().nextDouble() - 0.5) * diffSetting.reactionSpread;
         if (isDoubles) {
           final minX = (mySide == 'right') ? 340.0 : 635.0;
           final maxX = (mySide == 'right') ? 645.0 : 940.0;
-          targetX = predictedX.clamp(minX, maxX);
+          targetX = (predictedX + spread).clamp(minX, maxX);
         } else {
-          targetX = predictedX.clamp(340.0, 940.0);
+          targetX = (predictedX + spread).clamp(340.0, 940.0);
         }
 
         if (ball.bounceCountCurrentSide >= 1) {
           // Ball bounced! Rush directly to hit point
           targetY = (ball.position.y - 20.0).clamp(Background.courtTopY + 10.0, Background.kitchenTopY - 5.0);
         } else if (currentGame.rallyHitCount == 0) {
-          targetY = 230.0;
+          targetY = 140.0;
         } else if (ball.position.y <= 230.0) {
           // Ball is deep towards top baseline: CPU moves backward to intercept
           targetY = math.min(120.0, ball.position.y + 20.0);
         } else if (ball.position.y > Background.kitchenTopY - 30.0) {
           targetY = Background.kitchenTopY - 25.0; // Ready near kitchen
         } else {
-          targetY = 220.0; // Baseline depth
+          targetY = 200.0; // Baseline depth
         }
       } else {
         targetX = homeX;
-        targetY = (currentGame.rallyHitCount > 0) ? 220.0 : homeY;
+        targetY = (currentGame.rallyHitCount > 0) ? 200.0 : homeY;
       }
     } else {
       targetX = homeX;
-      targetY = (currentGame.rallyHitCount > 0 && !currentGame.isGameOver) ? 220.0 : homeY;
+      targetY = (currentGame.rallyHitCount > 0 && !currentGame.isGameOver) ? 200.0 : homeY;
     }
 
     final diffX = targetX - position.x;
@@ -993,7 +1011,8 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
 
       if (ball.velocity.y < 0 && !currentGame.isGameOver && !currentGame.isWaitingForServe) {
         final distToTarget = math.sqrt(diffX * diffX + diffY * diffY);
-        if (distToTarget > 140.0 && ball.bounceCountCurrentSide >= 1 && dashCooldown <= 0 && !isDashing) {
+        final dashThreshold = (currentGame.settings?.aiDifficulty ?? AIDifficulty.normal).dashThreshold;
+        if (distToTarget > dashThreshold && ball.bounceCountCurrentSide >= 1 && dashCooldown <= 0 && !isDashing) {
           dash(customDirection: Vector2(diffX, diffY).normalized());
           currentGame.onAnnouncement?.call('💨 CPU FLASH DASH!', 'Lightning court recovery!');
         }

@@ -641,7 +641,11 @@ class RoomPlayerSlot {
         isReady: json['isReady'] as bool? ?? false,
         isBot: json['isBot'] as bool? ?? false,
         pingMs: json['pingMs'] as int? ?? 24,
-        characterId: json['characterId'] as String? ?? 'alex_classic',
+        characterId: (json['characterId'] as String?)?.isNotEmpty == true
+            ? json['characterId'] as String
+            : ((json['playerAvatar'] as String?)?.isNotEmpty == true
+                ? json['playerAvatar'] as String
+                : 'alex_classic'),
       );
 }
 

@@ -77,6 +77,9 @@ class MultiplayerService extends ChangeNotifier {
       StreamController<MultiplayerPacket>.broadcast();
   Stream<MultiplayerPacket> get packetStream => _packetStreamController.stream;
 
+  /// Notifier triggered when the room host disconnects, alerting all connected players
+  final ValueNotifier<String?> hostDisconnectedNotifier = ValueNotifier<String?>(null);
+
   StreamSubscription<BattleRoomModel>? _firebaseRoomSub;
   StreamSubscription<MultiplayerPacket>? _firebasePacketSub;
 
@@ -826,6 +829,21 @@ class MultiplayerService extends ChangeNotifier {
     // 2. Dispatch to local game engine
     _packetStreamController.add(packet);
 
+    // Handle in-lobby character change from remote guest
+    if (packet.type == PacketType.playerState && packet.data.containsKey('characterChange')) {
+      final charId = packet.data['characterId'] as String?;
+      if (charId != null && _currentRoom != null) {
+        final slots = List<RoomPlayerSlot>.from(_currentRoom!.slots);
+        final idx = slots.indexWhere((s) => s.playerId == packet.senderId);
+        if (idx != -1) {
+          slots[idx] = slots[idx].copyWith(characterId: charId, playerAvatar: charId);
+          _currentRoom = _currentRoom!.copyWith(slots: slots);
+          notifyListeners();
+          _broadcastRoomState();
+        }
+      }
+    }
+
     // 3. Relay to all other connected clients
     final raw = jsonEncode(packet.toJson());
     for (final other in _connectedClientSockets) {
@@ -841,6 +859,9 @@ class MultiplayerService extends ChangeNotifier {
     final guestId = guestData['playerId'] as String? ?? packet.senderId;
     final guestName = guestData['playerName'] as String? ?? 'Player';
     final guestAvatar = guestData['playerAvatar'] as String? ?? 'alex_classic';
+    final guestCharacter = (guestData['characterId'] as String?)?.isNotEmpty == true
+        ? guestData['characterId'] as String
+        : guestAvatar;
     final guestRank = RankTier.values.firstWhere(
       (r) => r.name == guestData['rankTier'],
       orElse: () => RankTier.warrior,
@@ -862,7 +883,7 @@ class MultiplayerService extends ChangeNotifier {
         isHost: false,
         isReady: false,
         pingMs: 12,
-        characterId: guestAvatar,
+        characterId: guestCharacter,
       );
 
       _currentRoom = _currentRoom!.copyWith(slots: slots);
@@ -969,6 +990,7 @@ class MultiplayerService extends ChangeNotifier {
           'playerName': _myProfile.nickname,
           'playerAvatar': _myProfile.avatarId,
           'rankTier': _myProfile.rankTier.name,
+          'characterId': GameStateManager.instance.playerAvatarId,
         },
       );
       socket.add(jsonEncode(joinPacket.toJson()));
@@ -994,6 +1016,17 @@ class MultiplayerService extends ChangeNotifier {
 
               if (!completer.isCompleted) completer.complete(null);
             } else if (packet.type == PacketType.matchStart) {
+              if (packet.data.containsKey('slots') && packet.data['slots'] != null) {
+                try {
+                  final rawSlots = packet.data['slots'] as List<dynamic>;
+                  final parsedSlots = rawSlots
+                      .map((s) => RoomPlayerSlot.fromJson(Map<String, dynamic>.from(s as Map)))
+                      .toList();
+                  if (_currentRoom != null) {
+                    _currentRoom = _currentRoom!.copyWith(slots: parsedSlots);
+                  }
+                } catch (_) {}
+              }
               if (_currentRoom != null) {
                 _currentRoom = _currentRoom!.copyWith(status: 'inMatch');
               }
@@ -1021,8 +1054,16 @@ class MultiplayerService extends ChangeNotifier {
             debugPrint('Client socket parse notice: $e');
           }
         },
-        onDone: () => leaveRoom(),
+        onDone: () {
+          if (!_isHost && _currentRoom != null) {
+            hostDisconnectedNotifier.value = 'Host has disconnected. The match has ended.';
+          }
+          leaveRoom();
+        },
         onError: (e) {
+          if (!_isHost && _currentRoom != null) {
+            hostDisconnectedNotifier.value = 'Lost connection to host.';
+          }
           if (!completer.isCompleted) completer.complete('Connection error: $e');
           leaveRoom();
         },
@@ -1059,8 +1100,18 @@ class MultiplayerService extends ChangeNotifier {
             _handleIncomingPacket(packet);
           } catch (_) {}
         },
-        onDone: () => leaveRoom(),
-        onError: (_) => leaveRoom(),
+        onDone: () {
+          if (!_isHost && _currentRoom != null) {
+            hostDisconnectedNotifier.value = 'Host has disconnected. The match has ended.';
+          }
+          leaveRoom();
+        },
+        onError: (_) {
+          if (!_isHost && _currentRoom != null) {
+            hostDisconnectedNotifier.value = 'Lost connection to host.';
+          }
+          leaveRoom();
+        },
       );
     } catch (e) {
       debugPrint('Cloud WebSocket relay notice: $e (using local peer mode)');
@@ -1080,6 +1131,18 @@ class MultiplayerService extends ChangeNotifier {
   }
 
   void leaveRoom() {
+    if (_isHost && _currentRoom != null) {
+      try {
+        final leavePkt = MultiplayerPacket(
+          type: PacketType.leaveRoom,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          senderId: _myProfile.playerId,
+          data: {'isHost': true, 'reason': 'Host has disconnected. The match has ended.'},
+        );
+        broadcastPacket(leavePkt);
+      } catch (_) {}
+    }
+
     if (_currentRoom != null && _currentRoom!.connectionMode == MultiplayerConnectionMode.onlineCloud) {
       FirebaseMultiplayerService.instance.leaveRoom(
         _currentRoom!.roomCode,
@@ -1151,6 +1214,45 @@ class MultiplayerService extends ChangeNotifier {
       FirebaseMultiplayerService.instance.toggleSlotReady(_currentRoom!.roomCode, slotIndex);
     }
     notifyListeners();
+  }
+
+  /// Updates current player's equipped character and synchronizes to all room players
+  Future<void> updateMyCharacter(String characterId) async {
+    if (_currentRoom == null) return;
+    final state = GameStateManager.instance;
+    state.equipCharacter(characterId);
+
+    final slots = List<RoomPlayerSlot>.from(_currentRoom!.slots);
+    final myIdx = slots.indexWhere((s) => s.playerId == _myProfile.playerId);
+    if (myIdx != -1) {
+      slots[myIdx] = slots[myIdx].copyWith(
+        characterId: characterId,
+        playerAvatar: characterId,
+      );
+      _currentRoom = _currentRoom!.copyWith(slots: slots);
+      _broadcastRoomState();
+
+      if (_currentRoom!.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+        await FirebaseMultiplayerService.instance.updateSlotCharacter(
+          _currentRoom!.roomCode,
+          _myProfile.playerId,
+          characterId,
+        );
+      } else {
+        if (!_isHost && _clientSocket != null && _clientSocket!.readyState == WebSocket.open) {
+          _clientSocket!.add(jsonEncode(MultiplayerPacket(
+            type: PacketType.playerState,
+            timestamp: DateTime.now().millisecondsSinceEpoch,
+            senderId: _myProfile.playerId,
+            data: {
+              'characterChange': true,
+              'characterId': characterId,
+            },
+          ).toJson()));
+        }
+      }
+      notifyListeners();
+    }
   }
 
   void kickPlayer(int slotIndex) {
@@ -1273,7 +1375,10 @@ class MultiplayerService extends ChangeNotifier {
       type: PacketType.matchStart,
       timestamp: DateTime.now().millisecondsSinceEpoch,
       senderId: _myProfile.playerId,
-      data: {'status': 'inMatch'},
+      data: {
+        'status': 'inMatch',
+        'slots': _currentRoom!.slots.map((s) => s.toJson()).toList(),
+      },
     ));
 
     notifyListeners();
@@ -1305,6 +1410,14 @@ class MultiplayerService extends ChangeNotifier {
   }
 
   void _handleIncomingPacket(MultiplayerPacket packet) {
+    if (packet.type == PacketType.leaveRoom) {
+      if (packet.data['isHost'] == true || packet.senderId == _currentRoom?.hostId) {
+        final reason = packet.data['reason'] as String? ?? 'Host has disconnected. The match has ended.';
+        hostDisconnectedNotifier.value = reason;
+        leaveRoom();
+        return;
+      }
+    }
     if (packet.type == PacketType.chatMessage) {
       try {
         final msg = ChatMessageModel.fromJson(packet.data);

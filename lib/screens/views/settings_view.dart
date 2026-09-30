@@ -1046,7 +1046,35 @@ class _SettingsViewState extends State<SettingsView> {
             contentPadding: EdgeInsets.zero,
             onChanged: (val) => state.updateSettings(settings.copyWith(autoServe: val)),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
+
+          // AI Bot Difficulty
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('AI Bot Difficulty', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 2),
+              const Text('Adjust bot reaction speed, dash frequency, and spin technique counters', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<AIDifficulty>(
+                  segments: const [
+                    ButtonSegment(value: AIDifficulty.easy, label: Text('Easy')),
+                    ButtonSegment(value: AIDifficulty.normal, label: Text('Normal')),
+                    ButtonSegment(value: AIDifficulty.hard, label: Text('Hard')),
+                    ButtonSegment(value: AIDifficulty.extreme, label: Text('Extreme')),
+                  ],
+                  selected: {settings.aiDifficulty},
+                  onSelectionChanged: (selection) {
+                    state.updateSettings(settings.copyWith(aiDifficulty: selection.first));
+                  },
+                  style: _segmentedButtonStyle(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
 
           // Interactive Controller Preview Box
           _buildControllerLivePreview(settings),

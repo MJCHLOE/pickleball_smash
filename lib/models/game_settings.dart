@@ -1,3 +1,77 @@
+enum AIDifficulty {
+  easy,
+  normal,
+  hard,
+  extreme,
+}
+
+extension AIDifficultyExtension on AIDifficulty {
+  String get displayName {
+    switch (this) {
+      case AIDifficulty.easy:
+        return 'Easy';
+      case AIDifficulty.normal:
+        return 'Normal';
+      case AIDifficulty.hard:
+        return 'Hard';
+      case AIDifficulty.extreme:
+        return 'Extreme';
+    }
+  }
+
+  double get speedMultiplier {
+    switch (this) {
+      case AIDifficulty.easy:
+        return 0.75;
+      case AIDifficulty.normal:
+        return 1.0;
+      case AIDifficulty.hard:
+        return 1.20;
+      case AIDifficulty.extreme:
+        return 1.40;
+    }
+  }
+
+  double get reactionSpread {
+    switch (this) {
+      case AIDifficulty.easy:
+        return 75.0;
+      case AIDifficulty.normal:
+        return 40.0;
+      case AIDifficulty.hard:
+        return 18.0;
+      case AIDifficulty.extreme:
+        return 4.0;
+    }
+  }
+
+  double get dashThreshold {
+    switch (this) {
+      case AIDifficulty.easy:
+        return 210.0;
+      case AIDifficulty.normal:
+        return 140.0;
+      case AIDifficulty.hard:
+        return 95.0;
+      case AIDifficulty.extreme:
+        return 65.0;
+    }
+  }
+
+  double get spinTechniqueChance {
+    switch (this) {
+      case AIDifficulty.easy:
+        return 0.05;
+      case AIDifficulty.normal:
+        return 0.16;
+      case AIDifficulty.hard:
+        return 0.32;
+      case AIDifficulty.extreme:
+        return 0.55;
+    }
+  }
+}
+
 class GameSettings {
   // Audio Settings
   final double masterVolume;
@@ -70,6 +144,7 @@ class GameSettings {
   // Gameplay & Scoring Rules
   final String scoringMode; // 'rally' (Major League / Arcade) or 'sideOut' (Traditional USA Pickleball)
   final bool requireFloorBounceAllShots; // false by default (Official Pickleball: volleys allowed after 2-bounce rule outside NVZ)
+  final AIDifficulty aiDifficulty; // 'easy', 'normal', 'hard', 'extreme'
 
   // Deprecated/compatibility aliases
   double get controllerOpacity => transparentCapacity;
@@ -129,6 +204,7 @@ class GameSettings {
     this.dashPosY = mlbbDashY,
     this.scoringMode = 'rally',
     this.requireFloorBounceAllShots = false,
+    this.aiDifficulty = AIDifficulty.normal,
     // Graphics
     this.graphicsQuality = 'High',
     this.targetFps = 60,
@@ -183,6 +259,7 @@ class GameSettings {
     double? dashPosY,
     String? scoringMode,
     bool? requireFloorBounceAllShots,
+    AIDifficulty? aiDifficulty,
     // Deprecated compatibility parameters (ignored or redirected)
     double? joystickSensitivity,
     double? controllerOpacity,
@@ -240,6 +317,7 @@ class GameSettings {
       dashPosY: dashPosY ?? this.dashPosY,
       scoringMode: scoringMode ?? this.scoringMode,
       requireFloorBounceAllShots: requireFloorBounceAllShots ?? this.requireFloorBounceAllShots,
+      aiDifficulty: aiDifficulty ?? this.aiDifficulty,
       // Graphics
       graphicsQuality: graphicsQuality ?? this.graphicsQuality,
       targetFps: targetFps ?? this.targetFps,
@@ -296,6 +374,7 @@ class GameSettings {
       'dashPosY': dashPosY,
       'scoringMode': scoringMode,
       'requireFloorBounceAllShots': requireFloorBounceAllShots ? 1 : 0,
+      'aiDifficulty': aiDifficulty.name,
       // Legacy backward compatibility keys
       'joystickSensitivity': 1.0,
       'controllerOpacity': transparentCapacity,
@@ -358,6 +437,13 @@ class GameSettings {
       dashPosY: (map['dashPosY'] as num?)?.toDouble() ?? mlbbDashY,
       scoringMode: map['scoringMode'] as String? ?? 'rally',
       requireFloorBounceAllShots: (map['requireFloorBounceAllShots'] as int? ?? 0) == 1,
+      aiDifficulty: () {
+        final val = map['aiDifficulty'] as String?;
+        return AIDifficulty.values.firstWhere(
+          (e) => e.name == val,
+          orElse: () => AIDifficulty.normal,
+        );
+      }(),
       // Graphics
       graphicsQuality: map['graphicsQuality'] as String? ?? 'High',
       targetFps: (map['targetFps'] as num?)?.toInt() ?? 60,

@@ -39,28 +39,22 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
   Rect _cachedFloorRect = Rect.zero;
 
   // 2D Court geometry constants matching gameplay coordinates and court view white lines
-  static const double courtTopY = 174.0;
-  static const double courtBottomY = 661.0;
-  static const double netY = 360.0;
-  static const double kitchenTopY = 324.0;
-  static const double kitchenBottomY = 474.0;
+  static const double courtLeftX = 400.0;
+  static const double courtRightX = 880.0;
   static const double courtCenterX = 640.0;
+  static const double courtTopY = 50.0;
+  static const double courtBottomY = 670.0;
+  static const double netY = 360.0;
+  static const double kitchenTopY = 280.0;
+  static const double kitchenBottomY = 440.0;
 
-  // Perspective sidelines: half-width is 169.3 at net (Y=360), expanding to 208.1 at bottom (Y=661) and 145.2 at top (Y=174)
-  static double courtHalfWidthAt(double y) => 169.3 + (y - netY) * 0.1292;
-  static double courtLeftAt(double y) => courtCenterX - courtHalfWidthAt(y);
-  static double courtRightAt(double y) => courtCenterX + courtHalfWidthAt(y);
+  // Orthogonal sidelines: perfectly vertical from top baseline (Y=50) to bottom baseline (Y=670)
+  static double courtHalfWidthAt(double y) => (courtRightX - courtLeftX) / 2.0; // 240.0
+  static double courtLeftAt(double y) => courtLeftX;
+  static double courtRightAt(double y) => courtRightX;
 
-  /// Pseudo 2.5D perspective scaling factor based on court depth (Y coordinate).
-  /// Objects at the far top baseline (y=174) appear ~75% scale, scaling up to ~103% at bottom baseline (y=661).
-  static double perspectiveScaleAt(double y) {
-    final t = ((y - courtTopY) / (courtBottomY - courtTopY)).clamp(0.0, 1.15);
-    return 0.76 + t * 0.28;
-  }
-
-  // Outer bounds
-  static const double courtLeftX = 432.0;
-  static const double courtRightX = 848.0;
+  /// Classic 2D orthogonal arcade view uses consistent 1.0 scaling
+  static double perspectiveScaleAt(double y) => 1.0;
 
   Background({String? courtId})
       : _courtInfo = CourtCatalog.getById(courtId ?? 'court_pro_stadium') {
@@ -91,6 +85,9 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
     _applyCourtColors();
     _loadCourtSprite();
     invalidateCache();
+    try {
+      game.netComponent.updateCourtTheme(id);
+    } catch (_) {}
   }
 
   void applyCourtInfo(CourtInfo info) {
@@ -98,6 +95,9 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
     _applyCourtColors();
     _loadCourtSprite();
     invalidateCache();
+    try {
+      game.netComponent.updateCourtTheme(info.id);
+    } catch (_) {}
   }
 
   Future<void> _loadCourtSprite() async {

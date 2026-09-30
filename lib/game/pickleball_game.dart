@@ -15,6 +15,7 @@ import 'components/player.dart';
 import 'components/ball.dart';
 import 'components/arcade_button_component.dart';
 import 'components/arcade_skill_button_component.dart';
+import 'components/net.dart';
 import '../models/battle_technique.dart';
 
 class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHandlerComponents {
@@ -81,7 +82,9 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     this.ballId,
     this.isMultiplayer = false,
     this.isHost = false,
-  }) : super(
+  }) : _serverPlayer = (isMultiplayer && !isHost) ? 2 : 1,
+       serverTeam = (isMultiplayer && !isHost) ? 2 : 1,
+       super(
           camera: CameraComponent(),
         );
 
@@ -119,6 +122,9 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
   ArcadeSkillButtonComponent? get phantomButton => rightSpinButton;
   set phantomButton(ArcadeSkillButtonComponent? val) => rightSpinButton = val;
   late BallComponent ball;
+  NetComponent? _netComponent;
+  NetComponent get netComponent => _netComponent ??= NetComponent(courtId: courtId);
+  set netComponent(NetComponent val) => _netComponent = val;
   FpsTextComponent? fpsText;
   Sprite? paddleSprite;
 
@@ -150,13 +156,16 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
 
   PlayerComponent get activeServerComponent => activeServerComponentOrNull ?? player1;
 
-  bool get isHumanServer {
+  /// Returns true if the local human player (player1) on this device is serving
+  bool get isLocalPlayerServing {
     final server = activeServerComponentOrNull;
     if (server == null) {
-      return serverPlayer == 1;
+      return isMultiplayer ? isHost : (serverPlayer == 1);
     }
-    return !server.isAI;
+    return server == player1;
   }
+
+  bool get isHumanServer => isLocalPlayerServing;
 
   String get doublesScoreCallout {
     final servingScore = (serverTeam == 1) ? p1Score : p2Score;
@@ -184,6 +193,22 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
   /// Official Pickleball Side-Out Scoring & Fault Resolution
   void handleRallyWon({required bool winnerIsPlayerOne, required String faultReason}) {
     if (isGameOver) return;
+
+    if (isMultiplayer && !isHost) {
+      MultiplayerService.instance.broadcastPacket(
+        MultiplayerPacket(
+          type: PacketType.scoreSync,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          senderId: MultiplayerService.instance.myProfile.playerId,
+          data: {
+            'guestReported': true,
+            'winnerIsHost': !winnerIsPlayerOne,
+            'faultReason': faultReason,
+          },
+        ),
+      );
+      return;
+    }
 
     if (faultReason.isNotEmpty) {
       _dispatchViolation(faultReason);
@@ -231,8 +256,22 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
               timestamp: DateTime.now().millisecondsSinceEpoch,
               senderId: MultiplayerService.instance.myProfile.playerId,
               data: {
+                'hostScore': p1Score,
+                'guestScore': p2Score,
                 'p1Score': p1Score,
                 'p2Score': p2Score,
+                'hostIsServing': isDoubles ? (serverTeam == 1) : (serverPlayer == 1),
+                'serverTeam': serverTeam,
+                'serverNumber': serverNumber,
+                'serverPlayer': serverPlayer,
+                'servingSide': servingSide,
+                'isGameOver': true,
+                'winnerIsHost': winnerIsPlayerOne,
+                'faultReason': faultReason,
+                'p1CourtSide': p1CourtSide,
+                'p2CourtSide': p2CourtSide,
+                'streak': 0,
+                'longest': longestRally,
               },
             ),
           );
@@ -264,20 +303,6 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       }
 
       final callout = isDoubles ? doublesScoreCallout : '$p1Score - $p2Score';
-
-      if (isMultiplayer && isHost) {
-        MultiplayerService.instance.broadcastPacket(
-          MultiplayerPacket(
-            type: PacketType.scoreSync,
-            timestamp: DateTime.now().millisecondsSinceEpoch,
-            senderId: MultiplayerService.instance.myProfile.playerId,
-            data: {
-              'p1Score': p1Score,
-              'p2Score': p2Score,
-            },
-          ),
-        );
-      }
 
       onAnnouncement?.call(
         'POINT! ($callout)',
@@ -320,10 +345,39 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
           'SIDE OUT!',
           faultReason.isNotEmpty
               ? '$faultReason • Serve changes!'
-              : 'Serve changes to ${serverPlayer == 1 ? 'Player 1' : 'CPU'}',
+              : 'Serve changes to ${serverPlayer == 1 ? 'Player 1' : (isMultiplayer ? 'Guest' : 'CPU')}',
         );
         prepareServicePositions();
       }
+    }
+
+    // Host always broadcasts authoritative score & serve state to guests
+    if (isMultiplayer && isHost) {
+      MultiplayerService.instance.broadcastPacket(
+        MultiplayerPacket(
+          type: PacketType.scoreSync,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          senderId: MultiplayerService.instance.myProfile.playerId,
+          data: {
+            'hostScore': p1Score,
+            'guestScore': p2Score,
+            'p1Score': p1Score,
+            'p2Score': p2Score,
+            'hostIsServing': isDoubles ? (serverTeam == 1) : (serverPlayer == 1),
+            'serverTeam': serverTeam,
+            'serverNumber': serverNumber,
+            'serverPlayer': serverPlayer,
+            'servingSide': servingSide,
+            'isGameOver': false,
+            'winnerIsHost': winnerIsPlayerOne,
+            'faultReason': faultReason,
+            'p1CourtSide': p1CourtSide,
+            'p2CourtSide': p2CourtSide,
+            'streak': continuousRallyStreak,
+            'longest': longestRally,
+          },
+        ),
+      );
     }
   }
 
@@ -334,8 +388,13 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     isGameOver = false;
     rallyHitCount = 0;
     continuousRallyStreak = 0;
-    _serverPlayer = 1;
-    serverTeam = 1;
+    if (isMultiplayer) {
+      _serverPlayer = isHost ? 1 : 2;
+      serverTeam = isHost ? 1 : 2;
+    } else {
+      _serverPlayer = 1;
+      serverTeam = 1;
+    }
     serverNumber = isDoubles ? 2 : 1;
     p1CourtSide = 'right';
     p1PartnerCourtSide = 'left';
@@ -428,12 +487,12 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       // From P2 perspective: right court is viewer left (520), left court is viewer right (760)
       final p2IsServer = (activeServer == player2);
       final p2TargetX = (p2CourtSide == 'right') ? 520.0 : 760.0;
-      player2.position = Vector2(p2TargetX, p2IsServer ? 150.0 : 235.0);
+      player2.position = Vector2(p2TargetX, p2IsServer ? 25.0 : 140.0);
 
       if (player2Partner != null) {
         final p2pIsServer = (activeServer == player2Partner);
         final p2pTargetX = (p2PartnerCourtSide == 'right') ? 520.0 : 760.0;
-        player2Partner!.position = Vector2(p2pTargetX, p2pIsServer ? 150.0 : 235.0);
+        player2Partner!.position = Vector2(p2pTargetX, p2pIsServer ? 25.0 : 140.0);
       }
 
       player1.stopRunning();
@@ -455,7 +514,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
         serverTitle = 'PARTNER SERVE ($sideName)';
         serverSubtitle = 'Score: $callout • Partner is serving!';
       } else {
-        serverTitle = 'CPU SERVE ($sideName)';
+        serverTitle = '${isMultiplayer ? 'OPPONENT' : 'CPU'} SERVE ($sideName)';
         serverSubtitle = 'Score: $callout • Get Ready!';
       }
 
@@ -467,17 +526,17 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       if (serverPlayer == 1) {
         if (servingSide == 'right') {
           player1.position = Vector2(760, 695); // Behind baseline outside court
-          player2.position = Vector2(520, 235); // Receiver inside diagonal court
+          player2.position = Vector2(520, 140); // Receiver inside diagonal court
         } else {
           player1.position = Vector2(520, 695);
-          player2.position = Vector2(760, 235);
+          player2.position = Vector2(760, 140);
         }
       } else {
         if (servingSide == 'right') {
-          player2.position = Vector2(520, 150);  // Behind baseline outside court
+          player2.position = Vector2(520, 25);  // Behind baseline outside court
           player1.position = Vector2(760, 580); // Receiver inside diagonal court
         } else {
-          player2.position = Vector2(760, 150);
+          player2.position = Vector2(760, 25);
           player1.position = Vector2(520, 580);
         }
       }
@@ -487,7 +546,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
 
       ball.setupForServe();
 
-      final serverName = serverPlayer == 1 ? 'YOUR' : 'CPU';
+      final serverName = serverPlayer == 1 ? 'YOUR' : (isMultiplayer ? 'OPPONENT' : 'CPU');
       final sideName = servingSide.toUpperCase();
       final callout = '$p1Score - $p2Score';
       onAnnouncement?.call(
@@ -506,6 +565,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
 
     final effectiveCourt = courtId ?? GameStateManager.instance.equippedCourtId;
     background = Background(courtId: effectiveCourt);
+    background.priority = 0;
     world.add(background);
 
     _setupControls();
@@ -530,6 +590,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       playerSlot: 1,
       joystick: joystick,
     );
+    player1.priority = 15;
     player1.customGame = this;
     world.add(player1);
 
@@ -543,6 +604,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
         playerSlot: 2,
         joystick: null,
       );
+      player1Partner!.priority = 15;
       player1Partner!.customGame = this;
       world.add(player1Partner!);
     }
@@ -556,6 +618,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       playerSlot: 1,
       joystick: null,
     );
+    player2.priority = 5;
     player2.customGame = this;
     world.add(player2);
 
@@ -569,15 +632,36 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
         playerSlot: 2,
         joystick: null,
       );
+      player2Partner!.priority = 5;
       player2Partner!.customGame = this;
       world.add(player2Partner!);
     }
 
+    // Regulation 2D Net Component
+    _netComponent = NetComponent(courtId: effectiveCourt);
+    _netComponent!.priority = 10;
+    world.add(_netComponent!);
+
     // The Ball!
     final effectiveBall = ballId ?? GameStateManager.instance.equippedBallId;
     ball = BallComponent(ballId: effectiveBall);
+    ball.priority = 12;
     ball.customGame = this;
     world.add(ball);
+
+    if (isMultiplayer) {
+      if (isHost) {
+        _serverPlayer = 1;
+        serverTeam = 1;
+      } else {
+        _serverPlayer = 2; // Host serves first! On Guest's device, Host is player 2.
+        serverTeam = 2;
+      }
+    } else {
+      _serverPlayer = 1;
+      serverTeam = 1;
+    }
+    serverNumber = isDoubles ? 2 : 1;
 
     prepareServicePositions();
 
@@ -716,36 +800,89 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       final bspin = rawSpin != null ? -rawSpin : null;
 
       if (bx != null && by != null) {
-        if (!isHost) {
-          // Guest receiving authoritative ball from Host
-          ball.position.setValues(bx, by);
-          if (bvx != null && bvy != null) ball.velocity.setValues(bvx, bvy);
-          if (bspin != null) ball.spin = bspin;
-          if (z != null) ball.z = z;
-          if (zVelocity != null) ball.zVelocity = zVelocity;
-          if (ball.isWaitingForServe) {
-            ball.isWaitingForServe = false;
-            isWaitingForServe = false;
-          }
-        } else {
-          // Host receiving ball hit from Guest: Guest struck the ball
-          ball.position.setValues(bx, by);
-          if (bvx != null && bvy != null) ball.velocity.setValues(bvx, bvy);
-          if (bspin != null) ball.spin = bspin;
+        ball.position.setValues(bx, by);
+        if (bvx != null && bvy != null) ball.velocity.setValues(bvx, bvy);
+        if (bspin != null) ball.spin = bspin;
+        if (z != null) ball.z = z;
+        if (zVelocity != null) ball.zVelocity = zVelocity;
+        ball.speed = ball.velocity.length;
+        if (ball.isWaitingForServe || isWaitingForServe) {
+          ball.isWaitingForServe = false;
+          isWaitingForServe = false;
+          onServeStateChanged?.call(false, serverPlayer, servingSide);
         }
       }
     } else if (packet.type == PacketType.scoreSync) {
-      final p1 = packet.data['p1Score'] as int?;
-      final p2 = packet.data['p2Score'] as int?;
-      if (p1 != null && p2 != null) {
-        if (isHost) {
-          p1Score = p1;
-          p2Score = p2;
-        } else {
-          p1Score = p2;
-          p2Score = p1;
-        }
+      if (isHost && packet.data['guestReported'] == true) {
+        final bool winnerIsHost = packet.data['winnerIsHost'] == true;
+        final String reason = packet.data['faultReason'] as String? ?? '';
+        handleRallyWon(winnerIsPlayerOne: winnerIsHost, faultReason: reason);
+        return;
+      }
+
+      if (!isHost) {
+        final hostScore = packet.data['hostScore'] as int? ?? (packet.data['p1Score'] as int? ?? 0);
+        final guestScore = packet.data['guestScore'] as int? ?? (packet.data['p2Score'] as int? ?? 0);
+        final bool hostIsServing = packet.data['hostIsServing'] as bool? ?? (packet.data['serverPlayer'] == 1);
+        final bool gameOver = packet.data['isGameOver'] as bool? ?? false;
+        final bool winnerIsHost = packet.data['winnerIsHost'] as bool? ?? false;
+        final String fault = packet.data['faultReason'] as String? ?? '';
+        final int streak = packet.data['streak'] as int? ?? 0;
+        final int longest = packet.data['longest'] as int? ?? longestRally;
+
+        p1Score = guestScore;
+        p2Score = hostScore;
         onScoreUpdated?.call(p1Score, p2Score);
+
+        continuousRallyStreak = streak;
+        longestRally = longest;
+        onRallyStreakUpdated?.call(continuousRallyStreak, longestRally);
+
+        if (gameOver) {
+          isGameOver = true;
+          pauseEngine();
+          final bool won = !winnerIsHost;
+          if (won) {
+            AudioService.instance.playVictory();
+          } else {
+            AudioService.instance.playDefeat();
+          }
+          onAnnouncement?.call(
+            won ? 'VICTORY!' : 'MATCH DEFEAT',
+            'Final Score: $p1Score - $p2Score',
+          );
+          onMatchFinished?.call(won);
+          return;
+        }
+
+        // Host is player2, Guest is player1!
+        if (isDoubles) {
+          serverTeam = hostIsServing ? 2 : 1;
+          serverNumber = packet.data['serverNumber'] as int? ?? 1;
+        } else {
+          serverPlayer = hostIsServing ? 2 : 1;
+        }
+
+        if (packet.data.containsKey('p1CourtSide')) {
+          p2CourtSide = packet.data['p1CourtSide'] as String? ?? 'right';
+          p2PartnerCourtSide = (p2CourtSide == 'right') ? 'left' : 'right';
+        }
+        if (packet.data.containsKey('p2CourtSide')) {
+          p1CourtSide = packet.data['p2CourtSide'] as String? ?? 'left';
+          p1PartnerCourtSide = (p1CourtSide == 'right') ? 'left' : 'right';
+        }
+
+        AudioService.instance.playPointScored();
+        prepareServicePositions();
+
+        if (fault.isNotEmpty) {
+          _dispatchViolation(fault);
+        }
+      }
+    } else if (packet.type == PacketType.leaveRoom) {
+      if (packet.data['isHost'] == true || packet.senderId == MultiplayerService.instance.currentRoom?.hostId) {
+        pauseEngine();
+        onAnnouncement?.call('HOST DISCONNECTED', 'The host left the match.');
       }
     }
   }

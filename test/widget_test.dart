@@ -1424,17 +1424,17 @@ void main() {
       game.isWaitingForServe = false;
       game.rallyHitCount = 2; // Open play
 
-      // P1 hits a volley outside the kitchen at Y = 485 (kitchen bottom line is at 474)
-      p1.position = Vector2(640, 485);
-      game.ball.position = Vector2(640, 485);
+      // P1 hits a volley outside the kitchen at Y = 450 (kitchen bottom line is at 440)
+      p1.position = Vector2(640, 450);
+      game.ball.position = Vector2(640, 450);
       game.ball.velocity = Vector2(0, 300);
       game.ball.bounceCountCurrentSide = 0; // In air -> volley!
       p1.strike();
 
       expect(p1.timeSinceLastVolley, 0.0);
 
-      // P1 momentum carries forward into kitchen (Y moves to 465 <= 474) within 0.5s
-      p1.position = Vector2(640, 465);
+      // P1 momentum carries forward into kitchen (Y moves to 435 <= 440) within 0.5s
+      p1.position = Vector2(640, 435);
       p1.update(0.1);
 
       expect(lastViolation, 'KITCHEN MOMENTUM');
@@ -1852,13 +1852,13 @@ void main() {
       final bg = Background();
       expect(bg.paint.isAntiAlias, false);
       expect(bg.paint.filterQuality, FilterQuality.none);
-      expect(Background.courtLeftX, 432.0);
-      expect(Background.courtRightX, 848.0);
-      expect(Background.courtTopY, 174.0);
-      expect(Background.courtBottomY, 661.0);
+      expect(Background.courtLeftX, 400.0);
+      expect(Background.courtRightX, 880.0);
+      expect(Background.courtTopY, 50.0);
+      expect(Background.courtBottomY, 670.0);
       expect(Background.netY, 360.0);
-      expect(Background.kitchenTopY, 324.0);
-      expect(Background.kitchenBottomY, 474.0);
+      expect(Background.kitchenTopY, 280.0);
+      expect(Background.kitchenBottomY, 440.0);
     });
 
     test('BallComponent returns forward without sharp sideways angles when hit by player', () {

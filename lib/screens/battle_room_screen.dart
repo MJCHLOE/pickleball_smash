@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/character_roster.dart';
 import '../models/court_catalog.dart';
 import '../models/multiplayer_models.dart';
 import '../services/audio_service.dart';
 import '../services/connectivity_service.dart';
+import '../services/game_state_manager.dart';
 import '../services/multiplayer_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/avatar_picker_dialog.dart';
 import '../widgets/friends_modal.dart';
 import '../widgets/game_2d_button.dart';
 import '../widgets/game_2d_text.dart';
@@ -42,11 +45,28 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
     });
 
     MultiplayerService.instance.addListener(_onRoomStateChanged);
+    MultiplayerService.instance.hostDisconnectedNotifier.addListener(_onHostDisconnected);
 
     // Post-frame check: If room state is already inMatch, navigate immediately
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _onRoomStateChanged();
     });
+  }
+
+  void _onHostDisconnected() {
+    final reason = MultiplayerService.instance.hostDisconnectedNotifier.value;
+    if (reason != null && mounted && !MultiplayerService.instance.isHost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFDC2626),
+          content: Text(
+            reason,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+      Navigator.of(context).pop();
+    }
   }
 
   void _onRoomStateChanged() {
@@ -58,6 +78,7 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
 
   @override
   void dispose() {
+    MultiplayerService.instance.hostDisconnectedNotifier.removeListener(_onHostDisconnected);
     MultiplayerService.instance.removeListener(_onRoomStateChanged);
     _networkPacketSub?.cancel();
     super.dispose();
@@ -496,6 +517,8 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
     }
 
     final readyColor = slot.isReady ? AppTheme.neonLime : const Color(0xFFFBBF24);
+    final charId = slot.characterId.isNotEmpty ? slot.characterId : (slot.playerAvatar ?? 'alex_classic');
+    final charInfo = CharacterRoster.getById(charId);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -514,12 +537,22 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
           Stack(
             clipBehavior: Clip.none,
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: slot.rankTier?.color ?? Colors.white24, width: 2),
+              GestureDetector(
+                onTap: isMe
+                    ? () async {
+                        AudioService.instance.playButtonTap();
+                        await AvatarPickerDialog.show(context);
+                        final newCharId = GameStateManager.instance.playerAvatarId;
+                        await multi.updateMyCharacter(newCharId);
+                      }
+                    : null,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: slot.rankTier?.color ?? charInfo.borderColor, width: 2),
+                  ),
+                  child: PlayerAvatarWidget(avatarId: charInfo.id, size: 44),
                 ),
-                child: PlayerAvatarWidget(avatarId: slot.playerAvatar ?? 'alex_classic', size: 44),
               ),
               if (slot.isHost)
                 Positioned(
@@ -541,7 +574,7 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
           ),
           const SizedBox(width: 12),
 
-          // Player Name & Ping
+          // Player Name, Ping & Character Badge
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -604,6 +637,57 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
                       ],
                     ),
                   ],
+                ),
+                const SizedBox(height: 5),
+                // Character Badge Pill
+                InkWell(
+                  onTap: isMe
+                      ? () async {
+                          AudioService.instance.playButtonTap();
+                          await AvatarPickerDialog.show(context);
+                          final newCharId = GameStateManager.instance.playerAvatarId;
+                          await multi.updateMyCharacter(newCharId);
+                        }
+                      : null,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: charInfo.borderColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: charInfo.borderColor.withValues(alpha: 0.5),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          charInfo.badge,
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          charInfo.name.toUpperCase(),
+                          style: TextStyle(
+                            color: charInfo.borderColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        if (isMe) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.edit_rounded,
+                            size: 10,
+                            color: charInfo.borderColor,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),

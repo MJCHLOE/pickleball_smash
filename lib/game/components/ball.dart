@@ -4,6 +4,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../../models/ball_catalog.dart';
 import '../../models/battle_technique.dart';
+import '../../models/game_settings.dart';
 import '../../models/multiplayer_models.dart';
 import '../../services/audio_service.dart';
 import '../../services/multiplayer_service.dart';
@@ -92,6 +93,13 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
   final Paint _wispPaint = Paint()..style = PaintingStyle.fill;
   final Paint _auraFillPaint = Paint()..style = PaintingStyle.fill;
   final Paint _holePaint = Paint()..style = PaintingStyle.fill;
+  final Paint _spinArcPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round
+    ..strokeWidth = 2.2;
+  final Paint _seamPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.0;
 
   BallComponent({String? ballId})
       : _ballInfo = BallCatalog.getById(ballId ?? 'ball_elite') {
@@ -206,8 +214,8 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     Vector2 target;
     if (isPlayerOne) {
       // Bottom server serves diagonally upwards into diagonal receiving box
-      // Top court receiving boxes: between kitchenTopY (324) and topBaselineY (174)
-      const targetY = 245.0;
+      // Top court receiving boxes: between kitchenTopY (280) and topBaselineY (50)
+      const targetY = 165.0;
       final leftBoxX = (Background.courtLeftAt(targetY) + courtCenterX) / 2.0;
       final rightBoxX = (courtCenterX + Background.courtRightAt(targetY)) / 2.0;
       final baseTargetX = (currentGame.servingSide == 'right') ? leftBoxX : rightBoxX;
@@ -218,8 +226,8 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       target = Vector2(targetX, targetY);
     } else {
       // Top server serves diagonally downwards into diagonal receiving box
-      // Bottom court receiving boxes: between kitchenBottomY (474) and bottomBaselineY (661)
-      const targetY = 570.0;
+      // Bottom court receiving boxes: between kitchenBottomY (440) and bottomBaselineY (670)
+      const targetY = 555.0;
       final leftBoxX = (Background.courtLeftAt(targetY) + courtCenterX) / 2.0;
       final rightBoxX = (courtCenterX + Background.courtRightAt(targetY)) / 2.0;
       final baseTargetX = (currentGame.servingSide == 'right') ? rightBoxX : leftBoxX;
@@ -239,8 +247,8 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       final serverComp = currentGame.activeServerComponent;
       if (serverComp.isPlayerOne && serverComp.position.y > 665.0) {
         serverComp.position.y = 640.0;
-      } else if (!serverComp.isPlayerOne && serverComp.position.y < 165.0) {
-        serverComp.position.y = 195.0;
+      } else if (!serverComp.isPlayerOne && serverComp.position.y < 55.0) {
+        serverComp.position.y = 80.0;
       }
     } catch (_) {}
 
@@ -291,7 +299,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
         // Serving flow: Player must manually serve before game starts.
         // CPU waits 1.2s before executing serve so player can get ready.
         _serveTimer += dt;
-        final bool isCpu = !currentGame.isHumanServer;
+        final bool isCpu = !currentGame.isMultiplayer && !currentGame.isLocalPlayerServing;
         final bool autoServeEnabled = currentGame.settings?.autoServe ?? false;
         final double threshold = isCpu ? 1.2 : (autoServeEnabled ? 1.8 : double.infinity);
 
@@ -334,8 +342,13 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     // Apply aerodynamic curving force (Magnus effect)
     if (spin != 0.0 && curveStrength > 0.0) {
       velocity.x += curveStrength * spin * dt;
-      ballRotationAngle += spin * 24.0 * dt;
     }
+
+    // Dynamic ball rotation: spins continuously based on speed, direction & spin rate
+    final double spinRate = (spin.abs() > 0.05)
+        ? (spin * 28.0)
+        : (velocity.x * 0.03 + (velocity.y > 0 ? 10.0 : -10.0));
+    ballRotationAngle += spinRate * dt;
 
     // Move ball along 2D court floor trajectory
     position += velocity * dt;
@@ -343,6 +356,15 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
 
     // Pseudo 2.5D perspective scaling based on court depth
     radius = (11.0 * Background.perspectiveScaleAt(position.y)).clamp(8.0, 12.0);
+
+    // Dynamic depth sorting relative to net
+    if (position.y < netY && z < 18.0) {
+      priority = 6;
+    } else if (z >= 18.0) {
+      priority = 16;
+    } else {
+      priority = 12;
+    }
 
     // Track motion particle trail
     final settings = currentGameOrNull?.settings;
@@ -393,6 +415,9 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
         velocity.y = -velocity.y * 0.15;
         zVelocity = -40.0;
         final bool hitterWasP1 = crossingToP2;
+        try {
+          currentGame.netComponent.wobble(5.0);
+        } catch (_) {}
         currentGame.handleRallyWon(
           winnerIsPlayerOne: !hitterWasP1,
           faultReason: 'FAULT: Net Fault (Ball hit net and failed to clear)',
@@ -401,6 +426,9 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       } else if (z <= 18.0 && !_netClippedThisCross) {
         // Net clip: clips top tape of net cord, dampens slightly but continues LIVE!
         _netClippedThisCross = true;
+        try {
+          currentGame.netComponent.wobble(2.5);
+        } catch (_) {}
         AudioService.instance.playPaddleHit();
         velocity.x *= 0.94;
         velocity.y *= 0.90;
@@ -683,16 +711,62 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       ).createShader(Rect.fromCircle(center: Offset.zero, radius: radius));
     canvas.drawCircle(Offset.zero, radius, _cachedBallPaint!);
 
-    // 5. Draw pickleball holes / perforations with dynamic sidespin rotation
+    // 5. Draw pickleball holes / perforations with dynamic sidespin rotation & equatorial seam
     canvas.save();
     canvas.rotate(ballRotationAngle);
-    const double holeRad = 1.7;
-    canvas.drawCircle(const Offset(-4, -4), holeRad, _holePaint);
-    canvas.drawCircle(const Offset(4, -4), holeRad, _holePaint);
-    canvas.drawCircle(const Offset(-4, 4), holeRad, _holePaint);
-    canvas.drawCircle(const Offset(4, 4), holeRad, _holePaint);
-    canvas.drawCircle(const Offset(0, 0), holeRad, _holePaint);
+
+    // Subtle equatorial seam arcs
+    _seamPaint.color = Colors.white.withValues(alpha: 0.22);
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset.zero, radius: radius * 0.82),
+      -pi / 4,
+      pi / 2,
+      false,
+      _seamPaint,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset.zero, radius: radius * 0.82),
+      3 * pi / 4,
+      pi / 2,
+      false,
+      _seamPaint,
+    );
+
+    // 6 outer holes in a ring + 1 center hole
+    const double holeRad = 1.6;
+    for (int i = 0; i < 6; i++) {
+      final double hAngle = i * (pi / 3.0);
+      final double hDist = radius * 0.52;
+      canvas.drawCircle(Offset(cos(hAngle) * hDist, sin(hAngle) * hDist), holeRad, _holePaint);
+    }
+    canvas.drawCircle(Offset.zero, holeRad, _holePaint);
     canvas.restore();
+
+    // 6. Draw swirling aerodynamic spin vortex arcs when ball is spinning
+    if (spin.abs() > 0.08 || activeTechniqueType != BattleTechnique.none) {
+      final Color arcColor = (activeTechniqueType == BattleTechnique.leftSpin)
+          ? const Color(0xFF34D399)
+          : (activeTechniqueType == BattleTechnique.rightSpin)
+              ? const Color(0xFFA855F7)
+              : (spin < 0 ? const Color(0xFF38BDF8) : const Color(0xFFFBBF24));
+      _spinArcPaint.color = arcColor.withValues(alpha: 0.80);
+      final double arcLen = (pi * 0.45) * (spin.abs().clamp(0.4, 1.0));
+      // Two opposing swirling aerodynamic spin arcs
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset.zero, radius: radius + 2.5),
+        ballRotationAngle,
+        arcLen,
+        false,
+        _spinArcPaint,
+      );
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset.zero, radius: radius + 2.5),
+        ballRotationAngle + pi,
+        arcLen,
+        false,
+        _spinArcPaint,
+      );
+    }
 
     canvas.restore();
   }
@@ -791,10 +865,11 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       executedTechnique = player.activeTechnique;
       player.clearTechnique();
     } else if (!isPlayerOne && player.isAI && currentGame.rallyHitCount > 1) {
+      final aiDiff = currentGame.settings?.aiDifficulty ?? AIDifficulty.normal;
       final roll = Random().nextDouble();
-      if (roll < 0.12) {
+      if (roll < aiDiff.spinTechniqueChance * 0.5) {
         executedTechnique = BattleTechnique.leftSpin;
-      } else if (roll < 0.22) {
+      } else if (roll < aiDiff.spinTechniqueChance) {
         executedTechnique = BattleTechnique.rightSpin;
       }
     }
@@ -817,12 +892,12 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       tBounce = (zVelocity + sqrt(zVelocity * zVelocity + 4 * 170.0 * z)) / 340.0;
 
       if (isPlayerOne) {
-        targetY = 215.0;
+        targetY = 165.0;
         targetX = Background.courtLeftAt(targetY) + 18.0;
         currentGame.onAnnouncement?.call('🌪️ CYCLONE CURVE!', 'Wicked left sidespin curve!');
         currentGame.onTechniqueExecuted(BattleTechnique.leftSpin);
       } else {
-        targetY = 620.0;
+        targetY = 555.0;
         targetX = Background.courtLeftAt(targetY) + 20.0;
         currentGame.onAnnouncement?.call('🌪️ CPU CYCLONE CURVE!', 'Watch out! Violent left spin curve!');
         currentGame.onTechniqueExecuted(BattleTechnique.leftSpin);
@@ -847,12 +922,12 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       tBounce = (zVelocity + sqrt(zVelocity * zVelocity + 4 * 170.0 * z)) / 340.0;
 
       if (isPlayerOne) {
-        targetY = 215.0;
+        targetY = 165.0;
         targetX = Background.courtRightAt(targetY) - 18.0;
         currentGame.onAnnouncement?.call('⚡ VORTEX HOOK!', 'Fierce right sidespin hook!');
         currentGame.onTechniqueExecuted(BattleTechnique.rightSpin);
       } else {
-        targetY = 620.0;
+        targetY = 555.0;
         targetX = Background.courtRightAt(targetY) - 20.0;
         currentGame.onAnnouncement?.call('⚡ CPU VORTEX HOOK!', 'Watch out! Violent right spin hook!');
         currentGame.onTechniqueExecuted(BattleTechnique.rightSpin);
@@ -866,14 +941,20 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       position += velocity.normalized() * 10;
       return;
     } else {
-      // Standard return trajectory - reset any spin
-      spin = 0.0;
-      curveStrength = 0.0;
+      // Standard return trajectory - apply natural paddle slice spin based on contact offset
+      final diff = position - player.position;
+      final double naturalSpin = (diff.x / 42.0).clamp(-0.85, 0.85);
+      if (naturalSpin.abs() > 0.16) {
+        spin = naturalSpin;
+        curveStrength = 75.0 * naturalSpin.abs();
+      } else {
+        spin = 0.0;
+        curveStrength = 0.0;
+      }
       zVelocity = 210.0;
       squashFactor = 1.12;
       tBounce = (zVelocity + sqrt(zVelocity * zVelocity + 4 * 170.0 * z)) / 340.0;
 
-      final diff = position - player.position;
       if (isPlayerOne && !player.isAI) {
         double vInput = 0.0;
         if (player.joystick != null && !player.joystick!.delta.isZero()) {
@@ -881,7 +962,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
         } else {
           vInput = player.vAxis.toDouble();
         }
-        targetY = (245.0 + vInput * 45.0).clamp(195.0, 310.0);
+        targetY = (165.0 + vInput * 45.0).clamp(80.0, 260.0);
 
         final aimOffset = (player.horizontalMovement * 120.0) + (diff.x * 0.7);
         final minX = Background.courtLeftAt(targetY) + 15.0;
@@ -891,7 +972,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
         final oppPos = currentGame.player2.position;
         final targetLeft = oppPos.x > courtCenterX;
         final isDeep = (currentGame.rallyHitCount % 3 != 0);
-        targetY = isDeep ? 210.0 : 285.0;
+        targetY = isDeep ? 120.0 : 220.0;
         final leftBoxX = (Background.courtLeftAt(targetY) + courtCenterX) / 2.0;
         final rightBoxX = (courtCenterX + Background.courtRightAt(targetY)) / 2.0;
         final baseAim = targetLeft ? leftBoxX : rightBoxX;
@@ -903,7 +984,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
         final oppPos = currentGame.player1.position;
         final targetLeft = oppPos.x > courtCenterX;
         final isDeep = (currentGame.rallyHitCount % 3 != 0);
-        targetY = isDeep ? 625.0 : 520.0;
+        targetY = isDeep ? 600.0 : 500.0;
         final leftBoxX = (Background.courtLeftAt(targetY) + courtCenterX) / 2.0;
         final rightBoxX = (courtCenterX + Background.courtRightAt(targetY)) / 2.0;
         final baseAim = targetLeft ? leftBoxX : rightBoxX;
@@ -915,10 +996,10 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     }
 
     // Derive precise velocity so the ball lands and bounces at (targetX, targetY) inside the court
-    velocity = Vector2(
-      (targetX - position.x) / tBounce,
-      (targetY - position.y) / tBounce,
-    );
+    final double lateralAcc = spin * curveStrength;
+    final double v0X = (targetX - position.x - 0.5 * lateralAcc * tBounce * tBounce) / tBounce;
+    final double v0Y = (targetY - position.y) / tBounce;
+    velocity = Vector2(v0X, v0Y);
     speed = velocity.length;
 
     // Displace slightly forward along velocity to prevent immediate re-collision

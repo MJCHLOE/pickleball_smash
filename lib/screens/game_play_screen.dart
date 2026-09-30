@@ -65,6 +65,13 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
   String? _violationRuleDetail;
   Timer? _violationTimer;
 
+  // Multiplayer opponent & partner info
+  String? _myAvatarId;
+  String? _opponentAvatarId;
+  String? _opponentPlayerName;
+  String? _partnerAvatarId;
+  String? _opponentPartnerAvatarId;
+
   @visibleForTesting
   void setViolationForTest(String type, String desc, String ruleDetail) {
     setState(() {
@@ -83,12 +90,12 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
       DeviceOrientation.landscapeRight,
     ]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    AudioService.instance.playBgm();
+    AudioService.instance.playInGameBgm();
 
     final state = GameStateManager.instance;
     const targetScore = 11; // Standard Pickleball Game is 11 points
     final p1Char = CharacterRoster.getById(state.playerAvatarId);
-    final p1Type = p1Char.type;
+    CharacterType p1Type = p1Char.type;
 
     // AI bot opponents select among characters including male2, male3, and female2 (Chloe Frost)
     CharacterType p2Type;
@@ -105,8 +112,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
       p2Type = CharacterType.male1;
     }
 
-    final partner1Type = CharacterType.female1;
-    final partner2Type = CharacterType.male2;
+    CharacterType partner1Type = CharacterType.female1;
+    CharacterType partner2Type = CharacterType.male2;
 
     final bool isMultiplayer = widget.matchType == 'multiplayer';
     final multi = MultiplayerService.instance;
@@ -117,12 +124,61 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
     final effectiveCourtId = (isMultiplayer && room != null) ? room.courtId : state.equippedCourtId;
 
     if (isMultiplayer && room != null) {
-      final oppSlot = room.slots.firstWhere(
-        (s) => isHost ? (!s.isHost && !s.isEmpty) : (s.isHost && !s.isEmpty),
-        orElse: () => room.slots.firstWhere((s) => s.playerId != multi.myProfile.playerId, orElse: () => room.slots.first),
+      // Find my own slot
+      final mySlot = room.slots.firstWhere(
+        (s) => s.playerId == multi.myProfile.playerId,
+        orElse: () => isHost ? room.slots.first : (room.slots.length > 1 ? room.slots[1] : room.slots.first),
       );
-      final oppChar = CharacterRoster.getById(oppSlot.characterId.isNotEmpty ? oppSlot.characterId : oppSlot.playerAvatar ?? 'alex_classic');
+      final myCharId = mySlot.characterId.isNotEmpty ? mySlot.characterId : (mySlot.playerAvatar ?? state.playerAvatarId);
+      final myChar = CharacterRoster.getById(myCharId);
+      p1Type = myChar.type;
+      _myAvatarId = myChar.id;
+
+      // Find primary opponent slot
+      final oppSlot = room.slots.firstWhere(
+        (s) => !s.isEmpty && s.playerId != mySlot.playerId && (widget.isDoubles ? s.team != mySlot.team : true),
+        orElse: () => room.slots.firstWhere(
+          (s) => isHost ? (!s.isHost && !s.isEmpty) : (s.isHost && !s.isEmpty),
+          orElse: () => room.slots.firstWhere((s) => s.playerId != multi.myProfile.playerId, orElse: () => room.slots.first),
+        ),
+      );
+      final oppCharId = oppSlot.characterId.isNotEmpty ? oppSlot.characterId : (oppSlot.playerAvatar ?? 'alex_classic');
+      final oppChar = CharacterRoster.getById(oppCharId);
       p2Type = oppChar.type;
+      _opponentAvatarId = oppChar.id;
+      _opponentPlayerName = oppSlot.playerName ?? widget.opponentName ?? 'Opponent';
+
+      if (widget.isDoubles) {
+        // Find partner (same team as mySlot)
+        final myPartnerSlot = room.slots.firstWhere(
+          (s) => s.slotIndex != mySlot.slotIndex && s.team == mySlot.team && !s.isEmpty,
+          orElse: () => room.slots.firstWhere(
+            (s) => s.slotIndex != mySlot.slotIndex && s.team == mySlot.team,
+            orElse: () => mySlot,
+          ),
+        );
+        if (!myPartnerSlot.isEmpty) {
+          final p1pCharId = myPartnerSlot.characterId.isNotEmpty ? myPartnerSlot.characterId : (myPartnerSlot.playerAvatar ?? 'kai');
+          final p1pChar = CharacterRoster.getById(p1pCharId);
+          partner1Type = p1pChar.type;
+          _partnerAvatarId = p1pChar.id;
+        }
+
+        // Find opponent partner (same team as oppSlot)
+        final oppPartnerSlot = room.slots.firstWhere(
+          (s) => s.slotIndex != oppSlot.slotIndex && s.team == oppSlot.team && !s.isEmpty,
+          orElse: () => room.slots.firstWhere(
+            (s) => s.slotIndex != oppSlot.slotIndex && s.team == oppSlot.team,
+            orElse: () => oppSlot,
+          ),
+        );
+        if (!oppPartnerSlot.isEmpty) {
+          final p2pCharId = oppPartnerSlot.characterId.isNotEmpty ? oppPartnerSlot.characterId : (oppPartnerSlot.playerAvatar ?? 'female1');
+          final p2pChar = CharacterRoster.getById(p2pCharId);
+          partner2Type = p2pChar.type;
+          _opponentPartnerAvatarId = p2pChar.id;
+        }
+      }
     }
 
     _game = PickleballGame(
@@ -255,6 +311,61 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
         });
       },
     );
+
+    if (widget.matchType == 'multiplayer') {
+      MultiplayerService.instance.hostDisconnectedNotifier.addListener(_onHostDisconnected);
+    }
+  }
+
+  void _onHostDisconnected() {
+    final reason = MultiplayerService.instance.hostDisconnectedNotifier.value;
+    if (reason != null && mounted) {
+      _game.pauseEngine();
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF0F172A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFEF4444), width: 2),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.wifi_off_rounded, color: Color(0xFFEF4444), size: 28),
+              SizedBox(width: 10),
+              Text(
+                'HOST DISCONNECTED',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            reason,
+            style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.neonLime,
+                foregroundColor: Colors.black,
+              ),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                if (mounted) {
+                  Navigator.of(context).pop();
+                }
+              },
+              child: const Text('BACK TO LOBBY', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   void _restartForNextMatch() {
@@ -358,7 +469,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
   @override
   Widget build(BuildContext context) {
     final state = GameStateManager.instance;
-    final opponent = widget.opponentName ?? 'CPU Challenger';
+    final opponent = _opponentPlayerName ?? widget.opponentName ?? 'CPU Challenger';
     final title = widget.matchTitle ??
         (widget.isDoubles
             ? '2v2 Doubles'
@@ -833,13 +944,17 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       PlayerAvatarWidget(
-                        avatarId: state.playerAvatarId,
+                        avatarId: (widget.matchType == 'multiplayer' && _myAvatarId != null)
+                            ? _myAvatarId!
+                            : state.playerAvatarId,
                         size: 24,
                       ),
                       if (_game.isDoubles) ...[
                         const SizedBox(width: 2),
-                        const PlayerAvatarWidget(
-                          avatarId: 'kai',
+                        PlayerAvatarWidget(
+                          avatarId: (widget.matchType == 'multiplayer' && _partnerAvatarId != null)
+                              ? _partnerAvatarId!
+                              : 'kai',
                           size: 20,
                         ),
                       ],
@@ -889,16 +1004,26 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
                       ),
                     ),
                     const SizedBox(width: 5),
-                    PlayerAvatarWidget(
-                      avatar: PlayerAvatar.getForOpponent(opponent),
-                      size: 24,
-                    ),
+                    (widget.matchType == 'multiplayer' && _opponentAvatarId != null)
+                        ? PlayerAvatarWidget(
+                            avatarId: _opponentAvatarId!,
+                            size: 24,
+                          )
+                        : PlayerAvatarWidget(
+                            avatar: PlayerAvatar.getForOpponent(opponent),
+                            size: 24,
+                          ),
                     if (_game.isDoubles) ...[
                       const SizedBox(width: 2),
-                      PlayerAvatarWidget(
-                        avatar: PlayerAvatar.getForOpponent('CPU 2'),
-                        size: 20,
-                      ),
+                      (widget.matchType == 'multiplayer' && _opponentPartnerAvatarId != null)
+                          ? PlayerAvatarWidget(
+                              avatarId: _opponentPartnerAvatarId!,
+                              size: 20,
+                            )
+                          : PlayerAvatarWidget(
+                              avatar: PlayerAvatar.getForOpponent('CPU 2'),
+                              size: 20,
+                            ),
                     ],
                   ],
                 ),
@@ -1234,7 +1359,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
 
         // 5. Interactive Serve Action Prompt / Serving Indicator
         if (_isWaitingForServe && !_isPaused && !_matchFinished)
-          if (_game.isHumanServer)
+          if (_game.isLocalPlayerServing)
             GestureDetector(
               key: const ValueKey('serve_action_prompt'),
               onTap: () => _game.player1.strike(),
@@ -1329,7 +1454,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
                     const Icon(Icons.sports_tennis_rounded, color: AppTheme.electricCyan, size: 14),
                     const SizedBox(width: 5),
                     Text(
-                      'CPU SERVING (${_servingSide.toUpperCase()}) • GET READY',
+                      '${widget.matchType == 'multiplayer' ? 'OPPONENT' : 'CPU'} SERVING (${_servingSide.toUpperCase()}) • GET READY',
                       style: const TextStyle(
                         color: AppTheme.electricCyan,
                         fontWeight: FontWeight.bold,
@@ -1475,13 +1600,17 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
     _autoRestartTimer?.cancel();
     _announcementTimer?.cancel();
     _violationTimer?.cancel();
+    if (widget.matchType == 'multiplayer') {
+      MultiplayerService.instance.hostDisconnectedNotifier.removeListener(_onHostDisconnected);
+      MultiplayerService.instance.leaveRoom();
+    }
     // Restore system UI mode and portrait orientation when leaving gameplay
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
-    AudioService.instance.resumeBgm();
+    AudioService.instance.playMenuBgm();
     super.dispose();
   }
 }

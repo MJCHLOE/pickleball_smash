@@ -237,6 +237,22 @@ class FirebaseMultiplayerService extends ChangeNotifier {
     await _updateRemoteRoomSlots(roomCode, slots);
   }
 
+  Future<void> updateSlotCharacter(String roomCode, String playerId, String characterId) async {
+    if (_cachedRoom == null) return;
+    final slots = List<RoomPlayerSlot>.from(_cachedRoom!.slots);
+    final idx = slots.indexWhere((s) => s.playerId == playerId);
+    if (idx != -1) {
+      slots[idx] = slots[idx].copyWith(
+        characterId: characterId,
+        playerAvatar: characterId,
+      );
+      _cachedRoom = _cachedRoom!.copyWith(slots: slots);
+      _roomUpdatesController.add(_cachedRoom!);
+      notifyListeners();
+      await _updateRemoteRoomSlots(roomCode, slots);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Match Launch & State Sync
   // ---------------------------------------------------------------------------
@@ -316,9 +332,40 @@ class FirebaseMultiplayerService extends ChangeNotifier {
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final body = response.body;
-        if (body != 'null' && body.isNotEmpty) {
-          final data = jsonDecode(body) as Map<String, dynamic>;
-          final parsed = _parseFirebaseRoom(data);
+        if (body == 'null' || body.isEmpty) {
+          if (_cachedRoom != null) {
+            _packetStreamController.add(
+              MultiplayerPacket(
+                type: PacketType.leaveRoom,
+                timestamp: DateTime.now().millisecondsSinceEpoch,
+                senderId: _cachedRoom?.hostId ?? 'host',
+                data: {'isHost': true, 'reason': 'Host has disconnected. The match has ended.'},
+              ),
+            );
+            _cachedRoom = null;
+            notifyListeners();
+          }
+          return;
+        }
+
+        final data = jsonDecode(body) as Map<String, dynamic>;
+        if (data['status'] == 'closed') {
+          if (_cachedRoom != null) {
+            _packetStreamController.add(
+              MultiplayerPacket(
+                type: PacketType.leaveRoom,
+                timestamp: DateTime.now().millisecondsSinceEpoch,
+                senderId: _cachedRoom?.hostId ?? 'host',
+                data: {'isHost': true, 'reason': 'Host has disconnected. The match has ended.'},
+              ),
+            );
+            _cachedRoom = null;
+            notifyListeners();
+          }
+          return;
+        }
+
+        final parsed = _parseFirebaseRoom(data);
 
           // Check for status change to inMatch
           if (parsed.status == 'inMatch' && _cachedRoom?.status != 'inMatch') {
@@ -352,12 +399,11 @@ class FirebaseMultiplayerService extends ChangeNotifier {
           _roomUpdatesController.add(parsed);
           notifyListeners();
         }
+      } catch (_) {
+      } finally {
+        _isPollingRoomState = false;
       }
-    } catch (_) {
-    } finally {
-      _isPollingRoomState = false;
     }
-  }
 
   void _stopListeningToRoom() {
     _syncPollTimer?.cancel();
@@ -400,7 +446,7 @@ class FirebaseMultiplayerService extends ChangeNotifier {
     List<RoomPlayerSlot> slots = [];
     if (json['slots'] != null) {
       final rawSlots = json['slots'] as List<dynamic>;
-      slots = rawSlots.map((s) => RoomPlayerSlot.fromJson(s as Map<String, dynamic>)).toList();
+      slots = rawSlots.map((s) => RoomPlayerSlot.fromJson(Map<String, dynamic>.from(s as Map))).toList();
     }
 
     return BattleRoomModel(

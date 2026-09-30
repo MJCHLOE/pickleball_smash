@@ -37,7 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _lockPortraitOrientation();
-    AudioService.instance.playBgm();
+    AudioService.instance.playMenuBgm();
     MultiplayerService.instance.incomingInvitationNotifier.addListener(_onInvitationChanged);
   }
 

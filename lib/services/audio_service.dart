@@ -50,8 +50,14 @@ class AudioService {
   // BACKGROUND MUSIC (BGM)
   // ---------------------------------------------------------------------------
 
-  /// Play or loop retro arcade background music
-  Future<void> playBgm() async {
+  static const String defaultInGameBgm = 'audio/bgm_arcade_loop.wav';
+  static const String menuBgm = 'audio/bgm_menu.mp3';
+
+  String _currentBgmAsset = '';
+  String get currentBgmAsset => _currentBgmAsset;
+
+  /// Play or loop retro arcade background music with support for custom tracks
+  Future<void> playBgm([String assetPath = menuBgm]) async {
     if (_isTestEnvironment) return;
     if (!_settings.musicEnabled || effectiveMusicVolume <= 0.01) return;
 
@@ -59,14 +65,22 @@ class AudioService {
       _bgmPlayer ??= AudioPlayer();
       await _bgmPlayer!.setReleaseMode(ReleaseMode.loop);
       await _bgmPlayer!.setVolume(effectiveMusicVolume.clamp(0.0, 1.0));
-      if (!_isBgmPlaying) {
-        await _bgmPlayer!.play(AssetSource('audio/bgm_arcade_loop.wav'));
+      if (_currentBgmAsset != assetPath || !_isBgmPlaying) {
+        await _bgmPlayer!.stop();
+        _currentBgmAsset = assetPath;
+        await _bgmPlayer!.play(AssetSource(assetPath));
         _isBgmPlaying = true;
       }
     } catch (e) {
       debugPrint('BGM play caught: $e');
     }
   }
+
+  /// Play the menu/dashboard background music
+  Future<void> playMenuBgm() => playBgm(menuBgm);
+
+  /// Play the default in-game match background music
+  Future<void> playInGameBgm() => playBgm(defaultInGameBgm);
 
   /// Pause retro arcade background music
   Future<void> pauseBgm() async {
@@ -90,10 +104,10 @@ class AudioService {
         await _bgmPlayer!.resume();
         _isBgmPlaying = true;
       } else {
-        await playBgm();
+        await playBgm(_currentBgmAsset.isNotEmpty ? _currentBgmAsset : menuBgm);
       }
     } catch (_) {
-      await playBgm();
+      await playBgm(_currentBgmAsset.isNotEmpty ? _currentBgmAsset : menuBgm);
     }
   }
 

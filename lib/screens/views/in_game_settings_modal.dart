@@ -747,6 +747,31 @@ class _InGameSettingsModalState extends State<InGameSettingsModal> {
           contentPadding: EdgeInsets.zero,
           onChanged: (val) => _update(settings.copyWith(autoServe: val)),
         ),
+        const SizedBox(height: 14),
+
+        // AI / Bot Difficulty Level
+        const Text('AI Bot Difficulty', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        const Text('Adjust bot reaction speed, dash frequency, and spin technique counters', style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: SegmentedButton<AIDifficulty>(
+              segments: const [
+                ButtonSegment(value: AIDifficulty.easy, label: Text('Easy')),
+                ButtonSegment(value: AIDifficulty.normal, label: Text('Normal')),
+                ButtonSegment(value: AIDifficulty.hard, label: Text('Hard')),
+                ButtonSegment(value: AIDifficulty.extreme, label: Text('Extreme')),
+              ],
+              selected: {settings.aiDifficulty},
+              onSelectionChanged: (val) => _update(settings.copyWith(aiDifficulty: val.first)),
+              style: _compactSegmentedStyle(),
+            ),
+          ),
+        ),
       ],
     );
   }
