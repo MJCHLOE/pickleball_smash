@@ -392,6 +392,14 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       violationType = 'OUT OF BOUNDS';
       description = cleanReason;
       ruleDetail = 'Rule 4: Ball landed outside boundary lines!';
+    } else if (cleanReason.contains('Service Foot Fault')) {
+      violationType = 'SERVICE FOOT FAULT';
+      description = 'Server stepped on or inside baseline before serve';
+      ruleDetail = 'Rule 5: Server must stand completely behind the baseline when serving!';
+    } else if (cleanReason.contains('Double Bounce')) {
+      violationType = 'DOUBLE BOUNCE';
+      description = cleanReason;
+      ruleDetail = 'Rule 1: Ball bounced twice before being returned!';
     }
 
     onViolation?.call(violationType, description, ruleDetail);
@@ -420,12 +428,12 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       // From P2 perspective: right court is viewer left (520), left court is viewer right (760)
       final p2IsServer = (activeServer == player2);
       final p2TargetX = (p2CourtSide == 'right') ? 520.0 : 760.0;
-      player2.position = Vector2(p2TargetX, p2IsServer ? 25.0 : 140.0);
+      player2.position = Vector2(p2TargetX, p2IsServer ? 150.0 : 235.0);
 
       if (player2Partner != null) {
         final p2pIsServer = (activeServer == player2Partner);
         final p2pTargetX = (p2PartnerCourtSide == 'right') ? 520.0 : 760.0;
-        player2Partner!.position = Vector2(p2pTargetX, p2pIsServer ? 25.0 : 140.0);
+        player2Partner!.position = Vector2(p2pTargetX, p2pIsServer ? 150.0 : 235.0);
       }
 
       player1.stopRunning();
@@ -459,17 +467,17 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       if (serverPlayer == 1) {
         if (servingSide == 'right') {
           player1.position = Vector2(760, 695); // Behind baseline outside court
-          player2.position = Vector2(520, 140); // Receiver inside diagonal court
+          player2.position = Vector2(520, 235); // Receiver inside diagonal court
         } else {
           player1.position = Vector2(520, 695);
-          player2.position = Vector2(760, 140);
+          player2.position = Vector2(760, 235);
         }
       } else {
         if (servingSide == 'right') {
-          player2.position = Vector2(520, 25);  // Behind baseline outside court
+          player2.position = Vector2(520, 150);  // Behind baseline outside court
           player1.position = Vector2(760, 580); // Receiver inside diagonal court
         } else {
-          player2.position = Vector2(760, 25);
+          player2.position = Vector2(760, 150);
           player1.position = Vector2(520, 580);
         }
       }
@@ -1188,7 +1196,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     _setupControls();
 
     // 3. Connect joystick reference to player
-    player1.updateJoystick(joystick);
+    _player1?.updateJoystick(joystick);
 
     // 4. Update FPS overlay
     _updateFpsOverlay();

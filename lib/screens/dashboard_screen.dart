@@ -4,7 +4,6 @@ import '../models/multiplayer_models.dart';
 import '../services/audio_service.dart';
 import '../services/game_state_manager.dart';
 import '../theme/app_theme.dart';
-import '../widgets/avatar_picker_dialog.dart';
 import '../widgets/game_2d_button.dart';
 import '../widgets/game_2d_text.dart';
 import '../widgets/player_avatar.dart';
@@ -19,6 +18,7 @@ import '../widgets/friends_modal.dart';
 import '../widgets/inventory_modal.dart';
 import '../widgets/player_profile_modal.dart';
 import '../widgets/shop_modal.dart';
+import '../services/connectivity_service.dart';
 import '../services/multiplayer_service.dart';
 import 'battle_room_screen.dart';
 import 'game_play_screen.dart';
@@ -70,7 +70,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (ip != null) detectedIp = ip;
     });
 
-    MultiplayerConnectionMode selectedMode = MultiplayerConnectionMode.lanHotspot;
+    MultiplayerConnectionMode selectedMode = MultiplayerConnectionMode.onlineCloud;
+    String selectedGameMode = '1v1 Singles';
     bool isConnecting = false;
     String? connectionError;
 
@@ -115,7 +116,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Mode Selector Tabs (Hotspot/Wi-Fi vs Online Cloud)
+              // Match Format Selector (1v1 vs 2v2)
               Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E293B),
@@ -125,6 +126,129 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 padding: const EdgeInsets.all(4),
                 child: Row(
                   children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setSheetState(() => selectedGameMode = '1v1 Singles'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: selectedGameMode == '1v1 Singles'
+                                ? AppTheme.electricCyan.withValues(alpha: 0.25)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: selectedGameMode == '1v1 Singles'
+                                  ? AppTheme.electricCyan
+                                  : Colors.transparent,
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.person_rounded, size: 16, color: AppTheme.electricCyan),
+                              SizedBox(width: 6),
+                              Text(
+                                '1v1 SINGLES',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setSheetState(() => selectedGameMode = '2v2 Doubles'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: selectedGameMode == '2v2 Doubles'
+                                ? AppTheme.neonLime.withValues(alpha: 0.25)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: selectedGameMode == '2v2 Doubles'
+                                  ? AppTheme.neonLime
+                                  : Colors.transparent,
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.group_rounded, size: 16, color: AppTheme.neonLime),
+                              SizedBox(width: 6),
+                              Text(
+                                '2v2 DOUBLES',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Mode Selector Tabs (Online Cloud vs Hotspot/Wi-Fi)
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.surfaceBorder),
+                ),
+                padding: const EdgeInsets.all(4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () async {
+                          final hasNet = await ConnectivityService.instance.requireInternetAccess(context);
+                          if (!hasNet) return;
+                          setSheetState(() => selectedMode = MultiplayerConnectionMode.onlineCloud);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: selectedMode == MultiplayerConnectionMode.onlineCloud
+                                ? AppTheme.neonLime.withValues(alpha: 0.25)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: selectedMode == MultiplayerConnectionMode.onlineCloud
+                                  ? AppTheme.neonLime
+                                  : Colors.transparent,
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.cloud_sync_rounded, size: 16, color: AppTheme.neonLime),
+                              SizedBox(width: 6),
+                              Text(
+                                'Online Cloud (Firebase)',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
                     Expanded(
                       child: GestureDetector(
                         onTap: () => setSheetState(() => selectedMode = MultiplayerConnectionMode.lanHotspot),
@@ -148,41 +272,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               SizedBox(width: 6),
                               Text(
                                 'Hotspot / Wi-Fi (Offline)',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setSheetState(() => selectedMode = MultiplayerConnectionMode.onlineCloud),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          decoration: BoxDecoration(
-                            color: selectedMode == MultiplayerConnectionMode.onlineCloud
-                                ? AppTheme.neonLime.withValues(alpha: 0.25)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: selectedMode == MultiplayerConnectionMode.onlineCloud
-                                  ? AppTheme.neonLime
-                                  : Colors.transparent,
-                            ),
-                          ),
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.cloud_sync_rounded, size: 16, color: AppTheme.neonLime),
-                              SizedBox(width: 6),
-                              Text(
-                                'Online Cloud (Play Store)',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -228,15 +317,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onPressed: isConnecting
                     ? null
                     : () async {
+                        if (selectedMode == MultiplayerConnectionMode.onlineCloud) {
+                          final hasNet = await ConnectivityService.instance.requireInternetAccess(context);
+                          if (!hasNet || !ctx.mounted) return;
+                        }
+                        if (!ctx.mounted) return;
                         Navigator.of(ctx).pop();
-                        await multi.createRoom(mode: selectedMode);
+                        await multi.createRoom(
+                          mode: selectedMode,
+                          gameMode: selectedGameMode,
+                        );
                         rootNav.push(
                           MaterialPageRoute(builder: (c) => const BattleRoomScreen()),
                         );
                       },
                 text: selectedMode == MultiplayerConnectionMode.lanHotspot
                     ? 'HOST HOTSPOT / WI-FI ROOM'
-                    : 'HOST ONLINE CLOUD ROOM',
+                    : 'HOST ONLINE CLOUD ROOM (FIREBASE)',
                 icon: selectedMode == MultiplayerConnectionMode.lanHotspot
                     ? Icons.wifi_tethering_rounded
                     : Icons.cloud_upload_rounded,
@@ -244,6 +341,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ? GameButtonVariant.primary
                     : GameButtonVariant.cyan,
                 size: GameButtonSize.medium,
+              ),
+              const SizedBox(height: 6),
+              Center(
+                child: Text(
+                  selectedMode == MultiplayerConnectionMode.onlineCloud
+                      ? 'Live $selectedGameMode room will immediately be created on Firebase.'
+                      : 'Create a local Wi-Fi / Hotspot room for nearby players.',
+                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                ),
               ),
 
               const SizedBox(height: 16),
@@ -360,7 +466,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Text(
                 selectedMode == MultiplayerConnectionMode.lanHotspot
                     ? 'OR ENTER HOST IP / ROOM CODE DIRECTLY'
-                    : 'OR JOIN ONLINE ROOM BY 4-DIGIT CODE',
+                    : "ENTER HOST'S 4-DIGIT CODE TO JOIN",
                 style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
@@ -369,13 +475,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Expanded(
                     child: TextField(
                       controller: codeCtrl,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2.0,
+                        fontSize: 15,
+                      ),
                       textCapitalization: TextCapitalization.characters,
+                      keyboardType: selectedMode == MultiplayerConnectionMode.onlineCloud
+                          ? TextInputType.number
+                          : TextInputType.text,
+                      maxLength: selectedMode == MultiplayerConnectionMode.onlineCloud ? 4 : null,
+                      textAlign: selectedMode == MultiplayerConnectionMode.onlineCloud
+                          ? TextAlign.center
+                          : TextAlign.start,
                       decoration: InputDecoration(
+                        counterText: '',
                         hintText: selectedMode == MultiplayerConnectionMode.lanHotspot
-                            ? 'e.g. 192.168.43.1 or PB-8842'
-                            : 'e.g. PB-8842',
-                        hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                            ? 'e.g. 192.168.43.1 or 4821'
+                            : '4-digit code (e.g. 4821)',
+                        hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 13, letterSpacing: 0),
                         filled: true,
                         fillColor: const Color(0xFF1E293B),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -393,6 +512,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         : () async {
                             final input = codeCtrl.text.trim();
                             if (input.isEmpty) return;
+
+                            if (selectedMode == MultiplayerConnectionMode.onlineCloud) {
+                              final hasNet = await ConnectivityService.instance.requireInternetAccess(context);
+                              if (!hasNet || !ctx.mounted) return;
+                            }
+                            if (!ctx.mounted) return;
 
                             final sheetNav = Navigator.of(ctx);
                             setSheetState(() {
@@ -513,26 +638,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildTopHeader(BuildContext context, GameStateManager state) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-      color: AppTheme.surface,
+      decoration: const BoxDecoration(
+        color: Color(0xFF0A0F1E),
+        border: Border(bottom: BorderSide(color: AppTheme.electricCyan, width: 1)),
+      ),
       child: Row(
         children: [
-          // Player Avatar & Info - Tap to view individual stats and records
+          // Player Avatar & Info - Unified "My Profile"
           Expanded(
-            child: InkWell(
-              onTap: () => PlayerProfileModal.show(context),
-              borderRadius: BorderRadius.circular(14),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 2.0),
-                child: Row(
-                  children: [
-                    PlayerAvatarWidget(
-                      avatarId: state.playerAvatarId,
-                      size: 40,
-                      showBadge: true,
-                      onTap: () => AvatarPickerDialog.show(context),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
+            child: Tooltip(
+              message: 'My Profile',
+              child: InkWell(
+                key: const ValueKey('dashboard_profile_header_btn'),
+                onTap: () {
+                  AudioService.instance.playButtonTap();
+                  PlayerProfileModal.show(context);
+                },
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 2.0),
+                  child: Row(
+                    children: [
+                      PlayerAvatarWidget(
+                        avatarId: state.playerAvatarId,
+                        size: 40,
+                        showBadge: true,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
@@ -614,6 +747,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           ),
+        ),
           if (MediaQuery.sizeOf(context).width >= 380) ...[
             const SizedBox(width: 4),
             // Friends & Social Hub Icon Button
@@ -746,7 +880,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildNavigationRail() {
     return Container(
-      color: AppTheme.surface,
+      decoration: const BoxDecoration(
+        color: Color(0xFF0A0F1E),
+        border: Border(right: BorderSide(color: AppTheme.surfaceBorder, width: 1)),
+      ),
       width: 110,
       child: Column(
         children: [
@@ -759,12 +896,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 16.0),
             child: Text(
-              'SMASH\nv1.0',
+              '╔══╗\nSMASH\nv1.0\n╚══╝',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.3),
-                fontSize: 10,
+                color: Colors.white.withValues(alpha: 0.25),
+                fontSize: 9,
                 fontWeight: FontWeight.bold,
+                fontFamily: 'monospace',
+                height: 1.4,
               ),
             ),
           ),
@@ -777,7 +916,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final isSelected = _selectedTabIndex == index;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 6.0),
       child: InkWell(
         key: ValueKey('rail_item_$index'),
         onTap: () {
@@ -785,14 +924,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _selectedTabIndex = index;
           });
         },
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(8),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 180),
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? AppTheme.neonLime.withValues(alpha: 0.15) : Colors.transparent,
-            borderRadius: BorderRadius.circular(14),
+            color: isSelected ? const Color(0xFF0F172A) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: isSelected ? AppTheme.neonLime : Colors.transparent,
               width: 1.5,
@@ -804,17 +943,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Icon(
                 icon,
                 color: isSelected ? AppTheme.neonLime : AppTheme.textMuted,
-                size: 24,
+                size: 22,
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 5),
               Text(
-                label,
+                label.toUpperCase(),
                 style: TextStyle(
-                  color: isSelected ? Colors.white : AppTheme.textMuted,
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  color: isSelected ? AppTheme.neonLime : AppTheme.textMuted,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
                 ),
                 textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -826,47 +968,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildBottomNavigationBar() {
     return Container(
       decoration: const BoxDecoration(
-        color: AppTheme.surface,
-        border: Border(top: BorderSide(color: AppTheme.surfaceBorder, width: 1)),
+        color: Color(0xFF0A0F1E),
+        border: Border(top: BorderSide(color: AppTheme.electricCyan, width: 3)),
       ),
-      child: NavigationBar(
-        selectedIndex: _selectedTabIndex,
-        backgroundColor: Colors.transparent,
-        indicatorColor: AppTheme.neonLime.withValues(alpha: 0.25),
-        elevation: 0,
-        height: 65,
-        onDestinationSelected: (index) {
-          AudioService.instance.playButtonTap();
-          setState(() {
-            _selectedTabIndex = index;
-          });
-        },
-        destinations: const [
-          NavigationDestination(
-            key: ValueKey('nav_dest_0'),
-            icon: Icon(Icons.sports_tennis_rounded, color: AppTheme.textMuted),
-            selectedIcon: Icon(Icons.sports_tennis_rounded, color: AppTheme.neonLime),
-            label: 'Home',
+      child: ClipRect(
+        child: CustomPaint(
+          painter: _NavBarScanlinePainter(),
+          child: NavigationBar(
+            selectedIndex: _selectedTabIndex,
+            backgroundColor: Colors.transparent,
+            indicatorColor: AppTheme.neonLime.withValues(alpha: 0.25),
+            elevation: 0,
+            height: 65,
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            onDestinationSelected: (index) {
+              AudioService.instance.playButtonTap();
+              setState(() {
+                _selectedTabIndex = index;
+              });
+            },
+            destinations: const [
+              NavigationDestination(
+                key: ValueKey('nav_dest_0'),
+                icon: Icon(Icons.sports_tennis_rounded, color: AppTheme.textMuted),
+                selectedIcon: Icon(Icons.sports_tennis_rounded, color: AppTheme.neonLime),
+                label: 'Home',
+              ),
+              NavigationDestination(
+                key: ValueKey('nav_dest_1'),
+                icon: Icon(Icons.emoji_events_rounded, color: AppTheme.textMuted),
+                selectedIcon: Icon(Icons.emoji_events_rounded, color: AppTheme.neonLime),
+                label: 'Tournaments',
+              ),
+              NavigationDestination(
+                key: ValueKey('nav_dest_2'),
+                icon: Icon(Icons.military_tech_rounded, color: AppTheme.textMuted),
+                selectedIcon: Icon(Icons.military_tech_rounded, color: AppTheme.neonLime),
+                label: 'Challenges',
+              ),
+              NavigationDestination(
+                key: ValueKey('nav_dest_3'),
+                icon: Icon(Icons.tune_rounded, color: AppTheme.textMuted),
+                selectedIcon: Icon(Icons.tune_rounded, color: AppTheme.neonLime),
+                label: 'Settings',
+              ),
+            ],
           ),
-          NavigationDestination(
-            key: ValueKey('nav_dest_1'),
-            icon: Icon(Icons.emoji_events_rounded, color: AppTheme.textMuted),
-            selectedIcon: Icon(Icons.emoji_events_rounded, color: AppTheme.neonLime),
-            label: 'Tournaments',
-          ),
-          NavigationDestination(
-            key: ValueKey('nav_dest_2'),
-            icon: Icon(Icons.military_tech_rounded, color: AppTheme.textMuted),
-            selectedIcon: Icon(Icons.military_tech_rounded, color: AppTheme.neonLime),
-            label: 'Challenges',
-          ),
-          NavigationDestination(
-            key: ValueKey('nav_dest_3'),
-            icon: Icon(Icons.tune_rounded, color: AppTheme.textMuted),
-            selectedIcon: Icon(Icons.tune_rounded, color: AppTheme.neonLime),
-            label: 'Settings',
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -914,3 +1062,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
+
+/// Horizontal scanline overlay painter for the arcade navigation bar.
+class _NavBarScanlinePainter extends CustomPainter {
+  static final Paint _p = Paint()
+    ..color = const Color(0x10000000)
+    ..strokeWidth = 1.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (double y = 0; y <= size.height; y += 3) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), _p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_NavBarScanlinePainter old) => false;
+}

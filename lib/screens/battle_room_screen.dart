@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/court_catalog.dart';
 import '../models/multiplayer_models.dart';
 import '../services/audio_service.dart';
+import '../services/connectivity_service.dart';
 import '../services/multiplayer_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/friends_modal.dart';
@@ -40,17 +41,24 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
       }
     });
 
+    MultiplayerService.instance.addListener(_onRoomStateChanged);
+
     // Post-frame check: If room state is already inMatch, navigate immediately
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final multi = MultiplayerService.instance;
-      if (multi.currentRoom?.status == 'inMatch' && mounted && !_battleLaunched) {
-        _launchLiveBattle(multi.currentRoom!, fromHost: multi.isHost);
-      }
+      _onRoomStateChanged();
     });
+  }
+
+  void _onRoomStateChanged() {
+    final multi = MultiplayerService.instance;
+    if (multi.currentRoom?.status == 'inMatch' && mounted && !_battleLaunched) {
+      _launchLiveBattle(multi.currentRoom!, fromHost: multi.isHost);
+    }
   }
 
   @override
   void dispose() {
+    MultiplayerService.instance.removeListener(_onRoomStateChanged);
     _networkPacketSub?.cancel();
     super.dispose();
   }
@@ -65,6 +73,14 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
   void _launchLiveBattle(BattleRoomModel room, {required bool fromHost}) async {
     if (_battleLaunched) return;
     _battleLaunched = true;
+
+    if (room.connectionMode == MultiplayerConnectionMode.onlineCloud && mounted) {
+      final hasNet = await ConnectivityService.instance.requireInternetAccess(context);
+      if (!hasNet) {
+        _battleLaunched = false;
+        return;
+      }
+    }
 
     final multi = MultiplayerService.instance;
     if (fromHost) {
@@ -85,6 +101,7 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
 
     AudioService.instance.playServe();
 
+    if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => GamePlayScreen(
@@ -222,6 +239,51 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
               children: [
                 // Top Info Banner: Court, Mode, Target Score
                 _buildRoomHeaderBanner(room),
+
+                // Offline internet warning banner for Cloud mode
+                if (room.connectionMode == MultiplayerConnectionMode.onlineCloud)
+                  ValueListenableBuilder<bool>(
+                    valueListenable: ConnectivityService.instance.isOnlineNotifier,
+                    builder: (context, isOnline, _) {
+                      if (isOnline) return const SizedBox.shrink();
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        color: const Color(0xFFDC2626),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'NO INTERNET ACCESS — ONLINE CLOUD MATCH PAUSED',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 10,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () => ConnectivityService.instance.checkInternetAccess(),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.black26,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'RETRY',
+                                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
 
                 // Main Team A vs Team B Battlefield
                 Expanded(
@@ -554,7 +616,11 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
               // Ready indicator badge (interactive for guest player)
               InkWell(
                 onTap: (isMe && !slot.isHost)
-                    ? () {
+                    ? () async {
+                        if (room.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+                          final hasNet = await ConnectivityService.instance.requireInternetAccess(context);
+                          if (!hasNet) return;
+                        }
                         AudioService.instance.playButtonTap();
                         multi.toggleReady(slot.slotIndex);
                       }
@@ -637,17 +703,60 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
           const SizedBox(width: 12),
 
           // Main Ready / Start Battle Action
+          if (isHost && !room.canStartBattle && room.slots.any((s) => s.isEmpty)) ...[
+            Game2DButton(
+              onPressed: () {
+                AudioService.instance.playButtonTap();
+                multi.addCpuOpponent();
+              },
+              text: '+ CPU BOT',
+              icon: Icons.smart_toy_outlined,
+              variant: GameButtonVariant.cyan,
+              size: GameButtonSize.medium,
+            ),
+            const SizedBox(width: 8),
+          ],
           Expanded(
             child: isHost
                 ? Game2DButton(
-                    onPressed: room.canStartBattle ? () => _launchLiveBattle(room, fromHost: true) : null,
+                    onPressed: () async {
+                      if (!room.canStartBattle) {
+                        if (room.slots.where((s) => !s.isEmpty && !s.isHost).isEmpty) {
+                          multi.addCpuOpponent();
+                          if (room.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+                            final hasNet = await ConnectivityService.instance.requireInternetAccess(context);
+                            if (!hasNet) return;
+                          }
+                          _launchLiveBattle(multi.currentRoom ?? room, fromHost: true);
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Waiting for all players to tap READY before launching!',
+                            ),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                        return;
+                      }
+                      if (room.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+                        final hasNet = await ConnectivityService.instance.requireInternetAccess(context);
+                        if (!hasNet) return;
+                      }
+                      _launchLiveBattle(room, fromHost: true);
+                    },
                     text: 'START BATTLE',
                     icon: Icons.sports_tennis_rounded,
-                    variant: GameButtonVariant.primary,
+                    variant: room.canStartBattle ? GameButtonVariant.primary : GameButtonVariant.dark,
                     size: GameButtonSize.medium,
                   )
                 : Game2DButton(
-                    onPressed: () {
+                    onPressed: () async {
+                      if (room.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+                        final hasNet = await ConnectivityService.instance.requireInternetAccess(context);
+                        if (!hasNet) return;
+                      }
                       AudioService.instance.playButtonTap();
                       multi.toggleReady(mySlot.slotIndex);
                     },

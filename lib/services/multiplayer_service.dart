@@ -5,7 +5,9 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../models/character_roster.dart';
 import '../models/multiplayer_models.dart';
+import 'connectivity_service.dart';
 import 'database_service.dart';
+import 'firebase_multiplayer_service.dart';
 import 'game_state_manager.dart';
 
 /// Service managing Real Player Friends, Profiles, Match History, Battle Rooms,
@@ -74,6 +76,27 @@ class MultiplayerService extends ChangeNotifier {
   final StreamController<MultiplayerPacket> _packetStreamController =
       StreamController<MultiplayerPacket>.broadcast();
   Stream<MultiplayerPacket> get packetStream => _packetStreamController.stream;
+
+  StreamSubscription<BattleRoomModel>? _firebaseRoomSub;
+  StreamSubscription<MultiplayerPacket>? _firebasePacketSub;
+
+  void _listenToFirebaseRoom(String roomCode) {
+    _firebaseRoomSub?.cancel();
+    _firebaseRoomSub = FirebaseMultiplayerService.instance.onRoomUpdated.listen((updatedRoom) {
+      if (updatedRoom.roomCode == roomCode) {
+        _currentRoom = updatedRoom;
+        if (updatedRoom.status == 'inMatch') {
+          updatePresenceStatus(PlayerPresenceStatus.inMatch);
+        }
+        notifyListeners();
+      }
+    });
+
+    _firebasePacketSub?.cancel();
+    _firebasePacketSub = FirebaseMultiplayerService.instance.onPacketReceived.listen((pkt) {
+      _packetStreamController.add(pkt);
+    });
+  }
 
   // Real-time Chat & Player Communication
   final ValueNotifier<List<ChatMessageModel>> chatMessagesNotifier =
@@ -632,7 +655,8 @@ class MultiplayerService extends ChangeNotifier {
   }) async {
     final isDoubles = gameMode.contains('2v2') || gameMode.contains('Doubles');
     final maxPlayers = isDoubles ? 4 : 2;
-    final roomCode = 'PB-${(1000 + Random().nextInt(8999))}';
+    final fourDigits = (1000 + Random().nextInt(8999)).toString();
+    final roomCode = mode == MultiplayerConnectionMode.onlineCloud ? fourDigits : 'PB-$fourDigits';
     final state = GameStateManager.instance;
     final localIp = enableNetworking ? (await getLocalIpAddress() ?? '127.0.0.1') : '127.0.0.1';
     final hostAddr = customAddress ?? (mode == MultiplayerConnectionMode.lanHotspot ? localIp : cloudServerUrl);
@@ -690,7 +714,16 @@ class MultiplayerService extends ChangeNotifier {
         await _startHostServerSafely(8088);
         await _startLocalBeaconBroadcast(room, localIp);
       } else {
-        // Connect to Cloud WebSocket server
+        // Connect to Firebase Online Cloud (Realtime Database & Firestore synchronization)
+        final hasNet = await ConnectivityService.instance.checkInternetAccess();
+        if (!hasNet) {
+          _currentRoom = null;
+          _isHost = false;
+          notifyListeners();
+          throw const SocketException('No internet connection. Cannot host online cloud match.');
+        }
+        await FirebaseMultiplayerService.instance.createRoom(room);
+        _listenToFirebaseRoom(room.roomCode);
         _connectToCloudServer(room, isHost: true);
       }
 
@@ -884,14 +917,40 @@ class MultiplayerService extends ChangeNotifier {
   }) async {
     try {
       leaveRoom();
-      _isHost = false;
+      if (mode == MultiplayerConnectionMode.onlineCloud) {
+        final hasNet = await ConnectivityService.instance.checkInternetAccess();
+        if (!hasNet) {
+          return 'No active internet connection. Please connect to Wi-Fi or mobile data.';
+        }
+
+        // 1. Join room directly via Firebase Realtime Database
+        final state = GameStateManager.instance;
+        final fbRoom = await FirebaseMultiplayerService.instance.joinRoom(
+          roomCode: roomCode,
+          myProfile: _myProfile,
+          characterId: state.playerAvatarId,
+        );
+        if (fbRoom != null) {
+          _currentRoom = fbRoom;
+          _listenToFirebaseRoom(roomCode);
+          updatePresenceStatus(PlayerPresenceStatus.inRoom);
+          _startHeartbeatPing();
+          notifyListeners();
+          return null; // Successfully joined via Firebase!
+        }
+      }
+
+      if (kIsWeb) {
+        return 'Could not find room with code "$roomCode" on Firebase.';
+      }
+
       final Uri uri;
       if (mode == MultiplayerConnectionMode.lanHotspot) {
         // Direct local Wi-Fi or Hotspot address
         final cleanHost = hostAddress.replaceAll('ws://', '').replaceAll('http://', '').split(':').first;
         uri = Uri.parse('ws://$cleanHost:$port');
       } else {
-        // Online Cloud WebSocket server
+        // Online Cloud WebSocket server fallback
         final cleanUrl = cloudServerUrl.endsWith('/') ? cloudServerUrl : '$cloudServerUrl/';
         uri = Uri.parse('$cleanUrl?room=$roomCode');
       }
@@ -981,6 +1040,7 @@ class MultiplayerService extends ChangeNotifier {
   }
 
   void _connectToCloudServer(BattleRoomModel room, {required bool isHost}) async {
+    if (kIsWeb) return;
     try {
       final cleanUrl = cloudServerUrl.endsWith('/') ? cloudServerUrl : '$cloudServerUrl/';
       final uri = Uri.parse('$cleanUrl?room=${room.roomCode}&host=$isHost');
@@ -1020,6 +1080,18 @@ class MultiplayerService extends ChangeNotifier {
   }
 
   void leaveRoom() {
+    if (_currentRoom != null && _currentRoom!.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+      FirebaseMultiplayerService.instance.leaveRoom(
+        _currentRoom!.roomCode,
+        _myProfile.playerId,
+        _isHost,
+      );
+    }
+    _firebaseRoomSub?.cancel();
+    _firebaseRoomSub = null;
+    _firebasePacketSub?.cancel();
+    _firebasePacketSub = null;
+
     _isHost = false;
     _pingTimer?.cancel();
     _stopHostServer();
@@ -1058,6 +1130,9 @@ class MultiplayerService extends ChangeNotifier {
 
     _currentRoom = _currentRoom!.copyWith(slots: slots);
     _broadcastRoomState();
+    if (_currentRoom!.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+      FirebaseMultiplayerService.instance.switchSlotTeam(_currentRoom!.roomCode, slotIndex);
+    }
     notifyListeners();
   }
 
@@ -1072,6 +1147,9 @@ class MultiplayerService extends ChangeNotifier {
     slots[slotIndex] = currentSlot.copyWith(isReady: !currentSlot.isReady);
     _currentRoom = _currentRoom!.copyWith(slots: slots);
     _broadcastRoomState();
+    if (_currentRoom!.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+      FirebaseMultiplayerService.instance.toggleSlotReady(_currentRoom!.roomCode, slotIndex);
+    }
     notifyListeners();
   }
 
@@ -1085,6 +1163,29 @@ class MultiplayerService extends ChangeNotifier {
     _currentRoom = _currentRoom!.copyWith(slots: slots);
     _broadcastRoomState();
     notifyListeners();
+  }
+
+  void addCpuOpponent() {
+    if (_currentRoom == null) return;
+    final slots = List<RoomPlayerSlot>.from(_currentRoom!.slots);
+    final emptyIndex = slots.indexWhere((s) => s.isEmpty);
+    if (emptyIndex != -1) {
+      slots[emptyIndex] = RoomPlayerSlot(
+        slotIndex: emptyIndex,
+        team: (emptyIndex % 2 == 0) ? 'A' : 'B',
+        playerId: 'cpu_${DateTime.now().millisecondsSinceEpoch}',
+        playerName: 'CPU Challenger',
+        playerAvatar: 'alex_classic',
+        characterId: 'alex_classic',
+        isHost: false,
+        isReady: true,
+        isBot: true,
+        pingMs: 5,
+      );
+      _currentRoom = _currentRoom!.copyWith(slots: slots);
+      _broadcastRoomState();
+      notifyListeners();
+    }
   }
 
   void changeRoomSettings({
@@ -1163,6 +1264,10 @@ class MultiplayerService extends ChangeNotifier {
     _currentRoom = _currentRoom!.copyWith(status: 'inMatch');
     updatePresenceStatus(PlayerPresenceStatus.inMatch);
 
+    if (_currentRoom!.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+      FirebaseMultiplayerService.instance.launchMatch(_currentRoom!.roomCode);
+    }
+
     // Send match start packet across all network sockets
     broadcastPacket(MultiplayerPacket(
       type: PacketType.matchStart,
@@ -1181,6 +1286,9 @@ class MultiplayerService extends ChangeNotifier {
 
   void broadcastPacket(MultiplayerPacket packet) {
     _packetStreamController.add(packet);
+    if (_currentRoom != null && _currentRoom!.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+      FirebaseMultiplayerService.instance.broadcastLivePacket(_currentRoom!.roomCode, packet);
+    }
     if (!kIsWeb) {
       try {
         final raw = jsonEncode(packet.toJson());

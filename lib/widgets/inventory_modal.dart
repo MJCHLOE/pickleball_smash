@@ -8,6 +8,7 @@ import '../services/game_state_manager.dart';
 import '../theme/app_theme.dart';
 import 'game_2d_button.dart';
 import 'game_2d_text.dart';
+import 'ready_to_serve_character_widget.dart';
 import 'shop_modal.dart';
 
 class InventoryModal extends StatefulWidget {
@@ -258,6 +259,7 @@ class _InventoryModalState extends State<InventoryModal> with SingleTickerProvid
                     label: activeChar.name,
                     badge: activeChar.badge,
                     color: activeChar.borderColor,
+                    character: activeChar,
                   ),
                   const SizedBox(width: 8),
                   _buildLoadoutBadge(
@@ -287,6 +289,7 @@ class _InventoryModalState extends State<InventoryModal> with SingleTickerProvid
     required String label,
     required String badge,
     required Color color,
+    CharacterInfo? character,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -298,11 +301,19 @@ class _InventoryModalState extends State<InventoryModal> with SingleTickerProvid
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (character != null) ...[
+            ReadyToServeCharacterWidget(
+              character: character,
+              action: 'serve',
+              size: 20,
+            ),
+            const SizedBox(width: 4),
+          ],
           Text(badge, style: const TextStyle(fontSize: 13)),
           const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
               fontSize: 11,
@@ -344,72 +355,248 @@ class _InventoryModalState extends State<InventoryModal> with SingleTickerProvid
   // ---------------------------------------------------------------------------
   // 1. CHARACTERS TAB
   // ---------------------------------------------------------------------------
-  Widget _buildCharactersTab(GameStateManager state) {
-    final characters = CharacterRoster.allCharacters;
-
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: characters.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        final char = characters[index];
-        final isUnlocked = state.isCharacterUnlocked(char.id);
-        final isEquipped = state.playerAvatarId == char.id;
-
-        return _buildInventoryCard(
-          key: ValueKey('inv_char_${char.id}'),
-          badge: char.badge,
-          title: char.name,
-          subtitle: char.title,
-          description: char.description,
-          accentColor: char.borderColor,
-          isUnlocked: isUnlocked,
-          isEquipped: isEquipped,
-          isPurchasable: char.isPurchasable,
-          previewWidget: Container(
-            width: 68,
-            height: 68,
+  Widget _buildFighterShowcase(CharacterInfo char) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: char.borderColor.withValues(alpha: 0.7), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: char.borderColor.withValues(alpha: 0.25),
+            blurRadius: 14,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 78,
+            height: 78,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: isUnlocked
-                    ? char.gradientColors
-                    : [const Color(0xFF334155), const Color(0xFF1E293B)],
+              gradient: RadialGradient(
+                colors: [
+                  char.borderColor.withValues(alpha: 0.3),
+                  const Color(0xFF090D16),
+                ],
+                radius: 0.85,
               ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isUnlocked ? char.borderColor : const Color(0xFF475569),
-                width: 2,
-              ),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: char.borderColor.withValues(alpha: 0.5), width: 1.5),
             ),
-            child: Center(
-              child: Text(
-                isUnlocked ? char.badge : '🔒',
-                style: const TextStyle(fontSize: 28),
-              ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Positioned(
+                  bottom: 6,
+                  child: Container(
+                    width: 44,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                ReadyToServeCharacterWidget(
+                  character: char,
+                  action: 'serve',
+                  size: 64,
+                ),
+              ],
             ),
           ),
-          onEquip: () {
-            AudioService.instance.playButtonTap();
-            state.equipCharacter(char.id);
-            _showNotice('Equipped ${char.name}!');
-          },
-          onSell: char.isPurchasable && isUnlocked
-              ? () {
-                  final refund = char.sellRefund;
-                  if (state.sellCharacter(char.id)) {
-                    AudioService.instance.playPointScored();
-                    _showNotice('Sold ${char.name} for 🪙 $refund coins!');
-                  }
-                }
-              : null,
-          onGoToShop: () {
-            Navigator.of(context).pop();
-            ShopModal.show(context, initialTabIndex: 0);
-          },
-        );
-      },
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppTheme.neonLime.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: AppTheme.neonLime, width: 1),
+                      ),
+                      child: const Text(
+                        'READY TO SERVE',
+                        style: TextStyle(
+                          color: AppTheme.neonLime,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(char.badge, style: const TextStyle(fontSize: 13)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  char.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                Text(
+                  char.title,
+                  style: TextStyle(
+                    color: char.borderColor,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  char.description,
+                  style: const TextStyle(
+                    color: AppTheme.textMuted,
+                    fontSize: 10,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCharactersTab(GameStateManager state) {
+    final characters = CharacterRoster.allCharacters;
+    final activeChar = CharacterRoster.getById(state.playerAvatarId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildFighterShowcase(activeChar),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          child: Row(
+            children: [
+              const Icon(Icons.people_alt_rounded, color: AppTheme.textMuted, size: 14),
+              const SizedBox(width: 6),
+              Text(
+                'YOUR ROSTER (SELECT FIGHTER)',
+                style: TextStyle(
+                  color: AppTheme.textMuted.withValues(alpha: 0.8),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            itemCount: characters.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final char = characters[index];
+              final isUnlocked = state.isCharacterUnlocked(char.id);
+              final isEquipped = state.playerAvatarId == char.id;
+
+              return _buildInventoryCard(
+                key: ValueKey('inv_char_${char.id}'),
+                badge: char.badge,
+                title: char.name,
+                subtitle: char.title,
+                description: char.description,
+                accentColor: char.borderColor,
+                isUnlocked: isUnlocked,
+                isEquipped: isEquipped,
+                isPurchasable: char.isPurchasable,
+                previewWidget: Container(
+                  width: 68,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: isUnlocked
+                          ? char.gradientColors
+                          : [const Color(0xFF334155), const Color(0xFF1E293B)],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isUnlocked ? char.borderColor : const Color(0xFF475569),
+                      width: 2,
+                    ),
+                    boxShadow: isUnlocked
+                        ? [
+                            BoxShadow(
+                              color: char.borderColor.withValues(alpha: 0.3),
+                              blurRadius: 8,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        ReadyToServeCharacterWidget(
+                          character: char,
+                          action: 'serve',
+                          size: 56,
+                        ),
+                        Positioned(
+                          right: 4,
+                          bottom: 4,
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.65),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              char.badge,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                onEquip: () {
+                  AudioService.instance.playButtonTap();
+                  state.equipCharacter(char.id);
+                  _showNotice('Equipped ${char.name}!');
+                },
+                onSell: char.isPurchasable && isUnlocked
+                    ? () {
+                        final refund = char.sellRefund;
+                        if (state.sellCharacter(char.id)) {
+                          AudioService.instance.playPointScored();
+                          _showNotice('Sold ${char.name} for 🪙 $refund coins!');
+                        }
+                      }
+                    : null,
+                onGoToShop: () {
+                  Navigator.of(context).pop();
+                  ShopModal.show(context, initialTabIndex: 0);
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -441,7 +628,6 @@ class _InventoryModalState extends State<InventoryModal> with SingleTickerProvid
           previewWidget: Container(
             width: 68,
             height: 68,
-            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: isUnlocked ? court.apronColor : const Color(0xFF1E293B),
               borderRadius: BorderRadius.circular(16),
@@ -449,33 +635,56 @@ class _InventoryModalState extends State<InventoryModal> with SingleTickerProvid
                 color: isUnlocked ? court.accentColor : const Color(0xFF475569),
                 width: 2,
               ),
+              boxShadow: isUnlocked
+                  ? [
+                      BoxShadow(
+                        color: court.accentColor.withValues(alpha: 0.25),
+                        blurRadius: 8,
+                      ),
+                    ]
+                  : null,
             ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                if (isUnlocked)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: court.courtColor,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: court.lineColor.withValues(alpha: 0.8), width: 1.5),
-                    ),
-                    child: Center(
-                      child: Container(
-                        width: 28,
-                        height: 14,
-                        decoration: BoxDecoration(
-                          color: court.kitchenColor,
-                          border: Border(
-                            top: BorderSide(color: court.lineColor, width: 1),
-                            bottom: BorderSide(color: court.lineColor, width: 1),
-                          ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  if (isUnlocked)
+                    Image.asset(
+                      court.fullAssetPath,
+                      width: 68,
+                      height: 68,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        color: court.courtColor,
+                        child: Center(
+                          child: Text(court.badge, style: const TextStyle(fontSize: 18)),
                         ),
                       ),
                     ),
+                  Positioned(
+                    bottom: 3,
+                    right: 3,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isUnlocked
+                              ? court.accentColor.withValues(alpha: 0.6)
+                              : const Color(0xFF475569),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        isUnlocked ? court.badge : '🔒',
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                    ),
                   ),
-                Text(isUnlocked ? court.badge : '🔒', style: const TextStyle(fontSize: 20)),
-              ],
+                ],
+              ),
             ),
           ),
           onEquip: () {

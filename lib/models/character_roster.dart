@@ -45,6 +45,21 @@ class CharacterInfo {
 
   bool get isMale => type != CharacterType.female1 && type != CharacterType.female2;
   bool get isPurchasable => price > 0;
+
+  String get readyToServePath {
+    switch (type) {
+      case CharacterType.female1:
+        return 'assets/images/female1_sprite/female_p1sideidle.png';
+      case CharacterType.female2:
+        return 'assets/images/female2_sprite/female2_p1sideidle.png';
+      case CharacterType.male2:
+        return 'assets/images/male2_sprite/male2_p1sideidle.png';
+      case CharacterType.male3:
+        return 'assets/images/male3_sprite/male3_p1sideidle.png';
+      case CharacterType.male1:
+        return 'assets/images/male1_sprite/male_p1sideidle.png';
+    }
+  }
 }
 
 class CharacterRoster {
@@ -90,9 +105,9 @@ class CharacterRoster {
     title: 'Fire Striker',
     type: CharacterType.male2,
     spriteFolder: 'male2_sprite',
-    price: 2000,
-    sellRefund: 1000,
-    isDefaultUnlocked: false,
+    price: 0,
+    sellRefund: 0,
+    isDefaultUnlocked: true,
     charSelectIdlePath: 'assets/images/male2_sprite/male2_charselectidle.png',
     frontRunPath: 'assets/images/male2_sprite/male2_frontrun.png',
     frontSlashPath: 'assets/images/male2_sprite/male2_frontslash.png',
@@ -108,9 +123,9 @@ class CharacterRoster {
     title: 'Thunder Smasher',
     type: CharacterType.male3,
     spriteFolder: 'male3_sprite',
-    price: 2500,
-    sellRefund: 1250,
-    isDefaultUnlocked: false,
+    price: 0,
+    sellRefund: 0,
+    isDefaultUnlocked: true,
     charSelectIdlePath: 'assets/images/male3_sprite/male3_charselectidle.png',
     frontRunPath: 'assets/images/male3_sprite/male3_frontrun.png',
     frontSlashPath: 'assets/images/male3_sprite/male3_frontslash.png',
@@ -126,9 +141,9 @@ class CharacterRoster {
     title: 'Spin Specialist',
     type: CharacterType.female2,
     spriteFolder: 'female2_sprite',
-    price: 2200,
-    sellRefund: 1100,
-    isDefaultUnlocked: false,
+    price: 0,
+    sellRefund: 0,
+    isDefaultUnlocked: true,
     charSelectIdlePath: 'assets/images/female2_sprite/female2_charselectidle.png',
     frontRunPath: 'assets/images/female2_sprite/female2_frontrun.png',
     frontSlashPath: 'assets/images/female2_sprite/female2_frontslash.png',

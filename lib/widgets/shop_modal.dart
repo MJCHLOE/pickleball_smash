@@ -8,6 +8,7 @@ import '../services/game_state_manager.dart';
 import '../theme/app_theme.dart';
 import 'game_2d_button.dart';
 import 'game_2d_text.dart';
+import 'ready_to_serve_character_widget.dart';
 
 class ShopModal extends StatefulWidget {
   final int initialTabIndex;
@@ -33,7 +34,7 @@ class ShopModal extends StatefulWidget {
 class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String? _selectedCharacterId;
-  String _previewAction = 'idle'; // 'idle', 'run', 'smash'
+  String _previewAction = 'serve'; // 'serve', 'idle', 'run', 'smash'
 
   @override
   void initState() {
@@ -286,37 +287,6 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
     return equipped ?? characters.first;
   }
 
-  Widget _buildFrontViewSprite({
-    required String assetPath,
-    required int totalFrames,
-    int frameIndex = 0,
-    required double size,
-  }) {
-    final factor = 1.0 / totalFrames;
-    final alignmentX = totalFrames > 1
-        ? -1.0 + 2.0 * (frameIndex.clamp(0, totalFrames - 1) / (totalFrames - 1))
-        : 0.0;
-
-    return SizedBox(
-      width: size,
-      height: size,
-      child: ClipRect(
-        child: Align(
-          alignment: Alignment(alignmentX, 0.0),
-          widthFactor: factor,
-          child: Image.asset(
-            assetPath,
-            width: size * totalFrames,
-            height: size,
-            fit: BoxFit.fill,
-            filterQuality: FilterQuality.none,
-            errorBuilder: (_, _, _) => const Icon(Icons.person, color: Colors.white, size: 36),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildPoseChip(String label, String action, Color accent) {
     final isSelected = _previewAction == action;
     return InkWell(
@@ -352,29 +322,6 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
   Widget _buildCharacterShowcase(CharacterInfo char, GameStateManager state) {
     final isUnlocked = state.isCharacterUnlocked(char.id);
     final isEquipped = state.playerAvatarId == char.id;
-
-    String currentAsset;
-    int currentFrames;
-    int currentFrameIndex;
-
-    switch (_previewAction) {
-      case 'run':
-        currentAsset = char.frontRunPath;
-        currentFrames = 8;
-        currentFrameIndex = 1;
-        break;
-      case 'smash':
-        currentAsset = char.frontSlashPath;
-        currentFrames = 6;
-        currentFrameIndex = 2;
-        break;
-      case 'idle':
-      default:
-        currentAsset = char.charSelectIdlePath;
-        currentFrames = 2;
-        currentFrameIndex = 0;
-        break;
-    }
 
     return Container(
       margin: EdgeInsets.zero,
@@ -492,10 +439,9 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
                         ),
                       ),
                     ),
-                    _buildFrontViewSprite(
-                      assetPath: currentAsset,
-                      totalFrames: currentFrames,
-                      frameIndex: currentFrameIndex,
+                    ReadyToServeCharacterWidget(
+                      character: char,
+                      action: _previewAction,
                       size: 68,
                     ),
                   ],
@@ -544,6 +490,7 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
                       spacing: 6,
                       runSpacing: 4,
                       children: [
+                        _buildPoseChip('Serve', 'serve', char.borderColor),
                         _buildPoseChip('Idle', 'idle', char.borderColor),
                         _buildPoseChip('Run', 'run', char.borderColor),
                         _buildPoseChip('Smash', 'smash', char.borderColor),
@@ -665,26 +612,11 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // Character Front-View Pixel Sprite (Frame 0 of charselectidle)
-            SizedBox(
-              width: 58,
-              height: 58,
-              child: ClipRect(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: 0.5,
-                  child: Image.asset(
-                    char.charSelectIdlePath,
-                    width: 116,
-                    height: 58,
-                    fit: BoxFit.fill,
-                    filterQuality: FilterQuality.none,
-                    errorBuilder: (context, error, stackTrace) => Center(
-                      child: Text(char.badge, style: const TextStyle(fontSize: 28)),
-                    ),
-                  ),
-                ),
-              ),
+            // Character Ready-to-Serve Animated Pixel Sprite
+            ReadyToServeCharacterWidget(
+              character: char,
+              action: 'serve',
+              size: 58,
             ),
             // Badge in bottom-right corner
             Positioned(
@@ -756,39 +688,49 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
     return Container(
       width: 72,
       height: 72,
-      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: court.apronColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: court.accentColor, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: court.accentColor.withValues(alpha: 0.25),
+            blurRadius: 8,
+          ),
+        ],
       ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Simulated 2D court floor
-          Container(
-            decoration: BoxDecoration(
-              color: court.courtColor,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: court.lineColor.withValues(alpha: 0.8), width: 1.5),
-            ),
-            child: Center(
-              child: Container(
-                width: 32,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: court.kitchenColor,
-                  border: Border(
-                    top: BorderSide(color: court.lineColor, width: 1),
-                    bottom: BorderSide(color: court.lineColor, width: 1),
-                  ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Image.asset(
+              court.fullAssetPath,
+              width: 72,
+              height: 72,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => Container(
+                color: court.courtColor,
+                child: Center(
+                  child: Text(court.badge, style: const TextStyle(fontSize: 20)),
                 ),
               ),
             ),
-          ),
-          // Badge
-          Text(court.badge, style: const TextStyle(fontSize: 20)),
-        ],
+            Positioned(
+              bottom: 3,
+              right: 3,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: court.accentColor.withValues(alpha: 0.6), width: 1),
+                ),
+                child: Text(court.badge, style: const TextStyle(fontSize: 10)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

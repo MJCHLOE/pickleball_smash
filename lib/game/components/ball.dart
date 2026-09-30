@@ -8,6 +8,7 @@ import '../../models/multiplayer_models.dart';
 import '../../services/audio_service.dart';
 import '../../services/multiplayer_service.dart';
 import '../pickleball_game.dart';
+import 'background.dart';
 import 'player.dart';
 
 class BallComponent extends CircleComponent with HasGameReference<PickleballGame>, CollisionCallbacks {
@@ -60,15 +61,17 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
   double _bounceEffectRadius = 0.0;
   double _timeSinceLastBounce = 1.0;
 
-  // Court geometry constants (Portrait-proportioned 2D arcade court)
-  static const double courtLeftX = 400.0;
-  static const double courtRightX = 880.0;
-  static const double courtCenterX = 640.0;
-  static const double netY = 360.0;
-  static const double kitchenTopY = 280.0;    // Top Kitchen line (for P2)
-  static const double kitchenBottomY = 440.0; // Bottom Kitchen line (for P1)
-  static const double topBaselineY = 50.0;
-  static const double bottomBaselineY = 670.0;
+  // Court geometry constants matching the court view and white lines
+  static const double courtTopY = Background.courtTopY;
+  static const double courtBottomY = Background.courtBottomY;
+  static const double topBaselineY = Background.courtTopY;
+  static const double bottomBaselineY = Background.courtBottomY;
+  static const double netY = Background.netY;
+  static const double kitchenTopY = Background.kitchenTopY;    // Top Kitchen line (for P2)
+  static const double kitchenBottomY = Background.kitchenBottomY; // Bottom Kitchen line (for P1)
+  static const double courtCenterX = Background.courtCenterX;
+  static const double courtLeftX = Background.courtLeftX;
+  static const double courtRightX = Background.courtRightX;
 
   BallInfo _ballInfo;
   BallInfo get ballInfo => _ballInfo;
@@ -169,6 +172,32 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     zVelocity = 210.0; // Launch smooth parabolic serve arc over net
     squashFactor = 1.0;
 
+    // Rule 5: Service Foot Fault Check
+    // Server must stand completely behind the baseline when making the serve.
+    // Stepping on or inside the baseline before contacting the ball is an immediate fault.
+    try {
+      final serverComp = currentGame.activeServerComponentOrNull;
+      if (serverComp != null && serverComp.position != Vector2.zero()) {
+        if (serverComp.isPlayerOne && serverComp.position.y <= bottomBaselineY && serverComp.position.y >= netY) {
+          isWaitingForServe = false;
+          currentGame.isWaitingForServe = false;
+          currentGame.handleRallyWon(
+            winnerIsPlayerOne: false,
+            faultReason: 'FAULT: Service Foot Fault (Server stepped on or inside baseline)',
+          );
+          return;
+        } else if (!serverComp.isPlayerOne && serverComp.position.y >= topBaselineY && serverComp.position.y <= netY) {
+          isWaitingForServe = false;
+          currentGame.isWaitingForServe = false;
+          currentGame.handleRallyWon(
+            winnerIsPlayerOne: true,
+            faultReason: 'FAULT: Service Foot Fault (Server stepped on or inside baseline)',
+          );
+          return;
+        }
+      }
+    } catch (_) {}
+
     AudioService.instance.playServe();
 
     // Exact parabolic flight time to court floor bounce (z = 0)
@@ -177,17 +206,26 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     Vector2 target;
     if (isPlayerOne) {
       // Bottom server serves diagonally upwards into diagonal receiving box
-      // Right service box: [640, 880], Left service box: [400, 640]
-      // Safe depth past kitchen (280) and before baseline (50): Y = 165
-      final baseTargetX = (currentGame.servingSide == 'right') ? 520.0 : 760.0;
-      final clampedAngle = horizontalAngle.clamp(-0.25, 0.25);
-      final targetX = (baseTargetX + clampedAngle * 70.0).clamp(440.0, 840.0);
-      target = Vector2(targetX, 165.0);
+      // Top court receiving boxes: between kitchenTopY (324) and topBaselineY (174)
+      const targetY = 245.0;
+      final leftBoxX = (Background.courtLeftAt(targetY) + courtCenterX) / 2.0;
+      final rightBoxX = (courtCenterX + Background.courtRightAt(targetY)) / 2.0;
+      final baseTargetX = (currentGame.servingSide == 'right') ? leftBoxX : rightBoxX;
+      final clampedAngle = horizontalAngle.clamp(-0.20, 0.20);
+      final minX = Background.courtLeftAt(targetY) + 15.0;
+      final maxX = Background.courtRightAt(targetY) - 15.0;
+      final targetX = (baseTargetX + clampedAngle * 55.0).clamp(minX, maxX);
+      target = Vector2(targetX, targetY);
     } else {
       // Top server serves diagonally downwards into diagonal receiving box
-      // Safe depth past kitchen (440) and before baseline (670): Y = 555
-      final baseTargetX = (currentGame.servingSide == 'right') ? 760.0 : 520.0;
-      target = Vector2(baseTargetX, 555.0);
+      // Bottom court receiving boxes: between kitchenBottomY (474) and bottomBaselineY (661)
+      const targetY = 570.0;
+      final leftBoxX = (Background.courtLeftAt(targetY) + courtCenterX) / 2.0;
+      final rightBoxX = (courtCenterX + Background.courtRightAt(targetY)) / 2.0;
+      final baseTargetX = (currentGame.servingSide == 'right') ? rightBoxX : leftBoxX;
+      final minX = Background.courtLeftAt(targetY) + 15.0;
+      final maxX = Background.courtRightAt(targetY) - 15.0;
+      target = Vector2(baseTargetX.clamp(minX, maxX), targetY);
     }
 
     velocity = Vector2(
@@ -199,10 +237,10 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     // Step forward into court on serve impact
     try {
       final serverComp = currentGame.activeServerComponent;
-      if (serverComp.isPlayerOne && serverComp.position.y > 650) {
-        serverComp.position.y = 625.0;
-      } else if (!serverComp.isPlayerOne && serverComp.position.y < 70) {
-        serverComp.position.y = 95.0;
+      if (serverComp.isPlayerOne && serverComp.position.y > 665.0) {
+        serverComp.position.y = 640.0;
+      } else if (!serverComp.isPlayerOne && serverComp.position.y < 165.0) {
+        serverComp.position.y = 195.0;
       }
     } catch (_) {}
 
@@ -302,6 +340,9 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     // Move ball along 2D court floor trajectory
     position += velocity * dt;
     _timeSinceLastBounce += dt;
+
+    // Pseudo 2.5D perspective scaling based on court depth
+    radius = (11.0 * Background.perspectiveScaleAt(position.y)).clamp(8.0, 12.0);
 
     // Track motion particle trail
     final settings = currentGameOrNull?.settings;
@@ -450,8 +491,8 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     if (currentGame.rallyHitCount == 0 && bounceCountCurrentSide == 1) {
       if (isP1Side) {
         // CPU served to P1:
-        // Must clear kitchenBottomY (440)
-        if (position.y <= kitchenBottomY) {
+        // Must clear kitchenBottomY (474)
+        if (position.y <= kitchenBottomY + 2.0) {
           currentGame.handleRallyWon(
             winnerIsPlayerOne: true,
             faultReason: 'FAULT: Service In Kitchen (CPU)',
@@ -470,8 +511,8 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
         }
       } else {
         // P1 served to CPU:
-        // Must clear kitchenTopY (280)
-        if (position.y >= kitchenTopY) {
+        // Must clear kitchenTopY (324)
+        if (position.y >= kitchenTopY - 2.0) {
           currentGame.handleRallyWon(
             winnerIsPlayerOne: false,
             faultReason: 'FAULT: Service In Kitchen (Must clear Kitchen)',
@@ -491,11 +532,13 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       }
     }
 
-    // 6. Out of Bounds detection on first floor bounce
-    final bool outLeft = position.x < courtLeftX - 5;
-    final bool outRight = position.x > courtRightX + 5;
-    final bool outTop = position.y < topBaselineY - 10;
-    final bool outBottom = position.y > bottomBaselineY + 10;
+    // 6. Out of Bounds detection on first floor bounce according to white lines
+    final double courtLeft = Background.courtLeftAt(position.y);
+    final double courtRight = Background.courtRightAt(position.y);
+    final bool outLeft = position.x < courtLeft - 6.0;
+    final bool outRight = position.x > courtRight + 6.0;
+    final bool outTop = position.y < topBaselineY - 8.0;
+    final bool outBottom = position.y > bottomBaselineY + 8.0;
 
     if (outLeft || outRight || outTop || outBottom) {
       final bool hitterWasP1 = !isP1Side;
@@ -721,10 +764,12 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       }
     }
 
-    // 3. LEGAL HIT (Groundstroke, Dink, or Open-Play Volley outside Kitchen)
-    // 3. Mandatory Floor Bounce: Ball MUST bounce on the court floor before any hit!
-    if (bounceCountCurrentSide == 0) {
-      return; // Ball has not bounced yet! Cannot hit out of the air.
+    // 3. LEGAL HIT: Groundstroke, Dink, or Open-Play Volley outside Kitchen
+    // Rule 6: Two-bounce rule applies to serve and return (evaluated as faults above).
+    // Rule 7: Kitchen volleys are faults (evaluated as faults above).
+    // Outside the kitchen after the first two bounces, open-play volleys are 100% legal!
+    if ((currentGame.settings?.requireFloorBounceAllShots ?? false) && bounceCountCurrentSide == 0) {
+      return; // Optional training mode: requires floor bounce before every hit
     }
 
     // 4. LEGAL HIT (Groundstroke or Dink after floor bounce)
@@ -772,13 +817,13 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       tBounce = (zVelocity + sqrt(zVelocity * zVelocity + 4 * 170.0 * z)) / 340.0;
 
       if (isPlayerOne) {
-        targetX = 470.0; // Deep left sideline
-        targetY = 135.0;
+        targetY = 215.0;
+        targetX = Background.courtLeftAt(targetY) + 18.0;
         currentGame.onAnnouncement?.call('🌪️ CYCLONE CURVE!', 'Wicked left sidespin curve!');
         currentGame.onTechniqueExecuted(BattleTechnique.leftSpin);
       } else {
-        targetX = 470.0;
-        targetY = 595.0;
+        targetY = 620.0;
+        targetX = Background.courtLeftAt(targetY) + 20.0;
         currentGame.onAnnouncement?.call('🌪️ CPU CYCLONE CURVE!', 'Watch out! Violent left spin curve!');
         currentGame.onTechniqueExecuted(BattleTechnique.leftSpin);
       }
@@ -802,13 +847,13 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       tBounce = (zVelocity + sqrt(zVelocity * zVelocity + 4 * 170.0 * z)) / 340.0;
 
       if (isPlayerOne) {
-        targetX = 810.0; // Deep right sideline
-        targetY = 135.0;
+        targetY = 215.0;
+        targetX = Background.courtRightAt(targetY) - 18.0;
         currentGame.onAnnouncement?.call('⚡ VORTEX HOOK!', 'Fierce right sidespin hook!');
         currentGame.onTechniqueExecuted(BattleTechnique.rightSpin);
       } else {
-        targetX = 810.0;
-        targetY = 595.0;
+        targetY = 620.0;
+        targetX = Background.courtRightAt(targetY) - 20.0;
         currentGame.onAnnouncement?.call('⚡ CPU VORTEX HOOK!', 'Watch out! Violent right spin hook!');
         currentGame.onTechniqueExecuted(BattleTechnique.rightSpin);
       }
@@ -830,32 +875,42 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
 
       final diff = position - player.position;
       if (isPlayerOne && !player.isAI) {
-        final aimOffset = (player.horizontalMovement * 160.0) + (diff.x * 0.8);
-        targetX = (640.0 + aimOffset).clamp(450.0, 830.0);
-
         double vInput = 0.0;
         if (player.joystick != null && !player.joystick!.delta.isZero()) {
           vInput = player.joystick!.relativeDelta.y;
         } else {
           vInput = player.vAxis.toDouble();
         }
-        targetY = (195.0 + vInput * 65.0).clamp(115.0, 275.0);
+        targetY = (245.0 + vInput * 45.0).clamp(195.0, 310.0);
+
+        final aimOffset = (player.horizontalMovement * 120.0) + (diff.x * 0.7);
+        final minX = Background.courtLeftAt(targetY) + 15.0;
+        final maxX = Background.courtRightAt(targetY) - 15.0;
+        targetX = (courtCenterX + aimOffset).clamp(minX, maxX);
       } else if (isPlayerOne && player.isAI) {
         final oppPos = currentGame.player2.position;
-        final targetLeft = oppPos.x > 640.0;
-        final baseAim = targetLeft ? 520.0 : 760.0;
-        final aimOffset = (diff.x * 0.4) + ((Random().nextDouble() - 0.5) * 50.0);
-        targetX = (baseAim + aimOffset).clamp(440.0, 840.0);
+        final targetLeft = oppPos.x > courtCenterX;
         final isDeep = (currentGame.rallyHitCount % 3 != 0);
-        targetY = isDeep ? 145.0 : 255.0;
+        targetY = isDeep ? 210.0 : 285.0;
+        final leftBoxX = (Background.courtLeftAt(targetY) + courtCenterX) / 2.0;
+        final rightBoxX = (courtCenterX + Background.courtRightAt(targetY)) / 2.0;
+        final baseAim = targetLeft ? leftBoxX : rightBoxX;
+        final minX = Background.courtLeftAt(targetY) + 15.0;
+        final maxX = Background.courtRightAt(targetY) - 15.0;
+        final aimOffset = (diff.x * 0.3) + ((Random().nextDouble() - 0.5) * 40.0);
+        targetX = (baseAim + aimOffset).clamp(minX, maxX);
       } else {
         final oppPos = currentGame.player1.position;
-        final targetLeft = oppPos.x > 640.0;
-        final baseAim = targetLeft ? 520.0 : 760.0;
-        final aimOffset = (diff.x * 0.4) + ((Random().nextDouble() - 0.5) * 50.0);
-        targetX = (baseAim + aimOffset).clamp(440.0, 840.0);
+        final targetLeft = oppPos.x > courtCenterX;
         final isDeep = (currentGame.rallyHitCount % 3 != 0);
-        targetY = isDeep ? 585.0 : 465.0;
+        targetY = isDeep ? 625.0 : 520.0;
+        final leftBoxX = (Background.courtLeftAt(targetY) + courtCenterX) / 2.0;
+        final rightBoxX = (courtCenterX + Background.courtRightAt(targetY)) / 2.0;
+        final baseAim = targetLeft ? leftBoxX : rightBoxX;
+        final minX = Background.courtLeftAt(targetY) + 15.0;
+        final maxX = Background.courtRightAt(targetY) - 15.0;
+        final aimOffset = (diff.x * 0.3) + ((Random().nextDouble() - 0.5) * 40.0);
+        targetX = (baseAim + aimOffset).clamp(minX, maxX);
       }
     }
 

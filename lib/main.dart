@@ -5,11 +5,15 @@ import 'package:flame/flame.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'services/database_service.dart';
+import 'services/firebase_multiplayer_service.dart';
 import 'services/game_state_manager.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configure Firebase Online Multiplayer with user's Realtime Database
+  FirebaseMultiplayerService.instance.configureProject('https://pickl-6d440-default-rtdb.firebaseio.com/');
 
   // Make full screen safely without crashing on web or unsupported platforms
   try {

@@ -4,6 +4,7 @@ import '../models/multiplayer_models.dart';
 import '../services/audio_service.dart';
 import '../services/multiplayer_service.dart';
 import '../theme/app_theme.dart';
+import 'avatar_picker_dialog.dart';
 import 'game_2d_button.dart';
 import 'game_2d_text.dart';
 import 'player_avatar.dart';
@@ -165,8 +166,29 @@ class _PlayerProfileModalState extends State<PlayerProfileModal>
                   avatarId: profile.avatarId,
                   size: 58,
                   showBadge: false,
+                  onTap: widget.isMyProfile
+                      ? () async {
+                          AudioService.instance.playButtonTap();
+                          await AvatarPickerDialog.show(context);
+                          if (mounted) setState(() {});
+                        }
+                      : null,
                 ),
               ),
+              if (widget.isMyProfile)
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: AppTheme.electricCyan,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.black, width: 1.5),
+                    ),
+                    child: const Icon(Icons.edit_rounded, color: Colors.black, size: 10),
+                  ),
+                ),
               Positioned(
                 bottom: -2,
                 right: -2,
@@ -462,20 +484,6 @@ class _PlayerProfileModalState extends State<PlayerProfileModal>
             ),
           ],
         ),
-        const SizedBox(height: 20),
-
-        // Favorite Characters
-        const Text(
-          'FAVORITE HEROES',
-          style: TextStyle(
-            color: AppTheme.textMuted,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.1,
-          ),
-        ),
-        const SizedBox(height: 10),
-        ...profile.favoriteHeroes.map((hero) => _buildHeroTile(hero)),
       ],
     );
   }
@@ -533,54 +541,6 @@ class _PlayerProfileModalState extends State<PlayerProfileModal>
                 style: const TextStyle(color: AppTheme.textMuted, fontSize: 10),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeroTile(FavoriteHeroStat hero) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.surfaceBorder),
-      ),
-      child: Row(
-        children: [
-          PlayerAvatarWidget(avatarId: hero.avatarId, size: 38),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  hero.name,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                Text(
-                  '${hero.matches} Matches Played',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppTheme.neonLime.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '${hero.winRate.toStringAsFixed(1)}% WR',
-              style: const TextStyle(
-                color: AppTheme.neonLime,
-                fontWeight: FontWeight.bold,
-                fontSize: 11,
-              ),
-            ),
           ),
         ],
       ),

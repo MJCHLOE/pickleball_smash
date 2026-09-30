@@ -50,6 +50,8 @@ class CourtInfo {
   });
 
   bool get isPurchasable => price > 0;
+  String get spriteAsset => 'background/$id.png';
+  String get fullAssetPath => 'assets/images/background/$id.png';
 }
 
 class CourtCatalog {
@@ -81,8 +83,8 @@ class CourtCatalog {
     name: 'Sunset Beach Resort',
     subtitle: 'Tropical Oceanfront Boardwalk',
     description: 'Breezy tropical sand court with coral-teal surface, wooden boardwalk borders, and coastal palm scenery.',
-    price: 1500,
-    isDefaultUnlocked: false,
+    price: 0,
+    isDefaultUnlocked: true,
     badge: '🏖️',
     environment: CourtEnvironment.beach,
     courtColor: Color(0xFF0D9488),       // Caribbean ocean teal
@@ -103,8 +105,8 @@ class CourtCatalog {
     name: 'Neon Cyber Arcade',
     subtitle: 'Synthwave Digital Arena',
     description: 'High-octane retro 80s arcade court with pulsing laser grid lines, electric violet surface, and neon cyan accents.',
-    price: 1800,
-    isDefaultUnlocked: false,
+    price: 0,
+    isDefaultUnlocked: true,
     badge: '🕹️',
     environment: CourtEnvironment.cyber,
     courtColor: Color(0xFF581C87),       // Deep cyber purple
@@ -125,8 +127,8 @@ class CourtCatalog {
     name: 'Emerald Forest Park',
     subtitle: 'Lush Woodland Sanctuary',
     description: 'Scenic outdoor park court nestled among giant pine trees with mossy stone pavers and natural timber wood rails.',
-    price: 2200,
-    isDefaultUnlocked: false,
+    price: 0,
+    isDefaultUnlocked: true,
     badge: '🌲',
     environment: CourtEnvironment.forest,
     courtColor: Color(0xFF166534),       // Evergreen pine court
@@ -147,8 +149,8 @@ class CourtCatalog {
     name: 'Volcanic Magma Stadium',
     subtitle: 'Inferno Caldera Arena',
     description: 'Intense subterranean volcano court with cooling basalt obsidian floors, molten lava veins, and fiery orange lines.',
-    price: 2800,
-    isDefaultUnlocked: false,
+    price: 0,
+    isDefaultUnlocked: true,
     badge: '🌋',
     environment: CourtEnvironment.magma,
     courtColor: Color(0xFF7F1D1D),       // Scorched volcanic crimson

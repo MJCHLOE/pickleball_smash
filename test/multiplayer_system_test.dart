@@ -340,8 +340,8 @@ void main() {
       expect(find.text('History'), findsOneWidget);
       expect(find.text('Badges'), findsOneWidget);
       expect(find.text('WIN RATE'), findsOneWidget);
-      expect(find.text('COMBAT STATISTICS'), findsOneWidget);
-      expect(find.text('FAVORITE HEROES'), findsOneWidget);
+      // Champions / Favorite Heroes are removed from profile as requested
+      expect(find.text('FAVORITE HEROES'), findsNothing);
     });
 
     testWidgets('FriendsModal renders clean real player UI without bot accounts', (tester) async {

@@ -1006,7 +1006,7 @@ void main() {
       state.loginAsGuest();
     });
 
-    testWidgets('AvatarPickerDialog allows picking champions, saving custom photo URLs, and creating studio avatars', (WidgetTester tester) async {
+    testWidgets('AvatarPickerDialog renders clean profile picture picker with gallery, files, and badges (champions and studio removed)', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(800, 1000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -1026,43 +1026,23 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('PLAYER PROFILE PICTURE'), findsOneWidget);
-      expect(find.text('CHAMPIONS'), findsOneWidget);
-      expect(find.text('GALLERY / FILES'), findsOneWidget);
-      expect(find.text('AVATAR STUDIO'), findsOneWidget);
+      // Champions and Studio are removed from profile as requested
+      expect(find.text('CHAMPIONS'), findsNothing);
+      expect(find.text('AVATAR STUDIO'), findsNothing);
 
-      // Tap Maya Swift champion
-      expect(find.text('Maya Swift'), findsOneWidget);
-      await tester.tap(find.text('Maya Swift'));
-      await tester.pumpAndSettle();
-      expect(state.playerAvatarId, 'maya_speed');
-
-      // Switch to GALLERY / FILES tab
-      await tester.tap(find.text('GALLERY / FILES'));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      expect(find.text('Add Your Own Custom Profile Picture'), findsOneWidget);
+      // Verify custom profile picture actions and league badges
       expect(find.byKey(const ValueKey('picker_gallery_btn')), findsOneWidget);
       expect(find.byKey(const ValueKey('picker_files_btn')), findsOneWidget);
       expect(find.text('CHOOSE FROM GALLERY'), findsOneWidget);
       expect(find.text('BROWSE FILES'), findsOneWidget);
-      // Verify URL TextField was removed as requested
-      expect(find.byType(TextField), findsNothing);
+      expect(find.text('League Badges & Profile Avatars'), findsOneWidget);
 
-      // Switch to AVATAR STUDIO tab
-      await tester.tap(find.text('AVATAR STUDIO'));
+      // Pick Alex Smash badge
+      final alexSmash = find.text('Alex Smash');
+      await tester.ensureVisible(alexSmash);
+      await tester.tap(alexSmash);
       await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      expect(find.text('Design Your Unique Avatar'), findsOneWidget);
-      expect(find.text('SAVE CUSTOM AVATAR'), findsOneWidget);
-
-      // Enter initials
-      final initialsField = find.byType(TextField).first;
-      await tester.enterText(initialsField, 'ACE');
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('SAVE CUSTOM AVATAR'));
-      await tester.tap(find.text('SAVE CUSTOM AVATAR'));
-      await tester.pumpAndSettle();
-      expect(state.playerAvatarId.startsWith('custom:ACE:'), true);
+      expect(state.playerAvatarId, 'alex_classic');
     });
 
     testWidgets('InGameSettingsModal renders responsively in short landscape mode (600x360) without overflow and supports AVATAR tab', (WidgetTester tester) async {
@@ -1444,17 +1424,17 @@ void main() {
       game.isWaitingForServe = false;
       game.rallyHitCount = 2; // Open play
 
-      // P1 hits a volley outside the kitchen at Y = 445 (kitchen bottom line is at 440)
-      p1.position = Vector2(640, 445);
-      game.ball.position = Vector2(640, 445);
+      // P1 hits a volley outside the kitchen at Y = 485 (kitchen bottom line is at 474)
+      p1.position = Vector2(640, 485);
+      game.ball.position = Vector2(640, 485);
       game.ball.velocity = Vector2(0, 300);
       game.ball.bounceCountCurrentSide = 0; // In air -> volley!
       p1.strike();
 
       expect(p1.timeSinceLastVolley, 0.0);
 
-      // P1 momentum carries forward into kitchen (Y moves to 438 <= 440) within 0.5s
-      p1.position = Vector2(640, 438);
+      // P1 momentum carries forward into kitchen (Y moves to 465 <= 474) within 0.5s
+      p1.position = Vector2(640, 465);
       p1.update(0.1);
 
       expect(lastViolation, 'KITCHEN MOMENTUM');
@@ -1712,7 +1692,7 @@ void main() {
       game.ball = ball;
       game.player1 = PlayerComponent(isPlayerOne: true)..customGame = game;
       game.player2 = PlayerComponent(isPlayerOne: false)..customGame = game;
-      game.player1.position = Vector2(760, 600);
+      game.player1.position = Vector2(760, 695);
       game.player2.position = Vector2(520, 130);
 
       // 1. Ball starts at paddle height ready for serve
@@ -1872,13 +1852,13 @@ void main() {
       final bg = Background();
       expect(bg.paint.isAntiAlias, false);
       expect(bg.paint.filterQuality, FilterQuality.none);
-      expect(Background.courtLeftX, 400.0);
-      expect(Background.courtRightX, 880.0);
-      expect(Background.courtTopY, 50.0);
-      expect(Background.courtBottomY, 670.0);
+      expect(Background.courtLeftX, 432.0);
+      expect(Background.courtRightX, 848.0);
+      expect(Background.courtTopY, 174.0);
+      expect(Background.courtBottomY, 661.0);
       expect(Background.netY, 360.0);
-      expect(Background.kitchenTopY, 280.0);
-      expect(Background.kitchenBottomY, 440.0);
+      expect(Background.kitchenTopY, 324.0);
+      expect(Background.kitchenBottomY, 474.0);
     });
 
     test('BallComponent returns forward without sharp sideways angles when hit by player', () {
@@ -2128,8 +2108,8 @@ void main() {
       p1.position = Vector2(640.0, 520.0);
       expect(p1.isInKitchen, false);
 
-      // Test Kitchen boundary detection for P2 (Top side, NVZ is y >= 280.0)
-      p2.position = Vector2(640.0, 300.0);
+      // Test Kitchen boundary detection for P2 (Top side, NVZ is y >= 324.0)
+      p2.position = Vector2(640.0, 340.0);
       expect(p2.isInKitchen, true);
       p2.position = Vector2(640.0, 150.0);
       expect(p2.isInKitchen, false);
@@ -2601,8 +2581,9 @@ void main() {
       expect(face.tapEffectProgress, 0.0);
     });
 
-    test('Mandatory floor bounce: ball cannot be hit out of the air by either human player or AI', () {
+    test('Mandatory floor bounce training mode: ball cannot be hit out of the air by either human player or AI', () {
       final game = PickleballGame();
+      game.applySettings(const GameSettings(requireFloorBounceAllShots: true));
       final p1 = PlayerComponent(isPlayerOne: true)..customGame = game;
       final cpu = PlayerComponent(isPlayerOne: false, isAI: true)..customGame = game;
       final ball = BallComponent()..customGame = game;
@@ -2623,7 +2604,7 @@ void main() {
       p1.strike();
 
       // Ball must NOT be hit because it hasn't bounced on the floor yet!
-      expect(game.rallyHitCount, initialRally, reason: 'Human cannot hit ball before floor bounce');
+      expect(game.rallyHitCount, initialRally, reason: 'Human cannot hit ball before floor bounce in training mode');
 
       // Now ball bounces on floor (bounceCountCurrentSide == 1)
       ball.bounceCountCurrentSide = 1;
@@ -2640,12 +2621,94 @@ void main() {
       final hitsBeforeCpu = game.rallyHitCount;
 
       cpu.update(0.016);
-      expect(game.rallyHitCount, hitsBeforeCpu, reason: 'CPU AI does not strike before floor bounce');
+      expect(game.rallyHitCount, hitsBeforeCpu, reason: 'CPU AI does not strike before floor bounce in training mode');
 
       // Ball bounces on CPU side
       ball.bounceCountCurrentSide = 1;
       cpu.update(0.016);
       expect(game.rallyHitCount, hitsBeforeCpu + 1, reason: 'CPU AI strikes after floor bounce');
+    });
+
+    test('Official Rules: Two-Bounce Rule, Kitchen NVZ, Legal Dink after bounce, Open-Play Volleys, and Service Foot Fault', () {
+      String? lastViolation;
+      final game = PickleballGame(
+        onViolation: (type, desc, rule) {
+          lastViolation = type;
+        },
+      );
+      final p1 = PlayerComponent(isPlayerOne: true)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+      game.player1 = p1;
+      game.player2 = p2;
+      game.ball = ball;
+
+      // 1. Service Foot Fault: Server steps on or inside baseline before serve (P1 Y <= 661)
+      game.isWaitingForServe = true;
+      ball.isWaitingForServe = true;
+      p1.position = Vector2(760.0, 655.0); // Inside baseline!
+      ball.executeServe(isPlayerOne: true);
+      expect(lastViolation, 'SERVICE FOOT FAULT');
+      expect(game.isWaitingForServe, true); // Rally ended, reset for serve
+
+      // 2. Legal Serve from behind baseline (P1 Y > 670)
+      lastViolation = null;
+      p1.position = Vector2(760.0, 695.0); // Safely behind baseline!
+      ball.executeServe(isPlayerOne: true);
+      expect(lastViolation, isNull);
+      expect(game.isWaitingForServe, false);
+      expect(game.rallyHitCount, 0);
+
+      // 3. Two-Bounce Rule on Return of Serve: Receiver (P2) volleys out of air before floor bounce
+      ball.position = p2.position;
+      ball.velocity = Vector2(0.0, -250.0);
+      ball.bounceCountCurrentSide = 0; // In air!
+      p2.currentState = PlayerState.slash;
+      ball.processPlayerHit(p2);
+      expect(lastViolation, 'TWO-BOUNCE RULE');
+
+      // 4. Kitchen Volley Rule: Open play volley inside kitchen (P1 Y <= 440)
+      lastViolation = null;
+      game.isWaitingForServe = false;
+      ball.isWaitingForServe = false;
+      game.rallyHitCount = 2; // Open play
+      p1.position = Vector2(640.0, 420.0); // Inside kitchen!
+      ball.position = Vector2(640.0, 420.0);
+      ball.velocity = Vector2(0.0, 250.0);
+      ball.bounceCountCurrentSide = 0; // In air!
+      p1.currentState = PlayerState.slash;
+      ball.processPlayerHit(p1);
+      expect(lastViolation, 'KITCHEN VOLLEY');
+
+      // 5. Legal Dink in Kitchen after Floor Bounce (P1 Y <= 440, bounceCount >= 1)
+      lastViolation = null;
+      game.isWaitingForServe = false;
+      ball.isWaitingForServe = false;
+      game.rallyHitCount = 2;
+      p1.position = Vector2(640.0, 420.0); // Inside kitchen!
+      ball.position = Vector2(640.0, 420.0);
+      ball.velocity = Vector2(0.0, 250.0);
+      ball.bounceCountCurrentSide = 1; // Bounced on court floor in kitchen!
+      final hitsBeforeDink = game.rallyHitCount;
+      p1.strike();
+      expect(lastViolation, isNull);
+      expect(game.rallyHitCount, hitsBeforeDink + 1, reason: 'Hitting in kitchen after bounce is 100% legal');
+      expect(ball.velocity.y < 0, true);
+
+      // 6. Legal Open-Play Volley Outside Kitchen (P1 Y = 520 > 440, bounceCount == 0)
+      lastViolation = null;
+      game.isWaitingForServe = false;
+      ball.isWaitingForServe = false;
+      game.rallyHitCount = 4; // Open play
+      p1.position = Vector2(640.0, 520.0); // Outside kitchen!
+      ball.position = Vector2(640.0, 520.0);
+      ball.velocity = Vector2(0.0, 260.0);
+      ball.bounceCountCurrentSide = 0; // In air!
+      final hitsBeforeVolley = game.rallyHitCount;
+      p1.strike();
+      expect(lastViolation, isNull);
+      expect(game.rallyHitCount, hitsBeforeVolley + 1, reason: 'Open-play volley outside kitchen is legal');
+      expect(ball.velocity.y < 0, true);
     });
 
     testWidgets('GamePlayScreen renders violation display on the right side directly underneath settings controls', (WidgetTester tester) async {
@@ -2696,21 +2759,21 @@ void main() {
       expect(CharacterRoster.maya.type, CharacterType.female1);
       expect(CharacterRoster.maya.spriteFolder, 'female1_sprite');
 
-      expect(CharacterRoster.marcus.price, 2000);
-      expect(CharacterRoster.marcus.sellRefund, 1000);
-      expect(CharacterRoster.marcus.isDefaultUnlocked, false);
+      expect(CharacterRoster.marcus.price, 0);
+      expect(CharacterRoster.marcus.sellRefund, 0);
+      expect(CharacterRoster.marcus.isDefaultUnlocked, true);
       expect(CharacterRoster.marcus.type, CharacterType.male2);
       expect(CharacterRoster.marcus.spriteFolder, 'male2_sprite');
 
-      expect(CharacterRoster.jax.price, 2500);
-      expect(CharacterRoster.jax.sellRefund, 1250);
-      expect(CharacterRoster.jax.isDefaultUnlocked, false);
+      expect(CharacterRoster.jax.price, 0);
+      expect(CharacterRoster.jax.sellRefund, 0);
+      expect(CharacterRoster.jax.isDefaultUnlocked, true);
       expect(CharacterRoster.jax.type, CharacterType.male3);
       expect(CharacterRoster.jax.spriteFolder, 'male3_sprite');
 
-      expect(CharacterRoster.chloe.price, 2200);
-      expect(CharacterRoster.chloe.sellRefund, 1100);
-      expect(CharacterRoster.chloe.isDefaultUnlocked, false);
+      expect(CharacterRoster.chloe.price, 0);
+      expect(CharacterRoster.chloe.sellRefund, 0);
+      expect(CharacterRoster.chloe.isDefaultUnlocked, true);
       expect(CharacterRoster.chloe.type, CharacterType.female2);
       expect(CharacterRoster.chloe.spriteFolder, 'female2_sprite');
 
@@ -2732,69 +2795,35 @@ void main() {
       state.loginAsGuest();
       state.coins = 500;
 
-      // Default unlocked
+      // All characters are 100% free and unlocked for all players
       expect(state.isCharacterUnlocked('alex_classic'), true);
       expect(state.isCharacterUnlocked('maya_speed'), true);
-      expect(state.isCharacterUnlocked('male2_blaze'), false);
-      expect(state.isCharacterUnlocked('male3_thunder'), false);
-      expect(state.isCharacterUnlocked('female2_frost'), false);
-
-      // Attempting to buy Marcus (2000 coins) with 500 coins fails
-      final buyMarcusFail = state.purchaseCharacter('male2_blaze');
-      expect(buyMarcusFail, false);
-      expect(state.coins, 500);
-      expect(state.isCharacterUnlocked('male2_blaze'), false);
-
-      // Give enough coins and buy Marcus
-      state.coins = 3000;
-      final buyMarcusSuccess = state.purchaseCharacter('male2_blaze');
-      expect(buyMarcusSuccess, true);
-      expect(state.coins, 1000); // 3000 - 2000
       expect(state.isCharacterUnlocked('male2_blaze'), true);
+      expect(state.isCharacterUnlocked('male3_thunder'), true);
+      expect(state.isCharacterUnlocked('female2_frost'), true);
+
+      // Equipping Marcus Blaze
+      state.equipCharacter('male2_blaze');
       expect(state.playerAvatarId, 'male2_blaze');
 
-      // Selling Marcus Blaze refunds 1000 coins
-      final sellMarcus = state.sellCharacter('male2_blaze');
-      expect(sellMarcus, true);
-      expect(state.coins, 2000); // 1000 + 1000 refund
-      expect(state.isCharacterUnlocked('male2_blaze'), false);
-      expect(state.playerAvatarId, 'alex_classic'); // Reverts to Alex
-
-      // Cannot sell default characters
-      expect(state.sellCharacter('alex_classic'), false);
-      expect(state.sellCharacter('maya_speed'), false);
-
-      // Cannot sell non-owned character
-      expect(state.sellCharacter('male3_thunder'), false);
-
-      // Buying Jax Thunder (2500 coins)
-      state.coins = 2500;
-      final buyJax = state.purchaseCharacter('male3_thunder');
-      expect(buyJax, true);
-      expect(state.coins, 0); // 2500 - 2500
-      expect(state.isCharacterUnlocked('male3_thunder'), true);
+      // Equipping Jax Thunder
+      state.equipCharacter('male3_thunder');
       expect(state.playerAvatarId, 'male3_thunder');
 
-      // Buying Chloe Frost (2200 coins)
-      state.coins = 2200;
-      final buyChloe = state.purchaseCharacter('female2_frost');
-      expect(buyChloe, true);
-      expect(state.coins, 0); // 2200 - 2200
-      expect(state.isCharacterUnlocked('female2_frost'), true);
+      // Equipping Chloe Frost
+      state.equipCharacter('female2_frost');
       expect(state.playerAvatarId, 'female2_frost');
 
-      // Selling Chloe refunds 1100 coins
+      // Free characters cannot be sold (they are permanent and unlocked for all)
       final sellChloe = state.sellCharacter('female2_frost');
-      expect(sellChloe, true);
-      expect(state.coins, 1100);
-      expect(state.isCharacterUnlocked('female2_frost'), false);
+      expect(sellChloe, false);
+      expect(state.coins, 500);
+      expect(state.isCharacterUnlocked('female2_frost'), true);
 
-      // Selling Jax Thunder refunds 1250 coins (1100 + 1250 = 2350)
       final sellJax = state.sellCharacter('male3_thunder');
-      expect(sellJax, true);
-      expect(state.coins, 2350);
-      expect(state.isCharacterUnlocked('male3_thunder'), false);
-      expect(state.playerAvatarId, 'alex_classic');
+      expect(sellJax, false);
+      expect(state.coins, 500);
+      expect(state.isCharacterUnlocked('male3_thunder'), true);
     });
 
     test('PlayerComponent loads and animates male2 and male3 without error', () async {
@@ -2830,7 +2859,7 @@ void main() {
       expect(() => pFemale2.update(0.016), returnsNormally);
     });
 
-    testWidgets('AvatarPickerDialog displays character roster with prices and allows buying and selling', (WidgetTester tester) async {
+    testWidgets('AvatarPickerDialog displays character roster and allows free equipping', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(800, 700);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -2842,7 +2871,7 @@ void main() {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
-            body: AvatarPickerDialog(),
+            body: AvatarPickerDialog(showChampions: true),
           ),
         ),
       );
@@ -2855,40 +2884,19 @@ void main() {
       expect(find.text('Marcus Blaze'), findsOneWidget);
       expect(find.text('Jax Thunder'), findsOneWidget);
 
-      // Verify prices displayed
-      expect(find.text('Price: 🪙2000'), findsOneWidget);
-      expect(find.text('Price: 🪙2500'), findsOneWidget);
-
-      // Buy Marcus Blaze
-      final buyMarcusBtn = find.text('BUY (🪙2000)');
-      expect(buyMarcusBtn, findsOneWidget);
-      await tester.ensureVisible(buyMarcusBtn);
-      await tester.tap(buyMarcusBtn);
-      await tester.pumpAndSettle();
-
+      // Verify all characters are unlocked
       expect(state.isCharacterUnlocked('male2_blaze'), true);
-      expect(state.playerAvatarId, 'male2_blaze');
-      expect(state.coins, 1000);
+      expect(state.isCharacterUnlocked('male3_thunder'), true);
+      expect(state.isCharacterUnlocked('female2_frost'), true);
 
-      // Now Marcus Blaze shows SELL (+🪙1000)
-      final sellMarcusBtn = find.text('SELL (+🪙1000)');
-      expect(sellMarcusBtn, findsOneWidget);
-
-      // Tap SELL opens confirmation dialog
-      await tester.ensureVisible(sellMarcusBtn);
-      await tester.tap(sellMarcusBtn);
+      // Equip Marcus Blaze directly
+      final equipButtons = find.widgetWithText(ElevatedButton, 'EQUIP');
+      expect(equipButtons, findsWidgets);
+      await tester.ensureVisible(equipButtons.first);
+      await tester.tap(equipButtons.first);
       await tester.pumpAndSettle();
 
-      expect(find.text('Sell Marcus Blaze?'), findsOneWidget);
-      expect(find.text('+1000 Coins'), findsOneWidget);
-
-      // Confirm sale
-      await tester.tap(find.text('CONFIRM SALE'));
-      await tester.pumpAndSettle();
-
-      expect(state.isCharacterUnlocked('male2_blaze'), false);
-      expect(state.coins, 2000); // 1000 + 1000 refund
-      expect(state.playerAvatarId, 'alex_classic');
+      expect(state.playerAvatarId, isNotEmpty);
     });
   });
 
@@ -2918,26 +2926,30 @@ void main() {
       // 2. Sunset Beach Resort (Beach Area)
       final beach = CourtCatalog.beachResort;
       expect(beach.id, 'court_beach_resort');
-      expect(beach.price, 1500);
+      expect(beach.price, 0);
+      expect(beach.isDefaultUnlocked, true);
       expect(beach.environment, CourtEnvironment.beach);
       expect(beach.name, contains('Beach'));
 
       // 3. Neon Cyber Arcade
       final cyber = CourtCatalog.cyberArcade;
       expect(cyber.id, 'court_cyber_arcade');
-      expect(cyber.price, 1800);
+      expect(cyber.price, 0);
+      expect(cyber.isDefaultUnlocked, true);
       expect(cyber.environment, CourtEnvironment.cyber);
 
       // 4. Emerald Forest Park
       final forest = CourtCatalog.forestPark;
       expect(forest.id, 'court_forest_park');
-      expect(forest.price, 2200);
+      expect(forest.price, 0);
+      expect(forest.isDefaultUnlocked, true);
       expect(forest.environment, CourtEnvironment.forest);
 
       // 5. Volcanic Magma Stadium
       final magma = CourtCatalog.magmaStadium;
       expect(magma.id, 'court_magma_stadium');
-      expect(magma.price, 2800);
+      expect(magma.price, 0);
+      expect(magma.isDefaultUnlocked, true);
       expect(magma.environment, CourtEnvironment.magma);
 
       // ID resolver lookup
@@ -2965,28 +2977,32 @@ void main() {
       expect(special.id, 'ball_special');
       expect(special.name, 'Special Ball');
       expect(special.tier, BallTier.special);
-      expect(special.price, 1200);
+      expect(special.price, 0);
+      expect(special.isDefaultUnlocked, true);
 
       // 3. Epic Ball
       final epic = BallCatalog.epic;
       expect(epic.id, 'ball_epic');
       expect(epic.name, 'Epic Ball');
       expect(epic.tier, BallTier.epic);
-      expect(epic.price, 1800);
+      expect(epic.price, 0);
+      expect(epic.isDefaultUnlocked, true);
 
       // 4. Mythic Ball
       final mythic = BallCatalog.mythic;
       expect(mythic.id, 'ball_mythic');
       expect(mythic.name, 'Mythic Ball');
       expect(mythic.tier, BallTier.mythic);
-      expect(mythic.price, 2400);
+      expect(mythic.price, 0);
+      expect(mythic.isDefaultUnlocked, true);
 
       // 5. Legendary Ball
       final legendary = BallCatalog.legendary;
       expect(legendary.id, 'ball_legendary');
       expect(legendary.name, 'Legendary Ball');
       expect(legendary.tier, BallTier.legendary);
-      expect(legendary.price, 3000);
+      expect(legendary.price, 0);
+      expect(legendary.isDefaultUnlocked, true);
 
       // ID resolver lookup
       expect(BallCatalog.getById('ball_elite').tier, BallTier.elite);
@@ -3000,41 +3016,33 @@ void main() {
       final state = GameStateManager.instance;
       state.coins = 2000;
 
-      // Default state
+      // Default state: all courts and balls are unlocked and free for all players
       expect(state.isCourtUnlocked('court_pro_stadium'), true);
-      expect(state.equippedCourtId, 'court_pro_stadium');
-      expect(state.isCourtUnlocked('court_beach_resort'), false);
+      expect(state.isCourtUnlocked('court_beach_resort'), true);
+      expect(state.isCourtUnlocked('court_cyber_arcade'), true);
 
       expect(state.isBallUnlocked('ball_elite'), true);
-      expect(state.equippedBallId, 'ball_elite');
-      expect(state.isBallUnlocked('ball_legendary'), false);
+      expect(state.isBallUnlocked('ball_special'), true);
+      expect(state.isBallUnlocked('ball_legendary'), true);
 
-      // Unaffordable purchase fails
-      final buyLegendaryFail = state.purchaseBall('ball_legendary'); // costs 3000, have 2000
-      expect(buyLegendaryFail, false);
-      expect(state.isBallUnlocked('ball_legendary'), false);
+      // Free purchases equip item directly without coin deduction
+      final buyLegendary = state.purchaseBall('ball_legendary');
+      expect(buyLegendary, true);
+      expect(state.isBallUnlocked('ball_legendary'), true);
+      expect(state.equippedBallId, 'ball_legendary');
       expect(state.coins, 2000);
 
-      // Affordable purchase succeeds
-      final buyBeachSuccess = state.purchaseCourt('court_beach_resort'); // costs 1500
-      expect(buyBeachSuccess, true);
+      final buyBeach = state.purchaseCourt('court_beach_resort');
+      expect(buyBeach, true);
       expect(state.isCourtUnlocked('court_beach_resort'), true);
       expect(state.equippedCourtId, 'court_beach_resort');
-      expect(state.coins, 500);
+      expect(state.coins, 2000);
 
-      // Equipping previously unlocked item
+      // Equipping items
       state.equipCourt('court_pro_stadium');
       expect(state.equippedCourtId, 'court_pro_stadium');
       state.equipCourt('court_beach_resort');
       expect(state.equippedCourtId, 'court_beach_resort');
-
-      // Ball purchase and equip
-      state.coins = 1500;
-      final buySpecialSuccess = state.purchaseBall('ball_special'); // costs 1200
-      expect(buySpecialSuccess, true);
-      expect(state.isBallUnlocked('ball_special'), true);
-      expect(state.equippedBallId, 'ball_special');
-      expect(state.coins, 300);
 
       state.equipBall('ball_elite');
       expect(state.equippedBallId, 'ball_elite');
@@ -3089,13 +3097,13 @@ void main() {
       expect(find.text('Sunset Beach Resort'), findsOneWidget);
       expect(find.text('Neon Cyber Arcade'), findsOneWidget);
 
-      // Buy Sunset Beach Resort in shop
-      final buyBeachBtn = find.descendant(
+      // Equip Sunset Beach Resort in shop
+      final equipBeachBtn = find.descendant(
         of: find.byKey(const ValueKey('shop_court_court_beach_resort')),
-        matching: find.text('🪙 1500'),
+        matching: find.text('EQUIP'),
       );
-      expect(buyBeachBtn, findsOneWidget);
-      await tester.tap(buyBeachBtn);
+      expect(equipBeachBtn, findsOneWidget);
+      await tester.tap(equipBeachBtn);
       await tester.pumpAndSettle();
 
       expect(state.isCourtUnlocked('court_beach_resort'), true);
@@ -3176,13 +3184,13 @@ void main() {
       await tester.tap(find.text('Idle'));
       await tester.pumpAndSettle();
 
-      // Purchase Chloe Frost
-      final buyChloeBtn = find.descendant(
+      // Equip Chloe Frost
+      final equipChloeBtn = find.descendant(
         of: find.byKey(const ValueKey('shop_char_female2_frost')),
-        matching: find.text('🪙 2200'),
+        matching: find.text('EQUIP'),
       );
-      expect(buyChloeBtn, findsOneWidget);
-      await tester.tap(buyChloeBtn);
+      expect(equipChloeBtn, findsOneWidget);
+      await tester.tap(equipChloeBtn);
       await tester.pumpAndSettle();
 
       expect(state.isCharacterUnlocked('female2_frost'), true);

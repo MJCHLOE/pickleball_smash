@@ -30,29 +30,21 @@ class GameStateManager extends ChangeNotifier {
   int coins = 500;
   int trophies = 0;
 
-  // Unlocked Characters (Default: Alex & Maya free)
-  final Set<String> unlockedCharacterIds = {'alex_classic', 'maya_speed'};
+  // Unlocked Characters (All heroes are 100% free and unlocked for all players)
+  final Set<String> unlockedCharacterIds = {
+    'alex_classic',
+    'maya_speed',
+    'male2_blaze',
+    'male3_thunder',
+    'female2_frost',
+  };
 
-  bool isCharacterUnlocked(String charId) {
-    if (charId == 'alex_classic' || charId == 'maya_speed') return true;
-    return unlockedCharacterIds.contains(charId);
-  }
+  bool isCharacterUnlocked(String charId) => true;
 
   bool purchaseCharacter(String charId) {
     final character = CharacterRoster.getById(charId);
-    if (isCharacterUnlocked(character.id)) {
-      playerAvatarId = character.id;
-      notifyListeners();
-      return true;
-    }
-
-    if (coins < character.price) {
-      return false; // Insufficient coins
-    }
-
-    coins -= character.price;
-    unlockedCharacterIds.add(character.id);
     playerAvatarId = character.id;
+    unlockedCharacterIds.add(character.id);
     AudioService.instance.playCoin();
     saveCurrentProgress();
     notifyListeners();
@@ -61,8 +53,8 @@ class GameStateManager extends ChangeNotifier {
 
   bool sellCharacter(String charId) {
     final character = CharacterRoster.getById(charId);
-    if (!character.isPurchasable) return false; // Cannot sell default characters
-    if (!unlockedCharacterIds.contains(character.id)) return false; // Not owned
+    if (!character.isPurchasable) return false; // Free characters cannot be sold
+    if (!unlockedCharacterIds.contains(character.id)) return false;
 
     coins += character.sellRefund;
     unlockedCharacterIds.remove(character.id);
@@ -76,83 +68,58 @@ class GameStateManager extends ChangeNotifier {
   }
 
   void equipCharacter(String charId) {
-    if (!isCharacterUnlocked(charId)) return;
     playerAvatarId = charId;
     saveCurrentProgress();
     notifyListeners();
   }
 
   // ---------------------------------------------------------------------------
-  // Court Backgrounds (Default: Classic Pro Arena free)
+  // Court Backgrounds (All courts are 100% free and unlocked for all players)
   // ---------------------------------------------------------------------------
-  final Set<String> unlockedCourtIds = {'court_pro_stadium'};
+  final Set<String> unlockedCourtIds = {
+    'court_pro_stadium',
+    'court_beach_resort',
+    'court_cyber_arcade',
+    'court_forest_park',
+    'court_magma_stadium',
+  };
   String equippedCourtId = 'court_pro_stadium';
 
-  bool isCourtUnlocked(String courtId) {
-    if (courtId == 'court_pro_stadium') return true;
-    return unlockedCourtIds.contains(courtId);
-  }
+  bool isCourtUnlocked(String courtId) => true;
 
   bool purchaseCourt(String courtId) {
     final court = CourtCatalog.getById(courtId);
-    if (isCourtUnlocked(court.id)) {
-      equipCourt(court.id);
-      return true;
-    }
-
-    if (coins < court.price) {
-      return false; // Insufficient coins
-    }
-
-    coins -= court.price;
-    unlockedCourtIds.add(court.id);
-    equippedCourtId = court.id;
-    AudioService.instance.playCoin();
-    saveCurrentProgress();
-    notifyListeners();
+    equipCourt(court.id);
     return true;
   }
 
   void equipCourt(String courtId) {
-    if (!isCourtUnlocked(courtId)) return;
     equippedCourtId = courtId;
     saveCurrentProgress();
     notifyListeners();
   }
 
   // ---------------------------------------------------------------------------
-  // Pickleballs (Default: Elite Ball free)
+  // Pickleballs (All balls are 100% free and unlocked for all players)
   // ---------------------------------------------------------------------------
-  final Set<String> unlockedBallIds = {'ball_elite'};
+  final Set<String> unlockedBallIds = {
+    'ball_elite',
+    'ball_special',
+    'ball_epic',
+    'ball_mythic',
+    'ball_legendary',
+  };
   String equippedBallId = 'ball_elite';
 
-  bool isBallUnlocked(String ballId) {
-    if (ballId == 'ball_elite') return true;
-    return unlockedBallIds.contains(ballId);
-  }
+  bool isBallUnlocked(String ballId) => true;
 
   bool purchaseBall(String ballId) {
     final ball = BallCatalog.getById(ballId);
-    if (isBallUnlocked(ball.id)) {
-      equipBall(ball.id);
-      return true;
-    }
-
-    if (coins < ball.price) {
-      return false; // Insufficient coins
-    }
-
-    coins -= ball.price;
-    unlockedBallIds.add(ball.id);
-    equippedBallId = ball.id;
-    AudioService.instance.playCoin();
-    saveCurrentProgress();
-    notifyListeners();
+    equipBall(ball.id);
     return true;
   }
 
   void equipBall(String ballId) {
-    if (!isBallUnlocked(ballId)) return;
     equippedBallId = ballId;
     saveCurrentProgress();
     notifyListeners();
@@ -195,14 +162,14 @@ class GameStateManager extends ChangeNotifier {
     currentStreak = 0;
     unlockedCharacterIds
       ..clear()
-      ..addAll(['alex_classic', 'maya_speed']);
+      ..addAll(['alex_classic', 'maya_speed', 'male2_blaze', 'male3_thunder', 'female2_frost']);
     unlockedCourtIds
       ..clear()
-      ..add('court_pro_stadium');
+      ..addAll(['court_pro_stadium', 'court_beach_resort', 'court_cyber_arcade', 'court_forest_park', 'court_magma_stadium']);
     equippedCourtId = 'court_pro_stadium';
     unlockedBallIds
       ..clear()
-      ..add('ball_elite');
+      ..addAll(['ball_elite', 'ball_special', 'ball_epic', 'ball_mythic', 'ball_legendary']);
     equippedBallId = 'ball_elite';
     _initDefaultTournaments();
     _initDefaultChallenges();

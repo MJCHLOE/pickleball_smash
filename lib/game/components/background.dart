@@ -31,16 +31,36 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
   ui.Picture? _cachedCourtPicture;
   Rect? _lastRecordedRect;
   Paint? _cachedFloorPaint;
+  double _lastZoom = -1;
+  double _lastGameW = -1;
+  double _lastGameH = -1;
+  double _lastSizeX = -1;
+  double _lastSizeY = -1;
+  Rect _cachedFloorRect = Rect.zero;
 
-  // 2D Court geometry constants matching gameplay coordinates (Portrait 480x620)
-  static const double courtLeftX = 400.0;
-  static const double courtRightX = 880.0;
-  static const double courtCenterX = 640.0;
-  static const double courtTopY = 50.0;
-  static const double courtBottomY = 670.0;
+  // 2D Court geometry constants matching gameplay coordinates and court view white lines
+  static const double courtTopY = 174.0;
+  static const double courtBottomY = 661.0;
   static const double netY = 360.0;
-  static const double kitchenTopY = 280.0;
-  static const double kitchenBottomY = 440.0;
+  static const double kitchenTopY = 324.0;
+  static const double kitchenBottomY = 474.0;
+  static const double courtCenterX = 640.0;
+
+  // Perspective sidelines: half-width is 169.3 at net (Y=360), expanding to 208.1 at bottom (Y=661) and 145.2 at top (Y=174)
+  static double courtHalfWidthAt(double y) => 169.3 + (y - netY) * 0.1292;
+  static double courtLeftAt(double y) => courtCenterX - courtHalfWidthAt(y);
+  static double courtRightAt(double y) => courtCenterX + courtHalfWidthAt(y);
+
+  /// Pseudo 2.5D perspective scaling factor based on court depth (Y coordinate).
+  /// Objects at the far top baseline (y=174) appear ~75% scale, scaling up to ~103% at bottom baseline (y=661).
+  static double perspectiveScaleAt(double y) {
+    final t = ((y - courtTopY) / (courtBottomY - courtTopY)).clamp(0.0, 1.15);
+    return 0.76 + t * 0.28;
+  }
+
+  // Outer bounds
+  static const double courtLeftX = 432.0;
+  static const double courtRightX = 848.0;
 
   Background({String? courtId})
       : _courtInfo = CourtCatalog.getById(courtId ?? 'court_pro_stadium') {
@@ -57,6 +77,7 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
     _cachedCourtPicture = null;
     _lastRecordedRect = null;
     _cachedFloorPaint = null;
+    _lastZoom = -1;
   }
 
   @override
@@ -68,19 +89,31 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
   void applyCourt(String id) {
     _courtInfo = CourtCatalog.getById(id);
     _applyCourtColors();
-    if (_courtInfo.environment != CourtEnvironment.stadium) {
-      sprite = null;
-    }
+    _loadCourtSprite();
     invalidateCache();
   }
 
   void applyCourtInfo(CourtInfo info) {
     _courtInfo = info;
     _applyCourtColors();
-    if (_courtInfo.environment != CourtEnvironment.stadium) {
-      sprite = null;
-    }
+    _loadCourtSprite();
     invalidateCache();
+  }
+
+  Future<void> _loadCourtSprite() async {
+    try {
+      sprite = await game.loadSprite(_courtInfo.spriteAsset);
+    } catch (_) {
+      try {
+        sprite = await game.loadSprite('background reworked/pickleball-court.png');
+      } catch (_) {
+        try {
+          sprite = await game.loadSprite('background/pickleball_court.png');
+        } catch (e) {
+          debugPrint('Court sprite fallback load notice: $e');
+        }
+      }
+    }
   }
 
   void _applyCourtColors() {
@@ -92,19 +125,7 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
 
   @override
   Future<void> onLoad() async {
-    if (_courtInfo.environment == CourtEnvironment.stadium) {
-      try {
-        sprite = await game.loadSprite('background reworked/pickleball-court.png');
-      } catch (_) {
-        try {
-          sprite = await game.loadSprite('background/pickleball_court.png');
-        } catch (e) {
-          debugPrint('Court sprite fallback load error: $e');
-        }
-      }
-    } else {
-      sprite = null;
-    }
+    await _loadCourtSprite();
 
     size = Vector2(1280, 720);
     paint.isAntiAlias = false;
@@ -167,18 +188,32 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
       gameH = game.size.y;
     } catch (_) {}
 
-    final viewWidth = (zoom > 0 && gameW > 0)
-        ? math.max(1280.0, gameW / zoom + 300.0)
-        : 2000.0;
-    final viewHeight = (zoom > 0 && gameH > 0)
-        ? math.max(720.0, gameH / zoom + 300.0)
-        : 1200.0;
+    if (zoom != _lastZoom ||
+        gameW != _lastGameW ||
+        gameH != _lastGameH ||
+        size.x != _lastSizeX ||
+        size.y != _lastSizeY) {
+      _lastZoom = zoom;
+      _lastGameW = gameW;
+      _lastGameH = gameH;
+      _lastSizeX = size.x;
+      _lastSizeY = size.y;
 
-    final floorRect = Rect.fromCenter(
-      center: Offset(size.x / 2, size.y / 2),
-      width: viewWidth,
-      height: viewHeight,
-    );
+      final viewWidth = (zoom > 0 && gameW > 0)
+          ? math.max(1280.0, gameW / zoom + 300.0)
+          : 2000.0;
+      final viewHeight = (zoom > 0 && gameH > 0)
+          ? math.max(720.0, gameH / zoom + 300.0)
+          : 1200.0;
+
+      _cachedFloorRect = Rect.fromCenter(
+        center: Offset(size.x / 2, size.y / 2),
+        width: viewWidth,
+        height: viewHeight,
+      );
+    }
+
+    final floorRect = _cachedFloorRect;
 
     // 2. Render pixel court using cached ui.Picture for zero-cost per-frame rendering
     if (sprite != null) {
@@ -224,26 +259,45 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
     // Environment Pre-court Decorations (Floor layers)
     _renderEnvironmentFloor(canvas);
 
+    final leftTop = courtLeftAt(courtTopY);
+    final rightTop = courtRightAt(courtTopY);
+    final leftBottom = courtLeftAt(courtBottomY);
+    final rightBottom = courtRightAt(courtBottomY);
+
+    final leftKitchenTop = courtLeftAt(kitchenTopY);
+    final rightKitchenTop = courtRightAt(kitchenTopY);
+    final leftKitchenBottom = courtLeftAt(kitchenBottomY);
+    final rightKitchenBottom = courtRightAt(kitchenBottomY);
+
     // 1. Court drop shadow
     final shadowPaint = Paint()..color = Colors.black45;
-    canvas.drawRect(
-      const Rect.fromLTRB(courtLeftX - 6, courtTopY - 6, courtRightX + 6, courtBottomY + 6),
-      shadowPaint,
-    );
+    final shadowPath = Path()
+      ..moveTo(leftTop - 6, courtTopY - 6)
+      ..lineTo(rightTop + 6, courtTopY - 6)
+      ..lineTo(rightBottom + 6, courtBottomY + 6)
+      ..lineTo(leftBottom - 6, courtBottomY + 6)
+      ..close();
+    canvas.drawPath(shadowPath, shadowPaint);
 
     // 2. Main 2D Court Surface (Service courts)
     final courtPaint = Paint()..color = _courtColor;
-    canvas.drawRect(
-      const Rect.fromLTRB(courtLeftX, courtTopY, courtRightX, courtBottomY),
-      courtPaint,
-    );
+    final courtPath = Path()
+      ..moveTo(leftTop, courtTopY)
+      ..lineTo(rightTop, courtTopY)
+      ..lineTo(rightBottom, courtBottomY)
+      ..lineTo(leftBottom, courtBottomY)
+      ..close();
+    canvas.drawPath(courtPath, courtPaint);
 
     // 3. Non-Volley Zone (The Kitchen)
     final kitchenPaint = Paint()..color = _kitchenColor;
-    canvas.drawRect(
-      const Rect.fromLTRB(courtLeftX, kitchenTopY, courtRightX, kitchenBottomY),
-      kitchenPaint,
-    );
+    final kitchenPath = Path()
+      ..moveTo(leftKitchenTop, kitchenTopY)
+      ..lineTo(rightKitchenTop, kitchenTopY)
+      ..lineTo(rightKitchenBottom, kitchenBottomY)
+      ..lineTo(leftKitchenBottom, kitchenBottomY)
+      ..close();
+    canvas.drawPath(kitchenPath, kitchenPaint);
 
     // 4. White / Custom Boundary Lines (4px pixel-styled un-aliased)
     final linePaint = Paint()
@@ -253,39 +307,39 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
       ..isAntiAlias = false;
 
     // Outer boundary (sidelines & baselines)
-    canvas.drawRect(
-      const Rect.fromLTRB(courtLeftX, courtTopY, courtRightX, courtBottomY),
-      linePaint,
-    );
+    canvas.drawPath(courtPath, linePaint);
 
     // Kitchen lines
     canvas.drawLine(
-      const Offset(courtLeftX, kitchenTopY),
-      const Offset(courtRightX, kitchenTopY),
+      Offset(leftKitchenTop, kitchenTopY),
+      Offset(rightKitchenTop, kitchenTopY),
       linePaint,
     );
     canvas.drawLine(
-      const Offset(courtLeftX, kitchenBottomY),
-      const Offset(courtRightX, kitchenBottomY),
+      Offset(leftKitchenBottom, kitchenBottomY),
+      Offset(rightKitchenBottom, kitchenBottomY),
       linePaint,
     );
 
     // Center service lines
     canvas.drawLine(
-      const Offset(courtCenterX, courtTopY),
-      const Offset(courtCenterX, kitchenTopY),
+      Offset(courtCenterX, courtTopY),
+      Offset(courtCenterX, kitchenTopY),
       linePaint,
     );
     canvas.drawLine(
-      const Offset(courtCenterX, kitchenBottomY),
-      const Offset(courtCenterX, courtBottomY),
+      Offset(courtCenterX, kitchenBottomY),
+      Offset(courtCenterX, courtBottomY),
       linePaint,
     );
 
     // 5. 2D Pixel Net at netY = 360
+    final netLeft = courtLeftAt(netY);
+    final netRight = courtRightAt(netY);
+
     final netShadowPaint = Paint()..color = Colors.black54;
     canvas.drawRect(
-      const Rect.fromLTRB(courtLeftX - 30, netY + 3, courtRightX + 30, netY + 8),
+      Rect.fromLTRB(netLeft - 20, netY + 3, netRight + 20, netY + 8),
       netShadowPaint,
     );
 
@@ -294,8 +348,8 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
     canvas.drawLine(
-      const Offset(courtLeftX - 25, netY),
-      const Offset(courtRightX + 25, netY),
+      Offset(netLeft - 15, netY),
+      Offset(netRight + 15, netY),
       netMeshPaint,
     );
 
@@ -304,19 +358,19 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
       ..strokeWidth = 4.0
       ..style = PaintingStyle.stroke;
     canvas.drawLine(
-      const Offset(courtLeftX - 25, netY - 2),
-      const Offset(courtRightX + 25, netY - 2),
+      Offset(netLeft - 15, netY - 2),
+      Offset(netRight + 15, netY - 2),
       netTapePaint,
     );
 
     // Posts
     final postPaint = Paint()..color = const Color(0xFF64748B);
     canvas.drawRect(
-      const Rect.fromLTWH(courtLeftX - 28, netY - 6, 6, 14),
+      Rect.fromLTWH(netLeft - 18, netY - 6, 6, 14),
       postPaint,
     );
     canvas.drawRect(
-      const Rect.fromLTWH(courtRightX + 22, netY - 6, 6, 14),
+      Rect.fromLTWH(netRight + 12, netY - 6, 6, 14),
       postPaint,
     );
 
@@ -342,11 +396,13 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
         // Wooden boardwalk slats along court sidelines
         final plankPaint = Paint()..color = const Color(0xFFB45309).withValues(alpha: 0.35);
         final plankLine = Paint()..color = const Color(0xFF78350F).withValues(alpha: 0.4)..strokeWidth = 2;
-        for (double py = 50; py <= 670; py += 24) {
-          canvas.drawRect(Rect.fromLTWH(courtLeftX - 56, py, 48, 20), plankPaint);
-          canvas.drawLine(Offset(courtLeftX - 56, py + 20), Offset(courtLeftX - 8, py + 20), plankLine);
-          canvas.drawRect(Rect.fromLTWH(courtRightX + 8, py, 48, 20), plankPaint);
-          canvas.drawLine(Offset(courtRightX + 8, py + 20), Offset(courtRightX + 56, py + 20), plankLine);
+        for (double py = courtTopY; py <= courtBottomY; py += 24) {
+          final cl = courtLeftAt(py);
+          final cr = courtRightAt(py);
+          canvas.drawRect(Rect.fromLTWH(cl - 52, py, 44, 20), plankPaint);
+          canvas.drawLine(Offset(cl - 52, py + 20), Offset(cl - 8, py + 20), plankLine);
+          canvas.drawRect(Rect.fromLTWH(cr + 8, py, 44, 20), plankPaint);
+          canvas.drawLine(Offset(cr + 8, py + 20), Offset(cr + 52, py + 20), plankLine);
         }
         break;
 
@@ -371,21 +427,30 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
           ..color = const Color(0x3300E5FF)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 10.0;
-        canvas.drawRect(
-          const Rect.fromLTRB(courtLeftX - 8, courtTopY - 8, courtRightX + 8, courtBottomY + 8),
-          neonHalo,
-        );
+        final leftTop = courtLeftAt(courtTopY);
+        final rightTop = courtRightAt(courtTopY);
+        final leftBottom = courtLeftAt(courtBottomY);
+        final rightBottom = courtRightAt(courtBottomY);
+        final haloPath = Path()
+          ..moveTo(leftTop - 8, courtTopY - 8)
+          ..lineTo(rightTop + 8, courtTopY - 8)
+          ..lineTo(rightBottom + 8, courtBottomY + 8)
+          ..lineTo(leftBottom - 8, courtBottomY + 8)
+          ..close();
+        canvas.drawPath(haloPath, neonHalo);
         break;
 
       case CourtEnvironment.forest:
         // Mossy cobblestone border around court
         final stonePaint = Paint()..color = const Color(0x4444403C);
         final mossPaint = Paint()..color = const Color(0x3322C55E);
-        for (double py = 50; py <= 670; py += 30) {
-          canvas.drawRect(Rect.fromLTWH(courtLeftX - 32, py, 26, 26), stonePaint);
-          canvas.drawRect(Rect.fromLTWH(courtLeftX - 28, py + 4, 18, 18), mossPaint);
-          canvas.drawRect(Rect.fromLTWH(courtRightX + 6, py, 26, 26), stonePaint);
-          canvas.drawRect(Rect.fromLTWH(courtRightX + 10, py + 4, 18, 18), mossPaint);
+        for (double py = courtTopY; py <= courtBottomY; py += 30) {
+          final cl = courtLeftAt(py);
+          final cr = courtRightAt(py);
+          canvas.drawRect(Rect.fromLTWH(cl - 32, py, 26, 26), stonePaint);
+          canvas.drawRect(Rect.fromLTWH(cl - 28, py + 4, 18, 18), mossPaint);
+          canvas.drawRect(Rect.fromLTWH(cr + 6, py, 26, 26), stonePaint);
+          canvas.drawRect(Rect.fromLTWH(cr + 10, py + 4, 18, 18), mossPaint);
         }
         break;
 

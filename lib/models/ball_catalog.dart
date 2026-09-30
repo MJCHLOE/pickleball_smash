@@ -72,8 +72,8 @@ class BallCatalog {
     name: 'Special Ball',
     tier: BallTier.special,
     tierName: 'SPECIAL',
-    price: 1200,
-    isDefaultUnlocked: false,
+    price: 0,
+    isDefaultUnlocked: true,
     badge: '💎',
     description: 'Ionized plasma pickleball that crackles with concentrated electric charge in flight.',
     effectDescription: 'Electric Cyan Pulse Trail & Lightning Shockwave',
@@ -85,14 +85,14 @@ class BallCatalog {
     badgeBgColor: Color(0xFF0284C7),
   );
 
-  // 3. Epic Ball - Blazing Molten Inferno (1,800 Coins)
+  // 3. Epic Ball - Blazing Molten Inferno (Free)
   static const BallInfo epic = BallInfo(
     id: 'ball_epic',
     name: 'Epic Ball',
     tier: BallTier.epic,
     tierName: 'EPIC',
-    price: 1800,
-    isDefaultUnlocked: false,
+    price: 0,
+    isDefaultUnlocked: true,
     badge: '🔥',
     description: 'Forged in subterranean magma vents, leaving burning thermal trails on every smash.',
     effectDescription: 'Molten Flame Trail & Fiery Ember Bursts',
@@ -104,14 +104,14 @@ class BallCatalog {
     badgeBgColor: Color(0xFFEA580C),
   );
 
-  // 4. Mythic Ball - Celestial Cosmic Void (2,400 Coins)
+  // 4. Mythic Ball - Celestial Cosmic Void (Free)
   static const BallInfo mythic = BallInfo(
     id: 'ball_mythic',
     name: 'Mythic Ball',
     tier: BallTier.mythic,
     tierName: 'MYTHIC',
-    price: 2400,
-    isDefaultUnlocked: false,
+    price: 0,
+    isDefaultUnlocked: true,
     badge: '🌌',
     description: 'Enchanted cosmic orb infused with astral starlight and anti-gravity quantum particles.',
     effectDescription: 'Astral Galaxy Violet Trail & Starlight Sparks',
@@ -123,14 +123,14 @@ class BallCatalog {
     badgeBgColor: Color(0xFF9333EA),
   );
 
-  // 5. Legendary Ball - 24K Radiant Solar Gold (3,000 Coins)
+  // 5. Legendary Ball - 24K Radiant Solar Gold (Free)
   static const BallInfo legendary = BallInfo(
     id: 'ball_legendary',
     name: 'Legendary Ball',
     tier: BallTier.legendary,
     tierName: 'LEGENDARY',
-    price: 3000,
-    isDefaultUnlocked: false,
+    price: 0,
+    isDefaultUnlocked: true,
     badge: '👑',
     description: 'Masterwork pure solid gold sphere that glints with blinding solar flares and royal majesty.',
     effectDescription: 'Radiant 24K Solar Flare Trail & Golden Shockwave',

@@ -115,39 +115,46 @@ class HomeView extends StatelessWidget {
   Widget _buildHeroPlayCard(BuildContext context, GameStateManager state) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF1E3A8A),
-            Color(0xFF0F172A),
-          ],
-        ),
+        color: const Color(0xFF06090F),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppTheme.electricCyan.withValues(alpha: 0.4),
+          color: AppTheme.electricCyan,
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.electricCyan.withValues(alpha: 0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: AppTheme.electricCyan.withValues(alpha: 0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Stack(
         children: [
-          // Decorative background graphics
-          Positioned(
-            right: -20,
-            bottom: -30,
-            child: Icon(
-              Icons.sports_tennis,
-              size: 200,
-              color: Colors.white.withValues(alpha: 0.05),
+          // Pixel grid background
+          Positioned.fill(
+            child: RepaintBoundary(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: CustomPaint(painter: _PixelGridPainter.instance),
+              ),
             ),
           ),
+          // Scanline overlay
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Opacity(
+                opacity: 0.15,
+                child: CustomPaint(painter: _ScanlinePainter.instance),
+              ),
+            ),
+          ),
+          // Pixel corner notches
+          Positioned(top: 0, left: 0, child: Container(width: 6, height: 6, color: const Color(0xFF06090F))),
+          Positioned(top: 0, right: 0, child: Container(width: 6, height: 6, color: const Color(0xFF06090F))),
+          Positioned(bottom: 0, left: 0, child: Container(width: 6, height: 6, color: const Color(0xFF06090F))),
+          Positioned(bottom: 0, right: 0, child: Container(width: 6, height: 6, color: const Color(0xFF06090F))),
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: LayoutBuilder(
@@ -167,22 +174,22 @@ class HomeView extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: AppTheme.neonLime.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(20),
+                            color: AppTheme.neonLime.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
                             border: Border.all(color: AppTheme.neonLime, width: 1),
                           ),
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.bolt, color: AppTheme.neonLime, size: 16),
+                              Icon(Icons.bolt, color: AppTheme.neonLime, size: 14),
                               SizedBox(width: 4),
                               Text(
                                 'READY TO SERVE',
                                 style: TextStyle(
                                   color: AppTheme.neonLime,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.2,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.5,
                                 ),
                               ),
                             ],
@@ -191,12 +198,13 @@ class HomeView extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppTheme.surfaceBorder),
                           ),
                           child: const Text(
                             '1280x720 Court',
-                            style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                            style: TextStyle(color: AppTheme.textMuted, fontSize: 10),
                           ),
                         ),
                       ],
@@ -204,7 +212,7 @@ class HomeView extends StatelessWidget {
                     const SizedBox(height: 14),
                     Game2DText.hero(
                       'PICKL',
-                      fontSize: 32,
+                      fontSize: 28,
                       gradient: AppTheme.playButtonGradient,
                       strokeColor: const Color(0xFF060B18),
                       strokeWidth: 4.0,
@@ -215,11 +223,11 @@ class HomeView extends StatelessWidget {
                       'Jump onto the court for a fast-paced singles duel. Use movement and timely smashes to dominate the match!',
                       style: TextStyle(
                         color: AppTheme.textMuted,
-                        fontSize: 13,
+                        fontSize: 12,
                         height: 1.4,
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 14),
                     Wrap(
                       spacing: 10,
                       runSpacing: 10,
@@ -303,13 +311,13 @@ class HomeView extends StatelessWidget {
                     InkWell(
                       key: const ValueKey('dash_hero_badge'),
                       onTap: () => AvatarPickerDialog.show(context),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(6),
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 6),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(colors: equippedChar.gradientColors),
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(6),
                           border: Border.all(color: equippedChar.borderColor, width: 1.5),
                           boxShadow: [
                             BoxShadow(
@@ -343,19 +351,43 @@ class HomeView extends StatelessWidget {
                         ),
                       ),
                     ),
-                    AnimatedCharacterDisplay(
-                      key: ValueKey('dash_char_${state.playerAvatarId}'),
-                      initialGender: genderFromType(equippedChar.type),
-                      height: isWide ? 190 : 170,
-                      showControls: true,
-                      onGenderChanged: (newGender) {
-                        final targetChar = CharacterRoster.getByType(typeFromGender(newGender));
-                        if (state.isCharacterUnlocked(targetChar.id) || targetChar.isDefaultUnlocked) {
-                          state.updatePlayerAvatar(targetChar.id);
-                        } else {
-                          AvatarPickerDialog.show(context);
-                        }
-                      },
+                    // Pixel spotlight under character
+                    Stack(
+                      alignment: Alignment.bottomCenter,
+                      children: [
+                        Positioned(
+                          bottom: 0,
+                          child: Container(
+                            width: isWide ? 140 : 120,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.rectangle,
+                              borderRadius: BorderRadius.circular(60),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: equippedChar.borderColor.withValues(alpha: 0.25),
+                                  blurRadius: 24,
+                                  spreadRadius: 8,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        AnimatedCharacterDisplay(
+                          key: ValueKey('dash_char_${state.playerAvatarId}'),
+                          initialGender: genderFromType(equippedChar.type),
+                          height: isWide ? 190 : 170,
+                          showControls: true,
+                          onGenderChanged: (newGender) {
+                            final targetChar = CharacterRoster.getByType(typeFromGender(newGender));
+                            if (state.isCharacterUnlocked(targetChar.id) || targetChar.isDefaultUnlocked) {
+                              state.updatePlayerAvatar(targetChar.id);
+                            } else {
+                              AvatarPickerDialog.show(context);
+                            }
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 );
@@ -393,26 +425,27 @@ class HomeView extends StatelessWidget {
     );
   }
 
+
   Widget _buildShopAndLockerBanner(BuildContext context, GameStateManager state) {
     final activeChar = CharacterRoster.getById(state.playerAvatarId);
     final activeCourt = CourtCatalog.getById(state.equippedCourtId);
     final activeBall = BallCatalog.getById(state.equippedBallId);
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.surfaceBorder, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return Stack(
+      children: [
+        // Pixel corner notches
+        Positioned(top: 0, left: 0, child: Container(width: 5, height: 5, color: AppTheme.background)),
+        Positioned(top: 0, right: 0, child: Container(width: 5, height: 5, color: AppTheme.background)),
+        Positioned(bottom: 0, left: 0, child: Container(width: 5, height: 5, color: AppTheme.background)),
+        Positioned(bottom: 0, right: 0, child: Container(width: 5, height: 5, color: AppTheme.background)),
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0E1525),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppTheme.surfaceBorder, width: 1.5),
           ),
-        ],
-      ),
-      child: Column(
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -495,6 +528,8 @@ class HomeView extends StatelessWidget {
           ),
         ],
       ),
+        ),
+      ],
     );
   }
 
@@ -562,9 +597,9 @@ class HomeView extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.surfaceBorder),
+        color: const Color(0xFF0E1525),
+        borderRadius: const BorderRadius.all(Radius.circular(12)),
+        border: Border.all(color: AppTheme.surfaceBorder, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -722,9 +757,9 @@ class HomeView extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.surfaceBorder),
+        color: const Color(0xFF0E1525),
+        borderRadius: const BorderRadius.all(Radius.circular(12)),
+        border: Border.all(color: AppTheme.surfaceBorder, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -896,9 +931,9 @@ class HomeView extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.surfaceBorder),
+        color: const Color(0xFF0E1525),
+        borderRadius: const BorderRadius.all(Radius.circular(12)),
+        border: Border.all(color: AppTheme.surfaceBorder, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -995,14 +1030,10 @@ class HomeView extends StatelessWidget {
             maxHeight: MediaQuery.of(ctx).size.height * 0.75,
             maxWidth: 600,
           ),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppTheme.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border(
-              top: BorderSide(color: AppTheme.surfaceBorder, width: 1.5),
-              left: BorderSide(color: AppTheme.surfaceBorder, width: 1.5),
-              right: BorderSide(color: AppTheme.surfaceBorder, width: 1.5),
-            ),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(color: AppTheme.surfaceBorder, width: 1.5),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1446,3 +1477,56 @@ class HomeView extends StatelessWidget {
   }
 }
 
+
+
+// ============================================================================
+// CustomPainter: Pixel Grid Background (nearly invisible dark grid)
+// ============================================================================
+
+/// Subtle pixel grid background painter (very dark, nearly invisible).
+class _PixelGridPainter extends CustomPainter {
+  _PixelGridPainter._();
+  static final _PixelGridPainter instance = _PixelGridPainter._();
+
+  static final Paint _p = Paint()
+    ..color = const Color(0x08FFFFFF)
+    ..strokeWidth = 0.5;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const step = 16.0;
+    for (double x = 0; x <= size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), _p);
+    }
+    for (double y = 0; y <= size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), _p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PixelGridPainter old) => false;
+}
+
+// ============================================================================
+// CustomPainter: Horizontal Scanline Overlay
+// ============================================================================
+
+/// Horizontal scanline overlay painter.
+class _ScanlinePainter extends CustomPainter {
+  _ScanlinePainter._();
+  static final _ScanlinePainter instance = _ScanlinePainter._();
+
+  static final Paint _p = Paint()
+    ..color = const Color(0x12000000)
+    ..strokeWidth = 1.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (double y = 0; y <= size.height; y += 3) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), _p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ScanlinePainter old) => false;
+}

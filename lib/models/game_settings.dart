@@ -69,6 +69,7 @@ class GameSettings {
 
   // Gameplay & Scoring Rules
   final String scoringMode; // 'rally' (Major League / Arcade) or 'sideOut' (Traditional USA Pickleball)
+  final bool requireFloorBounceAllShots; // false by default (Official Pickleball: volleys allowed after 2-bounce rule outside NVZ)
 
   // Deprecated/compatibility aliases
   double get controllerOpacity => transparentCapacity;
@@ -127,6 +128,7 @@ class GameSettings {
     this.dashPosX = mlbbDashX,
     this.dashPosY = mlbbDashY,
     this.scoringMode = 'rally',
+    this.requireFloorBounceAllShots = false,
     // Graphics
     this.graphicsQuality = 'High',
     this.targetFps = 60,
@@ -180,6 +182,7 @@ class GameSettings {
     double? dashPosX,
     double? dashPosY,
     String? scoringMode,
+    bool? requireFloorBounceAllShots,
     // Deprecated compatibility parameters (ignored or redirected)
     double? joystickSensitivity,
     double? controllerOpacity,
@@ -236,6 +239,7 @@ class GameSettings {
       dashPosX: dashPosX ?? this.dashPosX,
       dashPosY: dashPosY ?? this.dashPosY,
       scoringMode: scoringMode ?? this.scoringMode,
+      requireFloorBounceAllShots: requireFloorBounceAllShots ?? this.requireFloorBounceAllShots,
       // Graphics
       graphicsQuality: graphicsQuality ?? this.graphicsQuality,
       targetFps: targetFps ?? this.targetFps,
@@ -291,6 +295,7 @@ class GameSettings {
       'dashPosX': dashPosX,
       'dashPosY': dashPosY,
       'scoringMode': scoringMode,
+      'requireFloorBounceAllShots': requireFloorBounceAllShots ? 1 : 0,
       // Legacy backward compatibility keys
       'joystickSensitivity': 1.0,
       'controllerOpacity': transparentCapacity,
@@ -352,6 +357,7 @@ class GameSettings {
       dashPosX: (map['dashPosX'] as num?)?.toDouble() ?? mlbbDashX,
       dashPosY: (map['dashPosY'] as num?)?.toDouble() ?? mlbbDashY,
       scoringMode: map['scoringMode'] as String? ?? 'rally',
+      requireFloorBounceAllShots: (map['requireFloorBounceAllShots'] as int? ?? 0) == 1,
       // Graphics
       graphicsQuality: map['graphicsQuality'] as String? ?? 'High',
       targetFps: (map['targetFps'] as num?)?.toInt() ?? 60,

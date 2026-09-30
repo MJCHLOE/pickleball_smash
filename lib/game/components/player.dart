@@ -9,6 +9,7 @@ import '../../models/character_roster.dart';
 import '../../services/audio_service.dart';
 import '../../services/multiplayer_service.dart';
 import '../pickleball_game.dart';
+import 'background.dart';
 
 enum PlayerDirection { front, behind, left, right }
 enum PlayerState { idle, run, slash }
@@ -130,6 +131,10 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   // Reusable cached paints for zero-allocation 60 FPS rendering
   static final Paint _shadowOuterPaint = Paint()..color = const Color(0x45000000);
   static final Paint _shadowInnerPaint = Paint()..color = const Color(0x60000000);
+  Rect? _cachedShadowOuterRect;
+  Rect? _cachedShadowInnerRect;
+  double _lastShadowSizeX = -1;
+  double _lastShadowSizeY = -1;
   final Paint _afterimagePaint = Paint();
   final Paint _ghostPaint = Paint()..style = PaintingStyle.fill;
   final Paint _particlePaint = Paint()..style = PaintingStyle.fill;
@@ -703,17 +708,21 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
 
     _clampToCourt();
 
+    // Pseudo 2.5D perspective scaling based on court depth
+    final pScale = 1.45 * Background.perspectiveScaleAt(position.y);
+    scale.setValues(pScale, pScale);
+
     // Rule 3: Kitchen Momentum Fault Check
     // If a player hit a volley, forward momentum cannot carry them into the Kitchen!
     timeSinceLastVolley += dt;
     if (timeSinceLastVolley <= 0.5 && !currentGame.isGameOver && !currentGame.isWaitingForServe) {
-      if (isPlayerOne && position.y <= 440.0) {
+      if (isPlayerOne && position.y <= Background.kitchenBottomY) {
         timeSinceLastVolley = 999.0;
         currentGame.handleRallyWon(
           winnerIsPlayerOne: false,
           faultReason: 'FAULT: Kitchen Momentum (Momentum carried player into Non-Volley Zone)',
         );
-      } else if (!isPlayerOne && position.y >= 280.0) {
+      } else if (!isPlayerOne && position.y >= Background.kitchenTopY) {
         timeSinceLastVolley = 999.0;
         currentGame.handleRallyWon(
           winnerIsPlayerOne: true,
@@ -767,7 +776,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     double targetX = position.x;
     double targetY = position.y;
     final side = currentGame.p1PartnerCourtSide;
-    final double homeX = (side == 'right') ? 760.0 : 520.0;
+    final double homeX = (side == 'right') ? 740.0 : 540.0;
     const double homeY = 570.0;
 
     if (ball.velocity.y > 0) {
@@ -787,11 +796,11 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
 
         if (ball.bounceCountCurrentSide >= 1) {
           // Ball bounced! Rush directly to hit point
-          targetY = (ball.position.y + 20.0).clamp(445.0, 640.0);
+          targetY = (ball.position.y + 20.0).clamp(Background.kitchenBottomY + 5.0, Background.courtBottomY - 10.0);
         } else if (currentGame.rallyHitCount == 1) {
           targetY = 590.0;
-        } else if (ball.position.y < 490.0) {
-          targetY = 480.0; // Ready near kitchen
+        } else if (ball.position.y < Background.kitchenBottomY + 20.0) {
+          targetY = Background.kitchenBottomY + 20.0; // Ready near kitchen
         } else {
           targetY = 585.0; // Baseline depth
         }
@@ -911,7 +920,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     double targetX = position.x;
     double targetY = position.y;
 
-    final double homeX = isDoubles ? ((mySide == 'right') ? 520.0 : 760.0) : 640.0;
+    final double homeX = isDoubles ? ((mySide == 'right') ? 565.0 : 715.0) : 640.0;
     const double homeY = 150.0;
 
     if (ball.velocity.y < 0) {
@@ -937,21 +946,24 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
 
         if (ball.bounceCountCurrentSide >= 1) {
           // Ball bounced! Rush directly to hit point
-          targetY = (ball.position.y - 20.0).clamp(90.0, 320.0);
+          targetY = (ball.position.y - 20.0).clamp(Background.courtTopY + 10.0, Background.kitchenTopY - 5.0);
         } else if (currentGame.rallyHitCount == 0) {
-          targetY = 140.0;
-        } else if (ball.position.y > 230) {
-          targetY = 240.0; // Ready near kitchen
+          targetY = 230.0;
+        } else if (ball.position.y <= 230.0) {
+          // Ball is deep towards top baseline: CPU moves backward to intercept
+          targetY = math.min(120.0, ball.position.y + 20.0);
+        } else if (ball.position.y > Background.kitchenTopY - 30.0) {
+          targetY = Background.kitchenTopY - 25.0; // Ready near kitchen
         } else {
-          targetY = 120.0; // Baseline depth
+          targetY = 220.0; // Baseline depth
         }
       } else {
         targetX = homeX;
-        targetY = homeY;
+        targetY = (currentGame.rallyHitCount > 0) ? 220.0 : homeY;
       }
     } else {
       targetX = homeX;
-      targetY = homeY;
+      targetY = (currentGame.rallyHitCount > 0 && !currentGame.isGameOver) ? 220.0 : homeY;
     }
 
     final diffX = targetX - position.x;
@@ -1019,31 +1031,29 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   /// the white boundary lines into the apron to retrieve wide and deep balls,
   /// while preventing players from crossing the net into the opponent's court.
   void _clampToCourt() {
-    const minPlayableX = 320.0;
-    const maxPlayableX = 960.0;
     const topApronLimitY = 15.0;
     const bottomApronLimitY = 715.0;
     const p1NetLimitY = 385.0;
     const p2NetLimitY = 330.0;
-
-    position.x = position.x.clamp(minPlayableX, maxPlayableX);
+    const minPlayableX = 320.0;
+    const maxPlayableX = 960.0;
 
     if (isPlayerOne) {
       position.y = position.y.clamp(p1NetLimitY, bottomApronLimitY);
     } else {
       position.y = position.y.clamp(topApronLimitY, p2NetLimitY);
     }
+
+    position.x = position.x.clamp(minPlayableX, maxPlayableX);
   }
 
   /// Returns true if the player is currently standing outside the white boundary lines.
   bool get isOutsideCourt {
-    const courtLeftX = 400.0;
-    const courtRightX = 880.0;
-    const topBaselineY = 50.0;
-    const bottomBaselineY = 670.0;
-    return position.x < courtLeftX ||
-        position.x > courtRightX ||
-        (isPlayerOne ? position.y > bottomBaselineY : position.y < topBaselineY);
+    final courtLeft = Background.courtLeftAt(position.y);
+    final courtRight = Background.courtRightAt(position.y);
+    return position.x < courtLeft ||
+        position.x > courtRight ||
+        (isPlayerOne ? position.y > Background.courtBottomY : position.y < Background.courtTopY);
   }
 
   Future<SpriteAnimation> _loadAnimation(
@@ -1078,9 +1088,14 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       isDashing = false;
     }
 
-    // AI / bot players MUST let the ball bounce on the court floor once before they hit!
+    // Rule 6 & 7: Two-bounce rule and Kitchen NVZ checks for AI
     if (isAI && !currentGame.isWaitingForServe && currentGame.ball.bounceCountCurrentSide == 0) {
-      return; // Do NOT swing, animate slash, or hit before the floor bounce
+      final bool inKitchen = isPlayerOne ? position.y <= Background.kitchenBottomY : position.y >= Background.kitchenTopY;
+      final bool twoBouncePhase = currentGame.rallyHitCount < 2;
+      final bool trainingMode = currentGame.settings?.requireFloorBounceAllShots ?? false;
+      if (twoBouncePhase || inKitchen || trainingMode) {
+        return; // Do NOT swing before floor bounce
+      }
     }
 
     if (isPlayerOne && !isAI) {
@@ -1102,12 +1117,10 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       final distY = (ball.position.y - position.y).abs();
       final distX = (ball.position.x - position.x).abs();
       if (distY < 95 && distX < 75) {
-        // AI must always wait for floor bounce.
-        // If player is outside the white line, the ball MUST have bounced first on the floor.
-        // On serve return (rallyHitCount == 0) and 3rd shot (rallyHitCount == 1), ball MUST have bounced first.
-        final bool requiresFloorBounce = isAI || isOutsideCourt || currentGame.rallyHitCount < 2;
-        if (requiresFloorBounce && ball.bounceCountCurrentSide == 0) {
-          return; // Ball has not bounced on the floor yet!
+        final bool trainingMode = currentGame.settings?.requireFloorBounceAllShots ?? false;
+        // In training mode or when outside court before floor bounce, require bounce
+        if ((trainingMode || isOutsideCourt) && ball.bounceCountCurrentSide == 0) {
+          return;
         }
         ball.processPlayerHit(this);
       }
@@ -1172,32 +1185,32 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   }
 
   /// Whether player is currently standing inside the Non-Volley Zone (The Kitchen)
-  bool get isInKitchen => isPlayerOne ? (position.y <= 440.0) : (position.y >= 280.0);
+  bool get isInKitchen => isPlayerOne ? (position.y <= Background.kitchenBottomY) : (position.y >= Background.kitchenTopY);
 
   @override
   void render(Canvas canvas) {
     // 1. Draw dynamic ground shadow beneath character feet
     final bool enableShadows = currentGame.settings?.shadowsEnabled ?? true;
     if (enableShadows) {
-      final shadowCenter = Offset(size.x / 2, size.y * 0.90);
-      // Soft ambient outer shadow
-      canvas.drawOval(
-        Rect.fromCenter(
+      if (_cachedShadowOuterRect == null ||
+          _lastShadowSizeX != size.x ||
+          _lastShadowSizeY != size.y) {
+        _lastShadowSizeX = size.x;
+        _lastShadowSizeY = size.y;
+        final shadowCenter = Offset(size.x / 2, size.y * 0.90);
+        _cachedShadowOuterRect = Rect.fromCenter(
           center: shadowCenter,
           width: size.x * 0.62,
           height: size.y * 0.20,
-        ),
-        _shadowOuterPaint,
-      );
-      // Denser contact inner shadow
-      canvas.drawOval(
-        Rect.fromCenter(
+        );
+        _cachedShadowInnerRect = Rect.fromCenter(
           center: shadowCenter,
           width: size.x * 0.40,
           height: size.y * 0.12,
-        ),
-        _shadowInnerPaint,
-      );
+        );
+      }
+      canvas.drawOval(_cachedShadowOuterRect!, _shadowOuterPaint);
+      canvas.drawOval(_cachedShadowInnerRect!, _shadowInnerPaint);
     }
 
     // 2. Render motion trail afterimages
