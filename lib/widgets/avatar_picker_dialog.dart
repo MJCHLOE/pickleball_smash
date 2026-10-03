@@ -9,6 +9,7 @@ import '../services/game_state_manager.dart';
 import '../theme/app_theme.dart';
 import 'game_2d_button.dart';
 import 'player_avatar.dart';
+import 'ready_to_serve_character_widget.dart';
 
 /// Clean 2D Arcade Player Profile Picture Picker.
 /// In profile, Champions and Avatar Studio have been removed as requested.
@@ -611,7 +612,6 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
           separatorBuilder: (_, i) => const SizedBox(height: 10),
           itemBuilder: (context, index) {
             final char = champions[index];
-            final av = PlayerAvatar.getById(char.id);
             final isUnlocked = state.isCharacterUnlocked(char.id);
             final isEquipped = _selectedAvatarId == char.id;
 
@@ -640,11 +640,25 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
                     borderRadius: BorderRadius.circular(10),
                     child: Row(
                       children: [
-                        PlayerAvatarWidget(
-                          avatar: av,
-                          size: 46,
-                          showBadge: true,
-                          isSelected: isEquipped,
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: char.gradientColors),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isEquipped ? AppTheme.neonLime : char.borderColor,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: ReadyToServeCharacterWidget(
+                              character: char,
+                              action: 'idle',
+                              size: 44,
+                            ),
+                          ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(

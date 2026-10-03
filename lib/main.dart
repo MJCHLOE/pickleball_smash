@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flame/flame.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'services/audio_service.dart';
 import 'services/database_service.dart';
 import 'services/firebase_multiplayer_service.dart';
 import 'services/game_state_manager.dart';
@@ -11,6 +12,9 @@ import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize AudioService (global AudioContext configuration & lifecycle observer)
+  AudioService.instance.initialize();
 
   // Configure Firebase Online Multiplayer with user's Realtime Database
   FirebaseMultiplayerService.instance.configureProject('https://pickl-6d440-default-rtdb.firebaseio.com/');

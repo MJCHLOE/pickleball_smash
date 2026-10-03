@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import '../../models/court_catalog.dart';
 import '../pickleball_game.dart';
 
@@ -29,6 +30,7 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
 
   // Cached Picture & Paint for ultra-smooth rendering on low-end devices
   ui.Picture? _cachedCourtPicture;
+  ui.Image? _centerLogoImage;
   Rect? _lastRecordedRect;
   Paint? _cachedFloorPaint;
   double _lastZoom = -1;
@@ -105,12 +107,16 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
       sprite = await game.loadSprite(_courtInfo.spriteAsset);
     } catch (_) {
       try {
-        sprite = await game.loadSprite('background reworked/pickleball-court.png');
+        sprite = await game.loadSprite('background/hud_court_background.png');
       } catch (_) {
         try {
-          sprite = await game.loadSprite('background/pickleball_court.png');
-        } catch (e) {
-          debugPrint('Court sprite fallback load notice: $e');
+          sprite = await game.loadSprite('background reworked/pickleball-court.png');
+        } catch (_) {
+          try {
+            sprite = await game.loadSprite('background/pickleball_court.png');
+          } catch (e) {
+            debugPrint('Court sprite fallback load notice: $e');
+          }
         }
       }
     }
@@ -126,6 +132,7 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
   @override
   Future<void> onLoad() async {
     await _loadCourtSprite();
+    await _loadCenterCourtLogo();
 
     size = Vector2(1280, 720);
     paint.isAntiAlias = false;
@@ -139,6 +146,21 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
 
     position = Vector2(1280 / 2, 720 / 2);
     anchor = Anchor.center;
+  }
+
+  Future<void> _loadCenterCourtLogo() async {
+    try {
+      _centerLogoImage = await game.images.load('logo/court_center_logo.png');
+    } catch (_) {
+      try {
+        final data = await rootBundle.load('assets/images/logo/court_center_logo.png');
+        final bytes = data.buffer.asUint8List();
+        _centerLogoImage = await decodeImageFromList(bytes);
+      } catch (e) {
+        debugPrint('Center court logo fallback load notice: $e');
+      }
+    }
+    invalidateCache();
   }
 
   void updateTheme(String theme) {
@@ -228,6 +250,7 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
       }
       canvas.drawRect(floorRect, _cachedFloorPaint!);
       super.render(canvas);
+      _renderCenterCourtLogo(canvas);
     } else {
       if (_cachedCourtPicture == null || _lastRecordedRect != floorRect) {
         _recordProceduralCourt(floorRect);
@@ -376,6 +399,64 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
 
     // 6. Environment Props & Furniture (Benches, boardwalks, trees, fissures)
     _renderEnvironmentProps(canvas);
+
+    // 7. Center Court University Seal Logo
+    _renderCenterCourtLogo(canvas);
+  }
+
+  /// Renders the official Misamis University circular seal logo right at the center of the court
+  void _renderCenterCourtLogo(Canvas canvas) {
+    if (_centerLogoImage == null) return;
+
+    const center = Offset(courtCenterX, netY);
+    const radius = 64.0; // 128px diameter centered at (640, 360)
+    final dstRect = Rect.fromCircle(center: center, radius: radius);
+
+    // 1. Subtle court floor drop shadow for authentic painted depth
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.35)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    canvas.drawCircle(center.translate(0, 2), radius + 2, shadowPaint);
+
+    // 2. Crisp circular white backing disc so the seal is vibrant against any court surface
+    final backingPaint = Paint()
+      ..color = Colors.white
+      ..isAntiAlias = true;
+    canvas.drawCircle(center, radius, backingPaint);
+
+    // 3. Render circular clipped logo image
+    canvas.save();
+    final clipPath = Path()..addOval(dstRect);
+    canvas.clipPath(clipPath);
+
+    final srcRect = Rect.fromLTWH(
+      0,
+      0,
+      _centerLogoImage!.width.toDouble(),
+      _centerLogoImage!.height.toDouble(),
+    );
+
+    final logoPaint = Paint()
+      ..filterQuality = FilterQuality.high
+      ..isAntiAlias = true;
+
+    canvas.drawImageRect(_centerLogoImage!, srcRect, dstRect, logoPaint);
+    canvas.restore();
+
+    // 4. Elegant university gold border ring
+    final ringPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.0
+      ..color = const Color(0xFFE5A823) // Misamis University gold ring
+      ..isAntiAlias = true;
+    canvas.drawCircle(center, radius, ringPaint);
+
+    final innerRingPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0
+      ..color = const Color(0xFF996515).withValues(alpha: 0.5)
+      ..isAntiAlias = true;
+    canvas.drawCircle(center, radius - 2, innerRingPaint);
   }
 
   /// Draws environment-specific floor patterns under and around the court

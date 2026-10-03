@@ -186,6 +186,10 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
           dashPosY: GameSettings.mlbbDashY,
           joystickExpand: 1.0,
           skillButtonScale: 1.0,
+          smashScale: 1.0,
+          leftSpinScale: 1.0,
+          rightSpinScale: 1.0,
+          dashScale: 1.0,
           buttonSize: 'Normal',
           joystickOnLeft: true,
           showJoystick: true,
@@ -208,6 +212,10 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
           dashPosY: 0.68,
           joystickExpand: 0.85,
           skillButtonScale: 0.85,
+          smashScale: 0.85,
+          leftSpinScale: 0.85,
+          rightSpinScale: 0.85,
+          dashScale: 0.85,
           skillSpacing: 75.0,
           joystickMarginX: 24.0,
           joystickMarginY: 24.0,
@@ -232,6 +240,10 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
           dashPosY: 0.58,
           joystickExpand: 1.25,
           skillButtonScale: 1.25,
+          smashScale: 1.25,
+          leftSpinScale: 1.15,
+          rightSpinScale: 1.15,
+          dashScale: 1.15,
           skillSpacing: 110.0,
           joystickMarginX: 44.0,
           joystickMarginY: 44.0,
@@ -263,6 +275,10 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
           dashPosY: GameSettings.arcadeDashY,
           joystickExpand: 1.0,
           skillButtonScale: 1.0,
+          smashScale: 1.0,
+          leftSpinScale: 1.0,
+          rightSpinScale: 1.0,
+          dashScale: 1.0,
           skillSpacing: 90.0,
           joystickMarginX: 36.0,
           joystickMarginY: 36.0,
@@ -493,9 +509,15 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
             return Stack(
               children: [
                 // Pickleball Court Background
-                CustomPaint(
-                  size: Size.infinite,
-                  painter: _FullCourtPainter(courtInfo: courtInfo, isMini: true),
+                Positioned.fill(
+                  child: Image.asset(
+                    'assets/images/background/hud_court_background.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => CustomPaint(
+                      size: Size.infinite,
+                      painter: _FullCourtPainter(courtInfo: courtInfo, isMini: true),
+                    ),
+                  ),
                 ),
 
                 // Player & Opponent Character Sprites on Court
@@ -589,20 +611,20 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
                     ),
                   ),
 
-                // 2. DRAGGABLE SMASH (BASIC ATTACK)
+                // 2. DRAGGABLE SMASH (BASIC ATTACK - UNIFIED ARCADE BUTTON)
                 if (_settings.showSkillButtons)
                   _buildDraggableElement(
                     element: 'smash',
                     pWidth: pWidth,
                     pHeight: pHeight,
                     isLeftHanded: isLeftHanded,
-                    size: 34.0 * _settings.skillButtonScale,
+                    size: 34.0 * _settings.smashScale,
                     onDrag: (details) => handleDrag('smash', details),
                     child: Opacity(
                       opacity: opacity,
                       child: Container(
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [Color(0xFFFF3366), Color(0xFFCC0033)]),
+                          color: const Color(0xFF0B0F19),
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: _selectedElement == 'smash' ? AppTheme.neonLime : Colors.white,
@@ -612,8 +634,41 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
                               ? [BoxShadow(color: AppTheme.neonLime.withValues(alpha: 0.6), blurRadius: 6)]
                               : null,
                         ),
-                        child: const Center(
-                          child: Text('💥', style: TextStyle(fontSize: 13)),
+                        padding: const EdgeInsets.all(2),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            gradient: RadialGradient(
+                              colors: [Color(0xFFFF3366), Color(0xFFB71C1C)],
+                            ),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Image.asset(
+                                  'assets/images/items/paddle_wooden.png',
+                                  width: 13.0 * _settings.smashScale,
+                                  height: 13.0 * _settings.smashScale,
+                                  filterQuality: FilterQuality.none,
+                                  errorBuilder: (_, _, _) => const Icon(
+                                    Icons.sports_tennis_rounded,
+                                    size: 11,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const Text(
+                                  'SMASH',
+                                  style: TextStyle(
+                                    color: Color(0xFFFFD700),
+                                    fontSize: 5.5,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -626,7 +681,7 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
                     pWidth: pWidth,
                     pHeight: pHeight,
                     isLeftHanded: isLeftHanded,
-                    size: 24.0 * _settings.skillButtonScale,
+                    size: 24.0 * _settings.leftSpinScale,
                     onDrag: (details) => handleDrag('leftSpin', details),
                     child: Opacity(
                       opacity: opacity,
@@ -656,7 +711,7 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
                     pWidth: pWidth,
                     pHeight: pHeight,
                     isLeftHanded: isLeftHanded,
-                    size: 24.0 * _settings.skillButtonScale,
+                    size: 24.0 * _settings.rightSpinScale,
                     onDrag: (details) => handleDrag('rightSpin', details),
                     child: Opacity(
                       opacity: opacity,
@@ -686,7 +741,7 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
                     pWidth: pWidth,
                     pHeight: pHeight,
                     isLeftHanded: isLeftHanded,
-                    size: 24.0 * _settings.skillButtonScale,
+                    size: 24.0 * _settings.dashScale,
                     onDrag: (details) => handleDrag('dash', details),
                     child: Opacity(
                       opacity: opacity,
@@ -1222,14 +1277,65 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
           ],
         ),
 
-        // Skill Button Scale
+        // Separate Controller Sizing Section
+        const SizedBox(height: 6),
+        const Text('Individual Controller Sizing', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 6),
+
+        // Smash Button Scale
         _buildSliderTile(
-          title: 'Skill & Action Button Scale',
+          title: '💥 Smash Button Size',
+          valueText: '${(_settings.smashScale * 100).round()}%',
+          value: _settings.smashScale,
+          min: 0.65,
+          max: 1.50,
+          onChanged: (val) => _applySettings(_settings.copyWith(smashScale: val)),
+        ),
+
+        // Cyclone Curve (K) Scale
+        _buildSliderTile(
+          title: '🌪️ Cyclone Curve (K) Size',
+          valueText: '${(_settings.leftSpinScale * 100).round()}%',
+          value: _settings.leftSpinScale,
+          min: 0.65,
+          max: 1.50,
+          onChanged: (val) => _applySettings(_settings.copyWith(leftSpinScale: val)),
+        ),
+
+        // Vortex Hook (L) Scale
+        _buildSliderTile(
+          title: '⚡ Vortex Hook (L) Size',
+          valueText: '${(_settings.rightSpinScale * 100).round()}%',
+          value: _settings.rightSpinScale,
+          min: 0.65,
+          max: 1.50,
+          onChanged: (val) => _applySettings(_settings.copyWith(rightSpinScale: val)),
+        ),
+
+        // Flash Dash (Shift) Scale
+        _buildSliderTile(
+          title: '💨 Flash Dash Size',
+          valueText: '${(_settings.dashScale * 100).round()}%',
+          value: _settings.dashScale,
+          min: 0.65,
+          max: 1.50,
+          onChanged: (val) => _applySettings(_settings.copyWith(dashScale: val)),
+        ),
+
+        // Master Skill Button Scale (scales all skills)
+        _buildSliderTile(
+          title: 'Master Action Buttons Scale',
           valueText: '${(_settings.skillButtonScale * 100).round()}%',
           value: _settings.skillButtonScale,
           min: 0.70,
           max: 1.50,
-          onChanged: (val) => _applySettings(_settings.copyWith(skillButtonScale: val)),
+          onChanged: (val) => _applySettings(_settings.copyWith(
+            skillButtonScale: val,
+            smashScale: val,
+            leftSpinScale: val,
+            rightSpinScale: val,
+            dashScale: val,
+          )),
         ),
 
         // Skill Cluster Spacing
@@ -1669,6 +1775,10 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
         dashPosY: GameSettings.mlbbDashY,
         joystickExpand: 1.0,
         skillButtonScale: 1.0,
+        smashScale: 1.0,
+        leftSpinScale: 1.0,
+        rightSpinScale: 1.0,
+        dashScale: 1.0,
         joystickOnLeft: true,
       );
     });
@@ -1697,6 +1807,10 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
             dashPosY: GameSettings.arcadeDashY,
             joystickExpand: 1.0,
             skillButtonScale: 1.0,
+            smashScale: 1.0,
+            leftSpinScale: 1.0,
+            rightSpinScale: 1.0,
+            dashScale: 1.0,
             joystickOnLeft: true,
           );
           break;
@@ -1716,6 +1830,10 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
             dashPosY: 0.68,
             joystickExpand: 0.85,
             skillButtonScale: 0.85,
+            smashScale: 0.85,
+            leftSpinScale: 0.85,
+            rightSpinScale: 0.85,
+            dashScale: 0.85,
             joystickOnLeft: true,
           );
           break;
@@ -1735,6 +1853,10 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
             dashPosY: 0.60,
             joystickExpand: 1.2,
             skillButtonScale: 1.15,
+            smashScale: 1.2,
+            leftSpinScale: 1.1,
+            rightSpinScale: 1.1,
+            dashScale: 1.1,
             joystickOnLeft: true,
           );
           break;
@@ -1754,15 +1876,30 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
       body: SafeArea(
         child: Stack(
           children: [
-            // 1. Full Pickleball Background Court Layout
-            CustomPaint(
-              size: Size.infinite,
-              painter: _FullCourtPainter(
-                courtInfo: courtInfo,
-                isMini: false,
-                showGrid: _showGuides,
+            // 1. Full Pickleball Background Court Layout Image
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/background/hud_court_background.png',
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => CustomPaint(
+                  size: Size.infinite,
+                  painter: _FullCourtPainter(
+                    courtInfo: courtInfo,
+                    isMini: false,
+                    showGrid: _showGuides,
+                  ),
+                ),
               ),
             ),
+            if (_showGuides)
+              CustomPaint(
+                size: Size.infinite,
+                painter: _FullCourtPainter(
+                  courtInfo: courtInfo,
+                  isMini: false,
+                  showGrid: true,
+                ),
+              ),
 
             // 2. Player (Front View) & Opponent Sprites on Court
             _CourtCharactersOverlay(
@@ -1784,13 +1921,13 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
                 child: _buildJoystickGraphic(opacity),
               ),
 
-            // 5. Draggable Basic Smash Attack (MLBB Attack Button)
+            // 5. Draggable Basic Smash Attack (Unified 2D Arcade Paddle Button)
             if (_settings.showSkillButtons)
               _buildDraggableWidget(
                 element: 'smash',
                 screenSize: screenSize,
                 isLeftHanded: isLeftHanded,
-                size: 84.0 * _settings.skillButtonScale,
+                size: 84.0 * _settings.smashScale,
                 child: _buildSmashGraphic(opacity),
               ),
 
@@ -1800,7 +1937,7 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
                 element: 'leftSpin',
                 screenSize: screenSize,
                 isLeftHanded: isLeftHanded,
-                size: 58.0 * _settings.skillButtonScale,
+                size: 58.0 * _settings.leftSpinScale,
                 child: _buildSkillGraphic(
                   opacity: opacity,
                   gradient: const [Color(0xFF10B981), Color(0xFF047857)],
@@ -1818,7 +1955,7 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
                 element: 'rightSpin',
                 screenSize: screenSize,
                 isLeftHanded: isLeftHanded,
-                size: 58.0 * _settings.skillButtonScale,
+                size: 58.0 * _settings.rightSpinScale,
                 child: _buildSkillGraphic(
                   opacity: opacity,
                   gradient: const [Color(0xFF8B5CF6), Color(0xFF5B21B6)],
@@ -1836,7 +1973,7 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
                 element: 'dash',
                 screenSize: screenSize,
                 isLeftHanded: isLeftHanded,
-                size: 58.0 * _settings.skillButtonScale,
+                size: 58.0 * _settings.dashScale,
                 child: _buildSkillGraphic(
                   opacity: opacity,
                   gradient: const [Color(0xFF0284C7), Color(0xFF0369A1)],
@@ -2241,43 +2378,66 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
       opacity: opacity,
       child: Container(
         decoration: BoxDecoration(
-          gradient: const RadialGradient(
-            colors: [Color(0xFFFF5252), Color(0xFFB71C1C)],
-          ),
+          color: const Color(0xFF0B0F19), // Dark arcade casing
           shape: BoxShape.circle,
           border: Border.all(
             color: isSelected ? AppTheme.neonLime : const Color(0xFFFFD700),
-            width: isSelected ? 3.5 : 2.5,
+            width: isSelected ? 3.5 : 2.0,
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFFF5252).withValues(alpha: 0.6),
+              color: isSelected
+                  ? AppTheme.neonLime.withValues(alpha: 0.6)
+                  : const Color(0xFFFF2D55).withValues(alpha: 0.5),
               blurRadius: 10,
               spreadRadius: 1,
             ),
           ],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('💥', style: TextStyle(fontSize: 26)),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Text(
-                'SMASH',
-                style: TextStyle(
-                  color: Color(0xFFFFD700),
-                  fontSize: 8.5,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5,
-                ),
-              ),
+        padding: const EdgeInsets.all(4),
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: RadialGradient(
+              colors: [Color(0xFFFF3366), Color(0xFFB71C1C)],
+              radius: 0.85,
             ),
-          ],
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(
+                  'assets/images/items/paddle_wooden.png',
+                  width: 34.0 * _settings.smashScale,
+                  height: 34.0 * _settings.smashScale,
+                  filterQuality: FilterQuality.none,
+                  errorBuilder: (_, _, _) => const Icon(
+                    Icons.sports_tennis_rounded,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'SMASH',
+                    style: TextStyle(
+                      color: Color(0xFFFFD700),
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -2350,7 +2510,17 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
   }
 
   Widget _buildBottomInspectorBar(BuildContext context) {
-    final currentScale = _selectedElement == 'joystick' ? _settings.joystickExpand : _settings.skillButtonScale;
+    final currentScale = _selectedElement == 'joystick'
+        ? _settings.joystickExpand
+        : (_selectedElement == 'smash'
+            ? _settings.smashScale
+            : (_selectedElement == 'leftSpin'
+                ? _settings.leftSpinScale
+                : (_selectedElement == 'rightSpin'
+                    ? _settings.rightSpinScale
+                    : (_selectedElement == 'dash'
+                        ? _settings.dashScale
+                        : _settings.skillButtonScale))));
     final currentOpacity = _settings.transparentCapacity;
 
     return Positioned(
@@ -2506,6 +2676,14 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
                       setState(() {
                         if (_selectedElement == 'joystick') {
                           _settings = _settings.copyWith(joystickExpand: val);
+                        } else if (_selectedElement == 'smash') {
+                          _settings = _settings.copyWith(smashScale: val);
+                        } else if (_selectedElement == 'leftSpin') {
+                          _settings = _settings.copyWith(leftSpinScale: val);
+                        } else if (_selectedElement == 'rightSpin') {
+                          _settings = _settings.copyWith(rightSpinScale: val);
+                        } else if (_selectedElement == 'dash') {
+                          _settings = _settings.copyWith(dashScale: val);
                         } else {
                           _settings = _settings.copyWith(skillButtonScale: val);
                         }

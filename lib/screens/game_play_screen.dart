@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flame/game.dart';
 import '../game/pickleball_game.dart';
+import '../models/ball_catalog.dart';
 import '../models/character_roster.dart';
+import '../models/court_catalog.dart';
 import '../models/player_avatar.dart';
 import '../services/audio_service.dart';
 import '../services/game_state_manager.dart';
@@ -25,6 +27,9 @@ class GamePlayScreen extends StatefulWidget {
   final String? opponentName;
   final String? matchTitle;
   final bool isDoubles;
+  final String? opponentCharacterId;
+  final String? opponentBallId;
+  final String? opponentCourtId;
 
   const GamePlayScreen({
     super.key,
@@ -33,13 +38,16 @@ class GamePlayScreen extends StatefulWidget {
     this.opponentName,
     this.matchTitle,
     this.isDoubles = false,
+    this.opponentCharacterId,
+    this.opponentBallId,
+    this.opponentCourtId,
   });
 
   @override
   State<GamePlayScreen> createState() => _GamePlayScreenState();
 }
 
-class _GamePlayScreenState extends State<GamePlayScreen> {
+class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObserver {
   late PickleballGame _game;
   int _p1Score = 0;
   int _p2Score = 0;
@@ -82,8 +90,24 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      // Auto-pause game match if user went to home screen, locked phone, or switched apps
+      if (!_isPaused && !_matchFinished) {
+        _game.pauseEngine();
+        setState(() {
+          _isPaused = true;
+        });
+      }
+    }
+  }
+
+  @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Switch to landscape orientation and immersive full-screen for gameplay
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
@@ -122,6 +146,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
 
     final effectiveTargetScore = (isMultiplayer && room != null) ? room.targetScore : targetScore;
     final effectiveCourtId = (isMultiplayer && room != null) ? room.courtId : state.equippedCourtId;
+    String effectiveBallId = state.equippedBallId;
 
     if (isMultiplayer && room != null) {
       // Find my own slot
@@ -147,6 +172,19 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
       p2Type = oppChar.type;
       _opponentAvatarId = oppChar.id;
       _opponentPlayerName = oppSlot.playerName ?? widget.opponentName ?? 'Opponent';
+
+      effectiveBallId = isHost ? mySlot.ballId : oppSlot.ballId;
+
+      final oppBall = BallCatalog.getById(oppSlot.ballId);
+      final oppCourt = CourtCatalog.getById(oppSlot.courtId);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _game.onAnnouncement?.call(
+            'LOADOUTS REVEALED!',
+            'VS ${oppChar.name} • Secret Ball: ${oppBall.name} (${oppBall.badge}) • Court: ${oppCourt.name}',
+          );
+        }
+      });
 
       if (widget.isDoubles) {
         // Find partner (same team as mySlot)
@@ -192,7 +230,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
       partner2CharacterType: partner2Type,
       isDoubles: widget.isDoubles,
       courtId: effectiveCourtId,
-      ballId: state.equippedBallId,
+      ballId: effectiveBallId,
       isMultiplayer: isMultiplayer,
       isHost: isHost,
       onViolation: (type, desc, ruleDetail) {
@@ -475,7 +513,14 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
             ? '2v2 Doubles'
             : (widget.matchType == 'tournament' ? 'Tournament Match' : 'Quick Match'));
 
-    return Scaffold(
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          AudioService.instance.playMenuBgm();
+        }
+      },
+      child: Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
@@ -842,8 +887,9 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
             ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildTopLeftScoreBoard(
     BuildContext context,
@@ -1597,6 +1643,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _autoRestartTimer?.cancel();
     _announcementTimer?.cancel();
     _violationTimer?.cancel();

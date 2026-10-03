@@ -268,6 +268,8 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
             'z': z,
             'zVelocity': zVelocity,
             'spin': spin,
+            'hitterId': MultiplayerService.instance.myProfile.playerId,
+            'hitCount': currentGame.rallyHitCount,
           },
         ),
       );
@@ -777,7 +779,11 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
 
     if (other is PlayerComponent) {
       if (other.currentState == PlayerState.slash) {
-        processPlayerHit(other);
+        final distY = (position.y - other.position.y).abs();
+        final distX = (position.x - other.position.x).abs();
+        if (distY <= 55.0 && distX <= 58.0) {
+          processPlayerHit(other);
+        }
       }
       // Body Fault removed per user request:
       // Live ball in flight touching a player does not cause a fault!
@@ -859,18 +865,27 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     );
     bounceCountCurrentSide = 0;
 
-    // Check battle technique for Player 1 (or AI counter during rally)
+    // Check battle technique for Player 1 or Player 2 (remote opponent or AI bot)
     BattleTechnique executedTechnique = BattleTechnique.none;
-    if (isPlayerOne && !player.isAI) {
-      executedTechnique = player.activeTechnique;
-      player.clearTechnique();
-    } else if (!isPlayerOne && player.isAI && currentGame.rallyHitCount > 1) {
-      final aiDiff = currentGame.settings?.aiDifficulty ?? AIDifficulty.normal;
-      final roll = Random().nextDouble();
-      if (roll < aiDiff.spinTechniqueChance * 0.5) {
-        executedTechnique = BattleTechnique.leftSpin;
-      } else if (roll < aiDiff.spinTechniqueChance) {
-        executedTechnique = BattleTechnique.rightSpin;
+    if (isPlayerOne) {
+      if (!player.isAI) {
+        executedTechnique = player.activeTechnique;
+        player.clearTechnique();
+      }
+    } else {
+      if (!player.isAI) {
+        // Remote multiplayer opponent
+        executedTechnique = player.activeTechnique;
+        player.clearTechnique();
+      } else if (currentGame.rallyHitCount > 1) {
+        // AI bot counter during rally
+        final aiDiff = currentGame.settings?.aiDifficulty ?? AIDifficulty.normal;
+        final roll = Random().nextDouble();
+        if (roll < aiDiff.spinTechniqueChance * 0.5) {
+          executedTechnique = BattleTechnique.leftSpin;
+        } else if (roll < aiDiff.spinTechniqueChance) {
+          executedTechnique = BattleTechnique.rightSpin;
+        }
       }
     }
     activeTechniqueType = executedTechnique;
@@ -895,12 +910,13 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
         targetY = 165.0;
         targetX = Background.courtLeftAt(targetY) + 18.0;
         currentGame.onAnnouncement?.call('🌪️ CYCLONE CURVE!', 'Wicked left sidespin curve!');
-        currentGame.onTechniqueExecuted(BattleTechnique.leftSpin);
+        currentGame.onTechniqueExecuted(BattleTechnique.leftSpin, isLocalPlayer: true);
       } else {
         targetY = 555.0;
         targetX = Background.courtLeftAt(targetY) + 20.0;
-        currentGame.onAnnouncement?.call('🌪️ CPU CYCLONE CURVE!', 'Watch out! Violent left spin curve!');
-        currentGame.onTechniqueExecuted(BattleTechnique.leftSpin);
+        final oppName = currentGame.isMultiplayer ? 'OPPONENT' : 'CPU';
+        currentGame.onAnnouncement?.call('🌪️ $oppName CYCLONE CURVE!', 'Watch out! Violent left spin curve!');
+        currentGame.onTechniqueExecuted(BattleTechnique.leftSpin, isLocalPlayer: false);
       }
 
       final double lateralAcc = spin * curveStrength;
@@ -925,12 +941,13 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
         targetY = 165.0;
         targetX = Background.courtRightAt(targetY) - 18.0;
         currentGame.onAnnouncement?.call('⚡ VORTEX HOOK!', 'Fierce right sidespin hook!');
-        currentGame.onTechniqueExecuted(BattleTechnique.rightSpin);
+        currentGame.onTechniqueExecuted(BattleTechnique.rightSpin, isLocalPlayer: true);
       } else {
         targetY = 555.0;
         targetX = Background.courtRightAt(targetY) - 20.0;
-        currentGame.onAnnouncement?.call('⚡ CPU VORTEX HOOK!', 'Watch out! Violent right spin hook!');
-        currentGame.onTechniqueExecuted(BattleTechnique.rightSpin);
+        final oppName = currentGame.isMultiplayer ? 'OPPONENT' : 'CPU';
+        currentGame.onAnnouncement?.call('⚡ $oppName VORTEX HOOK!', 'Watch out! Violent right spin hook!');
+        currentGame.onTechniqueExecuted(BattleTechnique.rightSpin, isLocalPlayer: false);
       }
 
       final double lateralAcc = spin * curveStrength;
@@ -1019,6 +1036,9 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
             'z': z,
             'zVelocity': zVelocity,
             'spin': spin,
+            'technique': activeTechniqueType.name,
+            'hitterId': MultiplayerService.instance.myProfile.playerId,
+            'hitCount': currentGame.rallyHitCount,
           },
         ),
       );

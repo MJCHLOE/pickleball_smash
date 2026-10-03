@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/audio_service.dart';
 import '../../services/database_service.dart';
 import '../../services/game_state_manager.dart';
 import '../../theme/app_theme.dart';
@@ -22,6 +23,12 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    AudioService.instance.playMenuBgm();
+  }
 
   @override
   void dispose() {
@@ -79,7 +86,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          AudioService.instance.stopBgm();
+        }
+      },
+      child: Scaffold(
       backgroundColor: AppTheme.background,
       body: SmoothLightsAlphabetBackground(
         child: SafeArea(
@@ -339,6 +353,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

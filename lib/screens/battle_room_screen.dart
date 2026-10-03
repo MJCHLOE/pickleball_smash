@@ -1,19 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/ball_catalog.dart';
 import '../models/character_roster.dart';
 import '../models/court_catalog.dart';
 import '../models/multiplayer_models.dart';
 import '../services/audio_service.dart';
 import '../services/connectivity_service.dart';
-import '../services/game_state_manager.dart';
 import '../services/multiplayer_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/avatar_picker_dialog.dart';
 import '../widgets/friends_modal.dart';
 import '../widgets/game_2d_button.dart';
 import '../widgets/game_2d_text.dart';
 import '../widgets/player_avatar.dart';
+import '../widgets/pre_match_loadout_modal.dart';
 import '../widgets/battle_room_chat_widget.dart';
 import 'game_play_screen.dart';
 
@@ -130,6 +130,9 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
           opponentName: opponentSlot.playerName ?? (isHost ? 'Guest Challenger' : 'Host Player'),
           matchTitle: '${room.gameMode} • ${room.roomCode}',
           isDoubles: room.isDoubles,
+          opponentCharacterId: opponentSlot.characterId,
+          opponentBallId: opponentSlot.ballId,
+          opponentCourtId: opponentSlot.courtId,
         ),
       ),
     );
@@ -359,7 +362,7 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
                 ),
 
                 // Bottom Action Bar
-                _buildBottomControls(context, multi, room, mySlot, isHost),
+                _buildBottomControls(multi, room, mySlot, isHost),
               ],
             ),
           ),
@@ -519,6 +522,8 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
     final readyColor = slot.isReady ? AppTheme.neonLime : const Color(0xFFFBBF24);
     final charId = slot.characterId.isNotEmpty ? slot.characterId : (slot.playerAvatar ?? 'alex_classic');
     final charInfo = CharacterRoster.getById(charId);
+    final ballInfo = BallCatalog.getById(slot.ballId);
+    final courtInfo = CourtCatalog.getById(slot.courtId);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -541,9 +546,13 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
                 onTap: isMe
                     ? () async {
                         AudioService.instance.playButtonTap();
-                        await AvatarPickerDialog.show(context);
-                        final newCharId = GameStateManager.instance.playerAvatarId;
-                        await multi.updateMyCharacter(newCharId);
+                        await PreMatchLoadoutModal.show(
+                          context,
+                          isHost: slot.isHost,
+                          initialCharacterId: slot.characterId,
+                          initialBallId: slot.ballId,
+                          initialCourtId: slot.courtId,
+                        );
                       }
                     : null,
                 child: Container(
@@ -639,55 +648,203 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
                   ],
                 ),
                 const SizedBox(height: 5),
-                // Character Badge Pill
-                InkWell(
-                  onTap: isMe
-                      ? () async {
-                          AudioService.instance.playButtonTap();
-                          await AvatarPickerDialog.show(context);
-                          final newCharId = GameStateManager.instance.playerAvatarId;
-                          await multi.updateMyCharacter(newCharId);
-                        }
-                      : null,
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: charInfo.borderColor.withValues(alpha: 0.15),
+                // Loadout Badges Wrap (Fighter -> Ball -> Court)
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: [
+                    // 1. Fighter (Always visible for all players)
+                    InkWell(
+                      onTap: isMe
+                          ? () async {
+                              AudioService.instance.playButtonTap();
+                              await PreMatchLoadoutModal.show(
+                                context,
+                                isHost: slot.isHost,
+                                initialCharacterId: slot.characterId,
+                                initialBallId: slot.ballId,
+                                initialCourtId: slot.courtId,
+                              );
+                            }
+                          : null,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: charInfo.borderColor.withValues(alpha: 0.5),
-                        width: 1,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: charInfo.borderColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: charInfo.borderColor.withValues(alpha: 0.5),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(charInfo.badge, style: const TextStyle(fontSize: 10)),
+                            const SizedBox(width: 3),
+                            Text(
+                              charInfo.name.toUpperCase(),
+                              style: TextStyle(
+                                color: charInfo.borderColor,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                            if (isMe) ...[
+                              const SizedBox(width: 3),
+                              Icon(Icons.edit_rounded, size: 9, color: charInfo.borderColor),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          charInfo.badge,
-                          style: const TextStyle(fontSize: 10),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          charInfo.name.toUpperCase(),
-                          style: TextStyle(
-                            color: charInfo.borderColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.5,
+
+                    // 2. Ball (Visible for YOU, HIDDEN for Opponent until match starts!)
+                    if (isMe)
+                      InkWell(
+                        onTap: () async {
+                          AudioService.instance.playButtonTap();
+                          await PreMatchLoadoutModal.show(
+                            context,
+                            isHost: slot.isHost,
+                            initialCharacterId: slot.characterId,
+                            initialBallId: slot.ballId,
+                            initialCourtId: slot.courtId,
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: ballInfo.glowColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: ballInfo.glowColor.withValues(alpha: 0.5),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(ballInfo.badge, style: const TextStyle(fontSize: 10)),
+                              const SizedBox(width: 3),
+                              Text(
+                                ballInfo.name.toUpperCase(),
+                                style: TextStyle(
+                                  color: ballInfo.glowColor,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.4,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        if (isMe) ...[
-                          const SizedBox(width: 4),
-                          Icon(
-                            Icons.edit_rounded,
-                            size: 10,
-                            color: charInfo.borderColor,
+                      )
+                    else
+                      // Opponent's Ball is Hidden
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFBBF24).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: const Color(0xFFFBBF24).withValues(alpha: 0.4),
+                            width: 1,
                           ),
-                        ],
-                      ],
-                    ),
-                  ),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.lock_rounded, size: 9, color: Color(0xFFFBBF24)),
+                            SizedBox(width: 3),
+                            Text(
+                              'SECRET BALL',
+                              style: TextStyle(
+                                color: Color(0xFFFBBF24),
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    // 3. Court (Visible for YOU, HIDDEN for Opponent until match starts!)
+                    if (isMe)
+                      InkWell(
+                        onTap: () async {
+                          AudioService.instance.playButtonTap();
+                          await PreMatchLoadoutModal.show(
+                            context,
+                            isHost: slot.isHost,
+                            initialCharacterId: slot.characterId,
+                            initialBallId: slot.ballId,
+                            initialCourtId: slot.courtId,
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: courtInfo.accentColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: courtInfo.accentColor.withValues(alpha: 0.5),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(courtInfo.badge, style: const TextStyle(fontSize: 10)),
+                              const SizedBox(width: 3),
+                              Text(
+                                courtInfo.name.toUpperCase(),
+                                style: TextStyle(
+                                  color: courtInfo.accentColor,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      // Opponent's Court is Hidden
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFBBF24).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: const Color(0xFFFBBF24).withValues(alpha: 0.4),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.lock_rounded, size: 9, color: Color(0xFFFBBF24)),
+                            SizedBox(width: 3),
+                            Text(
+                              'SECRET COURT',
+                              style: TextStyle(
+                                color: Color(0xFFFBBF24),
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -759,7 +916,6 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
   }
 
   Widget _buildBottomControls(
-    BuildContext context,
     MultiplayerService multi,
     BattleRoomModel room,
     RoomPlayerSlot mySlot,
@@ -784,7 +940,26 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
             variant: GameButtonVariant.dark,
             size: GameButtonSize.medium,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
+
+          // Pre-Match Loadout Selection button (Character -> Ball -> Court)
+          Game2DButton(
+            onPressed: () async {
+              AudioService.instance.playButtonTap();
+              await PreMatchLoadoutModal.show(
+                context,
+                isHost: isHost,
+                initialCharacterId: mySlot.characterId,
+                initialBallId: mySlot.ballId,
+                initialCourtId: mySlot.courtId,
+              );
+            },
+            text: 'LOADOUT',
+            icon: Icons.tune_rounded,
+            variant: mySlot.hasSelectedLoadout ? GameButtonVariant.cyan : GameButtonVariant.amber,
+            size: GameButtonSize.medium,
+          ),
+          const SizedBox(width: 8),
 
           // Main Ready / Start Battle Action
           if (isHost && !room.canStartBattle && room.slots.any((s) => s.isEmpty)) ...[
@@ -793,7 +968,7 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
                 AudioService.instance.playButtonTap();
                 multi.addCpuOpponent();
               },
-              text: '+ CPU BOT',
+              text: '+ CPU',
               icon: Icons.smart_toy_outlined,
               variant: GameButtonVariant.cyan,
               size: GameButtonSize.medium,
@@ -804,29 +979,44 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
             child: isHost
                 ? Game2DButton(
                     onPressed: () async {
+                      if (!mySlot.hasSelectedLoadout) {
+                        AudioService.instance.playButtonTap();
+                        final chosen = await PreMatchLoadoutModal.show(
+                          context,
+                          isHost: true,
+                          initialCharacterId: mySlot.characterId,
+                          initialBallId: mySlot.ballId,
+                          initialCourtId: mySlot.courtId,
+                        );
+                        if (chosen != true || !mounted) return;
+                      }
                       if (!room.canStartBattle) {
                         if (room.slots.where((s) => !s.isEmpty && !s.isHost).isEmpty) {
                           multi.addCpuOpponent();
                           if (room.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+                            if (!mounted) return;
                             final hasNet = await ConnectivityService.instance.requireInternetAccess(context);
-                            if (!hasNet) return;
+                            if (!hasNet || !mounted) return;
                           }
                           _launchLiveBattle(multi.currentRoom ?? room, fromHost: true);
                           return;
                         }
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Waiting for all players to tap READY before launching!',
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Waiting for all players to tap READY before launching!',
+                              ),
+                              duration: Duration(seconds: 2),
                             ),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
+                          );
+                        }
                         return;
                       }
                       if (room.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+                        if (!mounted) return;
                         final hasNet = await ConnectivityService.instance.requireInternetAccess(context);
-                        if (!hasNet) return;
+                        if (!hasNet || !mounted) return;
                       }
                       _launchLiveBattle(room, fromHost: true);
                     },
@@ -837,9 +1027,21 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
                   )
                 : Game2DButton(
                     onPressed: () async {
+                      if (!mySlot.isReady && !mySlot.hasSelectedLoadout) {
+                        AudioService.instance.playButtonTap();
+                        final chosen = await PreMatchLoadoutModal.show(
+                          context,
+                          isHost: false,
+                          initialCharacterId: mySlot.characterId,
+                          initialBallId: mySlot.ballId,
+                          initialCourtId: mySlot.courtId,
+                        );
+                        if (chosen != true || !mounted) return;
+                      }
                       if (room.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+                        if (!mounted) return;
                         final hasNet = await ConnectivityService.instance.requireInternetAccess(context);
-                        if (!hasNet) return;
+                        if (!hasNet || !mounted) return;
                       }
                       AudioService.instance.playButtonTap();
                       multi.toggleReady(mySlot.slotIndex);

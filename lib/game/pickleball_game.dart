@@ -94,7 +94,10 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
   final bool isHost;
   RemotePlayerInterpolator? _remoteInterpolator;
   StreamSubscription<MultiplayerPacket>? _networkPacketSub;
-  double _networkTickTimer = 0.0;
+  double _lastSentPlayerX = -999.0;
+  double _lastSentPlayerY = -999.0;
+  double _timeSinceLastPlayerPacket = 0.0;
+  double _ballSyncTimer = 0.0;
 
   Background? _background;
   Background get background =>
@@ -701,9 +704,20 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     elapsedTime += clampedDt;
 
     if (isMultiplayer) {
-      _networkTickTimer += dt;
-      if (_networkTickTimer >= 0.033) {
-        _networkTickTimer = 0.0;
+      _timeSinceLastPlayerPacket += dt;
+      final bool isStriking = player1.currentState == PlayerState.slash;
+      final bool isDashing = player1.isDashing;
+      final bool hasActiveTech = player1.activeTechnique != BattleTechnique.none;
+      final double dx = (player1.position.x - _lastSentPlayerX).abs();
+      final double dy = (player1.position.y - _lastSentPlayerY).abs();
+      final bool isMoving = player1.currentVelocity.length > 2.0 || dx > 0.8 || dy > 0.8;
+      final bool heartbeat = _timeSinceLastPlayerPacket >= 0.25;
+
+      // Throttle playerState to max 20 Hz (50ms), send when moving, acting, or on heartbeat
+      if (_timeSinceLastPlayerPacket >= 0.05 && (isMoving || isStriking || isDashing || hasActiveTech || heartbeat)) {
+        _timeSinceLastPlayerPacket = 0.0;
+        _lastSentPlayerX = player1.position.x;
+        _lastSentPlayerY = player1.position.y;
         final myId = MultiplayerService.instance.myProfile.playerId;
         MultiplayerService.instance.broadcastPacket(
           MultiplayerPacket(
@@ -715,18 +729,23 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
               'y': player1.position.y,
               'vx': player1.currentVelocity.x,
               'vy': player1.currentVelocity.y,
-              'isStriking': player1.currentState == PlayerState.slash,
+              'isStriking': isStriking,
               'technique': player1.activeTechnique.name,
-              'isDashing': player1.isDashing,
+              'isDashing': isDashing,
             },
           ),
         );
+      }
 
-        // Host continuously streams authoritative ball physics to Guest
-        if (isHost && !ball.isWaitingForServe) {
+      // Host periodically synchronizes authoritative ball state (~3.3 Hz) during active rallies
+      if (isHost && !ball.isWaitingForServe) {
+        _ballSyncTimer += dt;
+        if (_ballSyncTimer >= 0.3) {
+          _ballSyncTimer = 0.0;
+          final myId = MultiplayerService.instance.myProfile.playerId;
           MultiplayerService.instance.broadcastPacket(
             MultiplayerPacket(
-              type: PacketType.ballStrike,
+              type: PacketType.ballSync,
               timestamp: DateTime.now().millisecondsSinceEpoch,
               senderId: myId,
               data: {
@@ -811,6 +830,47 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
           isWaitingForServe = false;
           onServeStateChanged?.call(false, serverPlayer, servingSide);
         }
+        if (packet.senderId != MultiplayerService.instance.myProfile.playerId) {
+          AudioService.instance.playPaddleHit();
+        }
+      }
+    } else if (packet.type == PacketType.ballSync) {
+      // Authoritative ball position reconciliation from Host to Guest
+      if (!isHost && !ball.isWaitingForServe) {
+        final rawX = (packet.data['x'] as num?)?.toDouble();
+        final rawY = (packet.data['y'] as num?)?.toDouble();
+        final rawVx = (packet.data['vx'] as num?)?.toDouble();
+        final rawVy = (packet.data['vy'] as num?)?.toDouble();
+        final rawSpin = (packet.data['spin'] as num?)?.toDouble();
+        final z = (packet.data['z'] as num?)?.toDouble();
+        final zVelocity = (packet.data['zVelocity'] as num?)?.toDouble();
+
+        if (rawX != null && rawY != null) {
+          final targetX = 1280.0 - rawX;
+          final targetY = 720.0 - rawY;
+          final diffX = targetX - ball.position.x;
+          final diffY = targetY - ball.position.y;
+          final distSq = diffX * diffX + diffY * diffY;
+
+          // Gentle lerp if drift is small to prevent snapping, faster if moderate, snap if huge
+          if (distSq < 14400) {
+            ball.position.x += diffX * 0.28;
+            ball.position.y += diffY * 0.28;
+          } else if (distSq < 90000) {
+            ball.position.x += diffX * 0.55;
+            ball.position.y += diffY * 0.55;
+          } else {
+            ball.position.setValues(targetX, targetY);
+          }
+
+          if (rawVx != null && rawVy != null) {
+            ball.velocity.setValues(-rawVx, -rawVy);
+            ball.speed = ball.velocity.length;
+          }
+          if (rawSpin != null) ball.spin = -rawSpin;
+          if (z != null) ball.z += (z - ball.z) * 0.35;
+          if (zVelocity != null) ball.zVelocity = zVelocity;
+        }
       }
     } else if (packet.type == PacketType.scoreSync) {
       if (isHost && packet.data['guestReported'] == true) {
@@ -883,6 +943,8 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       if (packet.data['isHost'] == true || packet.senderId == MultiplayerService.instance.currentRoom?.hostId) {
         pauseEngine();
         onAnnouncement?.call('HOST DISCONNECTED', 'The host left the match.');
+        final reason = packet.data['reason'] as String? ?? 'Host left the match';
+        MultiplayerService.instance.hostDisconnectedNotifier.value = reason;
       }
     }
   }
@@ -949,7 +1011,10 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     final double skillMarginX = settings?.skillMarginX ?? 36.0;
     final double skillMarginY = settings?.skillMarginY ?? 36.0;
     final double skillSpacing = settings?.skillSpacing ?? 90.0;
-    final double skillScale = settings?.skillButtonScale ?? 1.0;
+    final double smashScale = settings?.smashScale ?? settings?.skillButtonScale ?? 1.0;
+    final double leftSpinScale = settings?.leftSpinScale ?? settings?.skillButtonScale ?? 1.0;
+    final double rightSpinScale = settings?.rightSpinScale ?? settings?.skillButtonScale ?? 1.0;
+    final double dashScale = settings?.dashScale ?? settings?.skillButtonScale ?? 1.0;
 
     double baseButtonRadius = 40.0;
     if (settings?.buttonSize == 'Large') {
@@ -957,8 +1022,11 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     } else if (settings?.buttonSize == 'Extra Large') {
       baseButtonRadius = 56.0;
     }
-    final buttonRadius = baseButtonRadius * skillScale;
-    final skillRadius = (buttonRadius * 0.65).clamp(20.0, 48.0);
+    final smashRadius = baseButtonRadius * smashScale;
+    final baseSkillRadius = baseButtonRadius * 0.65;
+    final leftSpinRadius = (baseSkillRadius * leftSpinScale).clamp(16.0, 52.0);
+    final rightSpinRadius = (baseSkillRadius * rightSpinScale).clamp(16.0, 52.0);
+    final dashRadius = (baseSkillRadius * dashScale).clamp(16.0, 52.0);
 
     final knobRadius = 26.0 * expand;
     final bgRadius = 68.0 * expand;
@@ -1018,10 +1086,10 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       final double dashY = settings?.dashPosY ?? GameSettings.mlbbDashY;
 
       joystickMargin = calculateNormalizedMargin(joyX, joyY, bgRadius * 2, bgRadius * 2);
-      buttonMargin = calculateNormalizedMargin(smashX, smashY, buttonRadius * 2, buttonRadius * 2);
-      leftSpinMargin = calculateNormalizedMargin(leftSpinX, leftSpinY, skillRadius * 2 + 8, skillRadius * 2 + 12);
-      rightSpinMargin = calculateNormalizedMargin(rightSpinX, rightSpinY, skillRadius * 2 + 8, skillRadius * 2 + 12);
-      dashMargin = calculateNormalizedMargin(dashX, dashY, skillRadius * 2 + 8, skillRadius * 2 + 12);
+      buttonMargin = calculateNormalizedMargin(smashX, smashY, smashRadius * 2, smashRadius * 2);
+      leftSpinMargin = calculateNormalizedMargin(leftSpinX, leftSpinY, leftSpinRadius * 2 + 8, leftSpinRadius * 2 + 12);
+      rightSpinMargin = calculateNormalizedMargin(rightSpinX, rightSpinY, rightSpinRadius * 2 + 8, rightSpinRadius * 2 + 12);
+      dashMargin = calculateNormalizedMargin(dashX, dashY, dashRadius * 2 + 8, dashRadius * 2 + 12);
     }
 
     // 1. JOYSTICK COMPONENT MANAGEMENT
@@ -1057,60 +1125,56 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     }
 
     // 2. SMASH / STRIKE BUTTON MANAGEMENT
+    // Guarantee strictly ONE authentic Smash button in the viewport
     final existingButtons = camera.viewport.children.whereType<HudButtonComponent>().toList();
-    if (!showSkillButtons) {
-      for (final btn in existingButtons) {
-        btn.removeFromParent();
+    if (existingButtons.isNotEmpty) {
+      strikeButton = existingButtons.first;
+      if (strikeButton.button is ArcadeButtonFaceComponent) {
+        final btnFace = strikeButton.button as ArcadeButtonFaceComponent;
+        btnFace.updateProperties(
+          radius: smashRadius,
+          opacity: opacity,
+          paddleSprite: paddleSprite,
+        );
+      }
+      if (strikeButton.buttonDown is ArcadeButtonFaceComponent) {
+        final btnDownFace = strikeButton.buttonDown as ArcadeButtonFaceComponent;
+        btnDownFace.updateProperties(
+          radius: smashRadius,
+          opacity: opacity,
+          paddleSprite: paddleSprite,
+        );
+      }
+
+      strikeButton.margin = buttonMargin;
+
+      // Remove any duplicate smash buttons so there is strictly ONE
+      for (int i = 1; i < existingButtons.length; i++) {
+        existingButtons[i].removeFromParent();
       }
     } else {
-      if (existingButtons.isNotEmpty) {
-        strikeButton = existingButtons.first;
-        if (strikeButton.button is ArcadeButtonFaceComponent) {
-          final btnFace = strikeButton.button as ArcadeButtonFaceComponent;
-          btnFace.updateProperties(
-            radius: buttonRadius,
-            opacity: opacity,
-            paddleSprite: paddleSprite,
-          );
-        }
-        if (strikeButton.buttonDown is ArcadeButtonFaceComponent) {
-          final btnDownFace = strikeButton.buttonDown as ArcadeButtonFaceComponent;
-          btnDownFace.updateProperties(
-            radius: buttonRadius,
-            opacity: opacity,
-            paddleSprite: paddleSprite,
-          );
-        }
-
-        strikeButton.margin = buttonMargin;
-
-        for (int i = 1; i < existingButtons.length; i++) {
-          existingButtons[i].removeFromParent();
-        }
-      } else {
-        strikeButton = HudButtonComponent(
-          button: ArcadeButtonFaceComponent(
-            radius: buttonRadius,
-            opacity: opacity,
-            isPressed: false,
-            paddleSprite: paddleSprite,
-            game: this,
-          ),
-          buttonDown: ArcadeButtonFaceComponent(
-            radius: buttonRadius,
-            opacity: opacity,
-            isPressed: true,
-            paddleSprite: paddleSprite,
-            game: this,
-          ),
-          margin: buttonMargin,
-          onPressed: () {
-            triggerSmashButtonEffect();
-            player1.strike();
-          },
-        );
-        camera.viewport.add(strikeButton);
-      }
+      strikeButton = HudButtonComponent(
+        button: ArcadeButtonFaceComponent(
+          radius: smashRadius,
+          opacity: opacity,
+          isPressed: false,
+          paddleSprite: paddleSprite,
+          game: this,
+        ),
+        buttonDown: ArcadeButtonFaceComponent(
+          radius: smashRadius,
+          opacity: opacity,
+          isPressed: true,
+          paddleSprite: paddleSprite,
+          game: this,
+        ),
+        margin: buttonMargin,
+        onPressed: () {
+          triggerSmashButtonEffect();
+          player1.strike();
+        },
+      );
+      camera.viewport.add(strikeButton);
     }
 
     // 3. SKILL BUTTONS (Left Spin, Right Spin, Dash)
@@ -1145,7 +1209,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       if (existingLeftSpin.isNotEmpty) {
         leftSpinButton = existingLeftSpin.first;
         leftSpinButton!.updateProperties(
-          radius: skillRadius,
+          radius: leftSpinRadius,
           opacity: opacity,
           margin: leftSpinMargin,
         );
@@ -1155,7 +1219,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       } else {
         leftSpinButton = ArcadeSkillButtonComponent(
           technique: BattleTechnique.leftSpin,
-          radius: skillRadius,
+          radius: leftSpinRadius,
           opacity: opacity,
           game: this,
           margin: leftSpinMargin,
@@ -1167,7 +1231,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       if (existingRightSpin.isNotEmpty) {
         rightSpinButton = existingRightSpin.first;
         rightSpinButton!.updateProperties(
-          radius: skillRadius,
+          radius: rightSpinRadius,
           opacity: opacity,
           margin: rightSpinMargin,
         );
@@ -1177,7 +1241,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       } else {
         rightSpinButton = ArcadeSkillButtonComponent(
           technique: BattleTechnique.rightSpin,
-          radius: skillRadius,
+          radius: rightSpinRadius,
           opacity: opacity,
           game: this,
           margin: rightSpinMargin,
@@ -1189,7 +1253,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       if (existingDash.isNotEmpty) {
         dashButton = existingDash.first;
         dashButton!.updateProperties(
-          radius: skillRadius,
+          radius: dashRadius,
           opacity: opacity,
           margin: dashMargin,
         );
@@ -1199,7 +1263,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       } else {
         dashButton = ArcadeSkillButtonComponent(
           technique: BattleTechnique.dash,
-          radius: skillRadius,
+          radius: dashRadius,
           opacity: opacity,
           game: this,
           margin: dashMargin,
@@ -1232,9 +1296,6 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     leftSpinButton?.isPrimed = true;
     rightSpinButton?.isPrimed = false;
     AudioService.instance.playPaddleHit();
-    if ((ball.position.y - player1.position.y).abs() < 120 && ball.velocity.y > 0) {
-      player1.strike();
-    }
   }
 
   /// Triggers the Right Spin (Vortex Hook) battle technique (Hotkey L)
@@ -1245,9 +1306,6 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     rightSpinButton?.isPrimed = true;
     leftSpinButton?.isPrimed = false;
     AudioService.instance.playPaddleHit();
-    if ((ball.position.y - player1.position.y).abs() < 120 && ball.velocity.y > 0) {
-      player1.strike();
-    }
   }
 
   /// Triggers the Flash Dash skill technique (Hotkey Shift / I / Dash Button)
@@ -1265,37 +1323,48 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
   void triggerPhantomDink() => triggerRightSpin();
 
   /// Called when a battle technique is successfully struck and launched into the rally
-  void onTechniqueExecuted(BattleTechnique technique) {
-    if (technique == BattleTechnique.leftSpin) {
-      leftSpinButton?.startCooldown();
-      leftSpinButton?.isPrimed = false;
-      AudioService.instance.playLeftSpin();
-      if (settings?.screenShakeEnabled ?? true) {
-        camera.viewfinder.position = Vector2(640, 364);
-        Future.delayed(const Duration(milliseconds: 60), () {
-          camera.viewfinder.position = Vector2(640, 356);
-        });
-        Future.delayed(const Duration(milliseconds: 120), () {
-          camera.viewfinder.position = Vector2(640, 360);
-        });
+  void onTechniqueExecuted(BattleTechnique technique, {bool isLocalPlayer = true}) {
+    if (isLocalPlayer) {
+      // Local player executed technique: start cooldown & reset primed status on HUD
+      if (technique == BattleTechnique.leftSpin) {
+        leftSpinButton?.startCooldown();
+        leftSpinButton?.isPrimed = false;
+        AudioService.instance.playLeftSpin();
+        _applyTechniqueScreenShake();
+      } else if (technique == BattleTechnique.rightSpin) {
+        rightSpinButton?.startCooldown();
+        rightSpinButton?.isPrimed = false;
+        AudioService.instance.playRightSpin();
+        _applyTechniqueScreenShake();
+      } else if (technique == BattleTechnique.dash) {
+        dashButton?.startCooldown();
+        dashButton?.isPrimed = false;
+        AudioService.instance.playDash();
       }
-    } else if (technique == BattleTechnique.rightSpin) {
-      rightSpinButton?.startCooldown();
-      rightSpinButton?.isPrimed = false;
-      AudioService.instance.playRightSpin();
-      if (settings?.screenShakeEnabled ?? true) {
-        camera.viewfinder.position = Vector2(640, 364);
-        Future.delayed(const Duration(milliseconds: 60), () {
-          camera.viewfinder.position = Vector2(640, 356);
-        });
-        Future.delayed(const Duration(milliseconds: 120), () {
-          camera.viewfinder.position = Vector2(640, 360);
-        });
+    } else {
+      // Enemy (CPU / opponent) executed technique:
+      // Play audio and visual effects, but NEVER consume or cooldown the local player's skill!
+      if (technique == BattleTechnique.leftSpin) {
+        AudioService.instance.playLeftSpin();
+        _applyTechniqueScreenShake();
+      } else if (technique == BattleTechnique.rightSpin) {
+        AudioService.instance.playRightSpin();
+        _applyTechniqueScreenShake();
+      } else if (technique == BattleTechnique.dash) {
+        AudioService.instance.playDash();
       }
-    } else if (technique == BattleTechnique.dash) {
-      dashButton?.startCooldown();
-      dashButton?.isPrimed = false;
-      AudioService.instance.playDash();
+    }
+  }
+
+  void _applyTechniqueScreenShake() {
+    if (settings?.screenShakeEnabled ?? true) {
+      camera.viewfinder.position = Vector2(640, 364);
+      Future.delayed(const Duration(milliseconds: 60), () {
+        camera.viewfinder.position = Vector2(640, 356);
+      });
+      Future.delayed(const Duration(milliseconds: 120), () {
+        camera.viewfinder.position = Vector2(640, 360);
+      });
     }
   }
 

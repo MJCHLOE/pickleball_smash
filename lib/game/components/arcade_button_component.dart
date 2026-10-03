@@ -208,8 +208,8 @@ class ArcadeButtonFaceComponent extends PositionComponent {
       _renderFallbackPaddle(canvas, Offset(cx, faceY), radius * 0.62, alphaVal);
     }
 
-    // 6. Action Tag: "SERVE" when waiting, "SMASH" during active play
-    final actionText = isServingPrompt ? 'SERVE' : 'SMASH';
+    // 6. Action Tag: Always the authentic single SMASH button
+    const actionText = 'SMASH';
     final textPainter = TextPainter(
       text: TextSpan(
         text: actionText,

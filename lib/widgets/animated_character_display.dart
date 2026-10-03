@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/character_roster.dart';
 
 enum CharacterGender { male, female, male2, male3, female2 }
 enum CharacterAction { idle, run, smash }
@@ -10,6 +11,8 @@ enum CharacterAction { idle, run, smash }
 class AnimatedCharacterDisplay extends StatefulWidget {
   final CharacterGender initialGender;
   final bool showControls;
+  final bool showCharacterSwitcher;
+  final bool showActionControls;
   final bool autoCycleActions;
   final double height;
   final VoidCallback? onSmashTriggered;
@@ -19,11 +22,43 @@ class AnimatedCharacterDisplay extends StatefulWidget {
     super.key,
     this.initialGender = CharacterGender.male,
     this.showControls = true,
+    this.showCharacterSwitcher = true,
+    this.showActionControls = true,
     this.autoCycleActions = false,
     this.height = 180,
     this.onSmashTriggered,
     this.onGenderChanged,
   });
+
+  static CharacterGender genderFromType(CharacterType type) {
+    switch (type) {
+      case CharacterType.female1:
+        return CharacterGender.female;
+      case CharacterType.female2:
+        return CharacterGender.female2;
+      case CharacterType.male2:
+        return CharacterGender.male2;
+      case CharacterType.male3:
+        return CharacterGender.male3;
+      case CharacterType.male1:
+        return CharacterGender.male;
+    }
+  }
+
+  static CharacterType typeFromGender(CharacterGender gender) {
+    switch (gender) {
+      case CharacterGender.female:
+        return CharacterType.female1;
+      case CharacterGender.female2:
+        return CharacterType.female2;
+      case CharacterGender.male2:
+        return CharacterType.male2;
+      case CharacterGender.male3:
+        return CharacterType.male3;
+      case CharacterGender.male:
+        return CharacterType.male1;
+    }
+  }
 
   @override
   State<AnimatedCharacterDisplay> createState() => _AnimatedCharacterDisplayState();
@@ -329,9 +364,7 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
                       borderRadius: BorderRadius.circular(16),
                       gradient: RadialGradient(
                         colors: [
-                          _gender == CharacterGender.male
-                              ? const Color(0xFF00E676).withValues(alpha: 0.12)
-                              : const Color(0xFFFF4081).withValues(alpha: 0.12),
+                          _getGenderGlowColor(_gender).withValues(alpha: 0.16),
                           Colors.transparent,
                         ],
                         radius: 0.85,
@@ -445,106 +478,108 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
                 runSpacing: 6,
                 children: [
                   // Male / Female toggle
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: SegmentedButton<CharacterGender>(
-                      style: ButtonStyle(
-                        visualDensity: VisualDensity.compact,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        backgroundColor: WidgetStateProperty.resolveWith((states) {
-                          if (states.contains(WidgetState.selected)) {
-                            if (_gender == CharacterGender.male) {
-                              return const Color(0xFF00E676).withValues(alpha: 0.25);
-                            } else if (_gender == CharacterGender.male2) {
-                              return const Color(0xFFFF9100).withValues(alpha: 0.25);
-                            } else if (_gender == CharacterGender.male3) {
-                              return const Color(0xFF00E5FF).withValues(alpha: 0.25);
-                            } else if (_gender == CharacterGender.female2) {
-                              return const Color(0xFFEC4899).withValues(alpha: 0.25);
-                            } else {
-                              return const Color(0xFFFF4081).withValues(alpha: 0.25);
+                  if (widget.showCharacterSwitcher)
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: SegmentedButton<CharacterGender>(
+                        style: ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          backgroundColor: WidgetStateProperty.resolveWith((states) {
+                            if (states.contains(WidgetState.selected)) {
+                              if (_gender == CharacterGender.male) {
+                                return const Color(0xFF00E676).withValues(alpha: 0.25);
+                              } else if (_gender == CharacterGender.male2) {
+                                return const Color(0xFFFF9100).withValues(alpha: 0.25);
+                              } else if (_gender == CharacterGender.male3) {
+                                return const Color(0xFF00E5FF).withValues(alpha: 0.25);
+                              } else if (_gender == CharacterGender.female2) {
+                                return const Color(0xFFEC4899).withValues(alpha: 0.25);
+                              } else {
+                                return const Color(0xFFFF4081).withValues(alpha: 0.25);
+                              }
                             }
-                          }
-                          return const Color(0xFF1E293B);
-                        }),
-                        side: WidgetStateProperty.all(
-                          BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                            return const Color(0xFF1E293B);
+                          }),
+                          side: WidgetStateProperty.all(
+                            BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                          ),
                         ),
+                        segments: [
+                          ButtonSegment(
+                            value: CharacterGender.male,
+                            label: Text(
+                              isCompact ? "Alex" : "Alex (M)",
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            icon: const Icon(Icons.sports_tennis, size: 14),
+                          ),
+                          ButtonSegment(
+                            value: CharacterGender.female,
+                            label: Text(
+                              isCompact ? "Maya" : "Maya (F)",
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            icon: const Icon(Icons.bolt, size: 14),
+                          ),
+                          ButtonSegment(
+                            value: CharacterGender.male2,
+                            label: Text(
+                              isCompact ? "Marcus" : "Marcus (M2)",
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            icon: const Icon(Icons.local_fire_department, size: 14),
+                          ),
+                          ButtonSegment(
+                            value: CharacterGender.male3,
+                            label: Text(
+                              isCompact ? "Jax" : "Jax (M3)",
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            icon: const Icon(Icons.flash_on, size: 14),
+                          ),
+                          ButtonSegment(
+                            value: CharacterGender.female2,
+                            label: Text(
+                              isCompact ? "Chloe" : "Chloe (F2)",
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            icon: const Icon(Icons.diamond_rounded, size: 14),
+                          ),
+                        ],
+                        selected: {_gender},
+                        onSelectionChanged: (newSelection) {
+                          setState(() {
+                            _gender = newSelection.first;
+                            _updateActionState();
+                            _startFrameTimer();
+                          });
+                          widget.onGenderChanged?.call(newSelection.first);
+                        },
                       ),
-                      segments: [
-                        ButtonSegment(
-                          value: CharacterGender.male,
-                          label: Text(
-                            isCompact ? "Alex" : "Alex (M)",
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                          ),
-                          icon: const Icon(Icons.sports_tennis, size: 14),
-                        ),
-                        ButtonSegment(
-                          value: CharacterGender.female,
-                          label: Text(
-                            isCompact ? "Maya" : "Maya (F)",
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                          ),
-                          icon: const Icon(Icons.bolt, size: 14),
-                        ),
-                        ButtonSegment(
-                          value: CharacterGender.male2,
-                          label: Text(
-                            isCompact ? "Marcus" : "Marcus (M2)",
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                          ),
-                          icon: const Icon(Icons.local_fire_department, size: 14),
-                        ),
-                        ButtonSegment(
-                          value: CharacterGender.male3,
-                          label: Text(
-                            isCompact ? "Jax" : "Jax (M3)",
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                          ),
-                          icon: const Icon(Icons.flash_on, size: 14),
-                        ),
-                        ButtonSegment(
-                          value: CharacterGender.female2,
-                          label: Text(
-                            isCompact ? "Chloe" : "Chloe (F2)",
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                          ),
-                          icon: const Icon(Icons.diamond_rounded, size: 14),
-                        ),
-                      ],
-                      selected: {_gender},
-                      onSelectionChanged: (newSelection) {
-                        setState(() {
-                          _gender = newSelection.first;
-                          _updateActionState();
-                          _startFrameTimer();
-                        });
-                        widget.onGenderChanged?.call(newSelection.first);
-                      },
                     ),
-                  ),
 
                   // Action Buttons: Idle / Run / Smash
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildActionChip("Idle", CharacterAction.idle),
-                          _buildActionChip("Run", CharacterAction.run),
-                          _buildActionChip("Smash", CharacterAction.smash, isSmash: true),
-                        ],
+                  if (widget.showActionControls)
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildActionChip("Idle", CharacterAction.idle),
+                            _buildActionChip("Run", CharacterAction.run),
+                            _buildActionChip("Smash", CharacterAction.smash, isSmash: true),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ],
@@ -552,6 +587,21 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
         );
       },
     );
+  }
+
+  Color _getGenderGlowColor(CharacterGender gender) {
+    switch (gender) {
+      case CharacterGender.male:
+        return const Color(0xFF00E676);
+      case CharacterGender.female:
+        return const Color(0xFFFF4081);
+      case CharacterGender.male2:
+        return const Color(0xFFFF9100);
+      case CharacterGender.male3:
+        return const Color(0xFF00E5FF);
+      case CharacterGender.female2:
+        return const Color(0xFFEC4899);
+    }
   }
 
   Widget _buildActionChip(String label, CharacterAction action, {bool isSmash = false}) {

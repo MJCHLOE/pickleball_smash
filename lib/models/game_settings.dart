@@ -99,6 +99,10 @@ class GameSettings {
   final double joystickMarginX; // Horizontal offset from screen edge (12 to 120)
   final double joystickMarginY; // Vertical offset from screen bottom (12 to 120)
   final double skillButtonScale; // Skill button scale multiplier (0.65 to 1.6)
+  final double smashScale; // Smash button scale multiplier (0.65 to 1.6)
+  final double leftSpinScale; // Cyclone Curve (Skill 1) scale multiplier (0.65 to 1.6)
+  final double rightSpinScale; // Vortex Hook (Skill 2) scale multiplier (0.65 to 1.6)
+  final double dashScale; // Flash Dash (Skill 3) scale multiplier (0.65 to 1.6)
   final double skillMarginX; // Horizontal offset for skill buttons (12 to 120)
   final double skillMarginY; // Vertical offset for skill buttons (12 to 120)
   final double skillSpacing; // Spacing between skill cluster buttons (60 to 140)
@@ -187,6 +191,10 @@ class GameSettings {
     this.joystickMarginX = 36.0,
     this.joystickMarginY = 36.0,
     this.skillButtonScale = 1.0,
+    this.smashScale = 1.0,
+    this.leftSpinScale = 1.0,
+    this.rightSpinScale = 1.0,
+    this.dashScale = 1.0,
     this.skillMarginX = 36.0,
     this.skillMarginY = 36.0,
     this.skillSpacing = 90.0,
@@ -242,6 +250,10 @@ class GameSettings {
     double? joystickMarginX,
     double? joystickMarginY,
     double? skillButtonScale,
+    double? smashScale,
+    double? leftSpinScale,
+    double? rightSpinScale,
+    double? dashScale,
     double? skillMarginX,
     double? skillMarginY,
     double? skillSpacing,
@@ -300,6 +312,10 @@ class GameSettings {
       joystickMarginX: joystickMarginX ?? this.joystickMarginX,
       joystickMarginY: joystickMarginY ?? this.joystickMarginY,
       skillButtonScale: skillButtonScale ?? this.skillButtonScale,
+      smashScale: smashScale ?? this.smashScale,
+      leftSpinScale: leftSpinScale ?? this.leftSpinScale,
+      rightSpinScale: rightSpinScale ?? this.rightSpinScale,
+      dashScale: dashScale ?? this.dashScale,
       skillMarginX: skillMarginX ?? this.skillMarginX,
       skillMarginY: skillMarginY ?? this.skillMarginY,
       skillSpacing: skillSpacing ?? this.skillSpacing,
@@ -357,6 +373,10 @@ class GameSettings {
       'joystickMarginX': joystickMarginX,
       'joystickMarginY': joystickMarginY,
       'skillButtonScale': skillButtonScale,
+      'smashScale': smashScale,
+      'leftSpinScale': leftSpinScale,
+      'rightSpinScale': rightSpinScale,
+      'dashScale': dashScale,
       'skillMarginX': skillMarginX,
       'skillMarginY': skillMarginY,
       'skillSpacing': skillSpacing,
@@ -420,6 +440,18 @@ class GameSettings {
       joystickMarginX: (map['joystickMarginX'] as num?)?.toDouble() ?? 36.0,
       joystickMarginY: (map['joystickMarginY'] as num?)?.toDouble() ?? 36.0,
       skillButtonScale: (map['skillButtonScale'] as num?)?.toDouble() ?? 1.0,
+      smashScale: (map['smashScale'] as num?)?.toDouble() ??
+          (map['skillButtonScale'] as num?)?.toDouble() ??
+          1.0,
+      leftSpinScale: (map['leftSpinScale'] as num?)?.toDouble() ??
+          (map['skillButtonScale'] as num?)?.toDouble() ??
+          1.0,
+      rightSpinScale: (map['rightSpinScale'] as num?)?.toDouble() ??
+          (map['skillButtonScale'] as num?)?.toDouble() ??
+          1.0,
+      dashScale: (map['dashScale'] as num?)?.toDouble() ??
+          (map['skillButtonScale'] as num?)?.toDouble() ??
+          1.0,
       skillMarginX: (map['skillMarginX'] as num?)?.toDouble() ?? 36.0,
       skillMarginY: (map['skillMarginY'] as num?)?.toDouble() ?? 36.0,
       skillSpacing: (map['skillSpacing'] as num?)?.toDouble() ?? 90.0,

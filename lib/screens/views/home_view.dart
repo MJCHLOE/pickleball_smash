@@ -19,6 +19,7 @@ import '../../widgets/shop_modal.dart';
 import '../../models/multiplayer_models.dart';
 import '../../services/multiplayer_service.dart';
 import '../auth/register_screen.dart';
+import '../../widgets/pre_match_loadout_modal.dart';
 import 'player_stats_modal.dart';
 
 class HomeView extends StatelessWidget {
@@ -481,23 +482,28 @@ class HomeView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          // Active Loadout Pill row
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF090D16),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF1E293B)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildMiniLoadoutItem('CHAR', activeChar.name, activeChar.badge, activeChar.borderColor),
-                Container(width: 1, height: 28, color: const Color(0xFF1E293B)),
-                _buildMiniLoadoutItem('COURT', activeCourt.name, activeCourt.badge, activeCourt.accentColor),
-                Container(width: 1, height: 28, color: const Color(0xFF1E293B)),
-                _buildMiniLoadoutItem('BALL', activeBall.name, activeBall.badge, activeBall.glowColor),
-              ],
+          // Active Loadout Pill row (Tap to customize loadout)
+          InkWell(
+            key: const ValueKey('home_active_loadout_row'),
+            onTap: () => PreMatchLoadoutModal.show(context, isHost: true),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF090D16),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF1E293B)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildMiniLoadoutItem('CHAR', activeChar.name, activeChar.badge, activeChar.borderColor),
+                  Container(width: 1, height: 28, color: const Color(0xFF1E293B)),
+                  _buildMiniLoadoutItem('COURT', activeCourt.name, activeCourt.badge, activeCourt.accentColor),
+                  Container(width: 1, height: 28, color: const Color(0xFF1E293B)),
+                  _buildMiniLoadoutItem('BALL', activeBall.name, activeBall.badge, activeBall.glowColor),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 14),

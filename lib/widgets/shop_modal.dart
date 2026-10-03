@@ -6,6 +6,8 @@ import '../models/court_catalog.dart';
 import '../services/audio_service.dart';
 import '../services/game_state_manager.dart';
 import '../theme/app_theme.dart';
+import 'animated_character_display.dart';
+import 'dashboard_character_card_feature.dart';
 import 'game_2d_button.dart';
 import 'game_2d_text.dart';
 import 'ready_to_serve_character_widget.dart';
@@ -34,7 +36,6 @@ class ShopModal extends StatefulWidget {
 class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String? _selectedCharacterId;
-  String _previewAction = 'serve'; // 'serve', 'idle', 'run', 'smash'
 
   @override
   void initState() {
@@ -287,66 +288,33 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
     return equipped ?? characters.first;
   }
 
-  Widget _buildPoseChip(String label, String action, Color accent) {
-    final isSelected = _previewAction == action;
-    return InkWell(
-      onTap: () {
-        AudioService.instance.playButtonTap();
-        setState(() {
-          _previewAction = action;
-        });
-      },
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: isSelected ? accent.withValues(alpha: 0.25) : const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? accent : const Color(0xFF334155),
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : AppTheme.textMuted,
-            fontSize: 10,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildCharacterShowcase(CharacterInfo char, GameStateManager state) {
     final isUnlocked = state.isCharacterUnlocked(char.id);
     final isEquipped = state.playerAvatarId == char.id;
+    final canAfford = state.coins >= char.price;
 
     return Container(
       margin: EdgeInsets.zero,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: char.borderColor.withValues(alpha: 0.7), width: 1.5),
         boxShadow: [
           BoxShadow(
             color: char.borderColor.withValues(alpha: 0.25),
-            blurRadius: 14,
-            offset: const Offset(0, 3),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 6,
-            runSpacing: 4,
+          // Top Header Row: Status tag & Coin chip
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -358,10 +326,10 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.remove_red_eye_outlined, color: char.borderColor, size: 12),
+                    const Icon(Icons.bolt, color: AppTheme.neonLime, size: 12),
                     const SizedBox(width: 4),
                     Text(
-                      'FRONT VIEW SPOTLIGHT: ${char.name.toUpperCase()}',
+                      'FEATURED FIGHTER',
                       style: TextStyle(
                         color: char.borderColor,
                         fontSize: 10,
@@ -374,7 +342,7 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
               ),
               if (isEquipped)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: AppTheme.neonLime.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(6),
@@ -391,7 +359,7 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
                 )
               else if (isUnlocked)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: const Color(0xFF38BDF8).withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(6),
@@ -405,100 +373,117 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.goldCoin.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppTheme.goldCoin, width: 1),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.monetization_on_rounded, color: AppTheme.goldCoin, size: 12),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${char.price} COINS',
+                        style: const TextStyle(
+                          color: AppTheme.goldCoin,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
             ],
           ),
           const SizedBox(height: 8),
+
+          // Arcade Character Feature with Top Pill, Spotlight, and Interactive Paddle Sprite
+          DashboardCharacterCardFeature(
+            character: char,
+            height: 155,
+            showBadge: true,
+            showSwapIcon: true,
+            onBadgeTap: () {
+              final all = CharacterRoster.allCharacters;
+              final idx = all.indexWhere((c) => c.id == char.id);
+              final next = all[(idx + 1) % all.length];
+              setState(() {
+                _selectedCharacterId = next.id;
+              });
+              AudioService.instance.playButtonTap();
+            },
+            showSpotlight: true,
+            showCharacterSwitcher: true,
+            showActionControls: true,
+            onGenderChanged: (newGender) {
+              final targetChar = CharacterRoster.getByType(AnimatedCharacterDisplay.typeFromGender(newGender));
+              setState(() {
+                _selectedCharacterId = targetChar.id;
+              });
+            },
+          ),
+
+          const SizedBox(height: 6),
+          // Character description & quick buy/equip actions
           Row(
             children: [
-              Container(
-                width: 82,
-                height: 82,
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    colors: [
-                      char.borderColor.withValues(alpha: 0.28),
-                      const Color(0xFF090D16),
-                    ],
-                    radius: 0.85,
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: char.borderColor.withValues(alpha: 0.4), width: 1.5),
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Positioned(
-                      bottom: 6,
-                      child: Container(
-                        width: 48,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                    ReadyToServeCharacterWidget(
-                      character: char,
-                      action: _previewAction,
-                      size: 68,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          char.badge,
-                          style: const TextStyle(fontSize: 15),
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            char.title,
-                            style: TextStyle(
-                              color: char.borderColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      char.description,
-                      style: const TextStyle(
-                        color: AppTheme.textMuted,
-                        fontSize: 10.5,
-                        height: 1.25,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        _buildPoseChip('Serve', 'serve', char.borderColor),
-                        _buildPoseChip('Idle', 'idle', char.borderColor),
-                        _buildPoseChip('Run', 'run', char.borderColor),
-                        _buildPoseChip('Smash', 'smash', char.borderColor),
-                      ],
-                    ),
-                  ],
+                child: Text(
+                  char.description,
+                  style: const TextStyle(
+                    color: AppTheme.textMuted,
+                    fontSize: 11,
+                    height: 1.25,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 10),
+              if (isEquipped)
+                Game2DButton(
+                  onPressed: () {},
+                  text: 'EQUIPPED',
+                  icon: Icons.check_circle_rounded,
+                  variant: GameButtonVariant.cyan,
+                  size: GameButtonSize.small,
+                )
+              else if (isUnlocked)
+                Game2DButton(
+                  onPressed: () {
+                    AudioService.instance.playButtonTap();
+                    state.equipCharacter(char.id);
+                    _showNotice('Equipped ${char.name}!');
+                  },
+                  text: 'EQUIP',
+                  icon: Icons.sports_tennis_rounded,
+                  variant: GameButtonVariant.primary,
+                  size: GameButtonSize.small,
+                )
+              else
+                Game2DButton(
+                  onPressed: () {
+                    if (state.purchaseCharacter(char.id)) {
+                      AudioService.instance.playPointScored();
+                      _showNotice('Unlocked & equipped ${char.name}!');
+                    } else {
+                      AudioService.instance.playButtonTap();
+                      _showNotice(
+                        'Need ${char.price - state.coins} more coins to purchase ${char.name}!',
+                        isSuccess: false,
+                      );
+                    }
+                  },
+                  text: 'BUY (${char.price})',
+                  icon: Icons.shopping_bag_outlined,
+                  variant: canAfford ? GameButtonVariant.amber : GameButtonVariant.dark,
+                  size: GameButtonSize.small,
+                ),
             ],
           ),
         ],
@@ -510,15 +495,13 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
     final characters = CharacterRoster.allCharacters;
     final selectedChar = _resolveSelectedCharacter(state);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
       children: [
+        _buildCharacterShowcase(selectedChar, state),
+        const SizedBox(height: 12),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-          child: _buildCharacterShowcase(selectedChar, state),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Row(
             children: [
               const Icon(Icons.people_alt_rounded, color: AppTheme.textMuted, size: 14),
@@ -535,55 +518,47 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
             ],
           ),
         ),
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-            itemCount: characters.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final char = characters[index];
-              final isUnlocked = state.isCharacterUnlocked(char.id);
-              final isEquipped = state.playerAvatarId == char.id;
-              final isInspected = char.id == selectedChar.id;
-              final canAfford = state.coins >= char.price;
-
-              return _buildItemCard(
-                key: ValueKey('shop_char_${char.id}'),
-                badge: char.badge,
-                title: char.name,
-                subtitle: char.title,
-                description: char.description,
-                accentColor: char.borderColor,
-                previewWidget: _buildCharacterPreview(char),
-                isUnlocked: isUnlocked,
-                isEquipped: isEquipped,
-                isInspected: isInspected,
-                price: char.price,
-                canAfford: canAfford,
-                onTap: () {
-                  AudioService.instance.playButtonTap();
-                  setState(() {
-                    _selectedCharacterId = char.id;
-                  });
-                },
-                onEquip: () {
-                  AudioService.instance.playButtonTap();
-                  state.equipCharacter(char.id);
-                  _showNotice('Equipped ${char.name}!');
-                },
-                onBuy: () {
-                  if (state.purchaseCharacter(char.id)) {
-                    AudioService.instance.playPointScored();
-                    _showNotice('Unlocked & equipped ${char.name}!');
-                  } else {
-                    AudioService.instance.playButtonTap();
-                    _showNotice('Need ${char.price - state.coins} more coins to purchase ${char.name}!', isSuccess: false);
-                  }
-                },
-              );
+        const SizedBox(height: 6),
+        for (final char in characters) ...[
+          _buildItemCard(
+            key: ValueKey('shop_char_${char.id}'),
+            badge: char.badge,
+            title: char.name,
+            subtitle: char.title,
+            description: char.description,
+            accentColor: char.borderColor,
+            previewWidget: _buildCharacterPreview(char),
+            isUnlocked: state.isCharacterUnlocked(char.id),
+            isEquipped: state.playerAvatarId == char.id,
+            isInspected: char.id == selectedChar.id,
+            price: char.price,
+            canAfford: state.coins >= char.price,
+            onTap: () {
+              AudioService.instance.playButtonTap();
+              setState(() {
+                _selectedCharacterId = char.id;
+              });
+            },
+            onEquip: () {
+              AudioService.instance.playButtonTap();
+              state.equipCharacter(char.id);
+              _showNotice('Equipped ${char.name}!');
+            },
+            onBuy: () {
+              if (state.purchaseCharacter(char.id)) {
+                AudioService.instance.playPointScored();
+                _showNotice('Unlocked & equipped ${char.name}!');
+              } else {
+                AudioService.instance.playButtonTap();
+                _showNotice(
+                  'Need ${char.price - state.coins} more coins to purchase ${char.name}!',
+                  isSuccess: false,
+                );
+              }
             },
           ),
-        ),
+          const SizedBox(height: 10),
+        ],
       ],
     );
   }
@@ -612,10 +587,10 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // Character Ready-to-Serve Animated Pixel Sprite
+            // Character Ready-to-Serve Animated Pixel Sprite (front-facing with paddle)
             ReadyToServeCharacterWidget(
               character: char,
-              action: 'serve',
+              action: 'idle',
               size: 58,
             ),
             // Badge in bottom-right corner
@@ -713,6 +688,30 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
                 color: court.courtColor,
                 child: Center(
                   child: Text(court.badge, style: const TextStyle(fontSize: 20)),
+                ),
+              ),
+            ),
+            // Center Court Logo
+            Center(
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                  border: Border.all(color: const Color(0xFFE5A823), width: 1.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/images/logo/court_center_logo.png',
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
             ),

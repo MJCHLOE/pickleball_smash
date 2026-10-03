@@ -1,11 +1,12 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../models/game_settings.dart';
 import 'game_state_manager.dart';
 
-class AudioService {
+class AudioService with WidgetsBindingObserver {
   AudioService._();
   static final AudioService instance = AudioService._();
 
@@ -36,6 +37,14 @@ class AudioService {
   bool _isBgmPlaying = false;
   bool get isBgmPlaying => _isBgmPlaying;
 
+  bool _initialized = false;
+  bool _isAppInBackground = false;
+  bool get isAppInBackground => _isAppInBackground;
+
+  bool _wasBgmPlayingBeforeBackground = false;
+  String? _bgmAssetBeforeBackground;
+  int _bgmRequestId = 0;
+
   /// Check whether running inside automated unit test environment
   bool get _isTestEnvironment {
     if (kIsWeb) return false;
@@ -44,6 +53,102 @@ class AudioService {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Initialize AudioService, configure background mode audio context,
+  /// and register application lifecycle observer.
+  void initialize() {
+    if (_initialized || _isTestEnvironment) return;
+    _initialized = true;
+
+    try {
+      WidgetsBinding.instance.addObserver(this);
+    } catch (e) {
+      debugPrint('AudioService WidgetsBinding observer notice: $e');
+    }
+
+    try {
+      AudioPlayer.global.setAudioContext(
+        AudioContext(
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.ambient,
+            options: const {
+              AVAudioSessionOptions.mixWithOthers,
+            },
+          ),
+          android: const AudioContextAndroid(
+            isSpeakerphoneOn: false,
+            stayAwake: false, // Ensures music does not keep device awake or play when screen is off
+            contentType: AndroidContentType.music,
+            usageType: AndroidUsageType.game,
+            audioFocus: AndroidAudioFocus.gain,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Global AudioContext setup skipped: $e');
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+        _handleAppBackgrounded();
+        break;
+      case AppLifecycleState.detached:
+        _handleAppDetached();
+        break;
+      case AppLifecycleState.resumed:
+        _handleAppForegrounded();
+        break;
+    }
+  }
+
+  /// Called when user goes to mobile home screen, turns off phone screen, or switches apps
+  void _handleAppBackgrounded() {
+    _isAppInBackground = true;
+    if (_isBgmPlaying) {
+      _wasBgmPlayingBeforeBackground = true;
+      _bgmAssetBeforeBackground = _currentBgmAsset;
+      pauseBgm();
+    }
+    _stopAllSfx();
+  }
+
+  /// Called when user returns to app from home screen or unlocks the phone
+  void _handleAppForegrounded() {
+    _isAppInBackground = false;
+    if (_wasBgmPlayingBeforeBackground && _settings.musicEnabled && effectiveMusicVolume > 0.01) {
+      final targetAsset = (_bgmAssetBeforeBackground != null && _bgmAssetBeforeBackground!.isNotEmpty)
+          ? _bgmAssetBeforeBackground!
+          : (_currentBgmAsset.isNotEmpty ? _currentBgmAsset : menuBgm);
+      playBgm(targetAsset);
+    }
+    _wasBgmPlayingBeforeBackground = false;
+    _bgmAssetBeforeBackground = null;
+  }
+
+  /// Called when app is backed out of or terminated
+  void _handleAppDetached() {
+    _isAppInBackground = true;
+    _wasBgmPlayingBeforeBackground = false;
+    _bgmAssetBeforeBackground = null;
+    stopBgm();
+    _stopAllSfx();
+  }
+
+  /// Stop all active sound effects immediately
+  void _stopAllSfx() {
+    try { _uiPlayer?.stop(); } catch (_) {}
+    try { _hitPlayer?.stop(); } catch (_) {}
+    try { _smashPlayer?.stop(); } catch (_) {}
+    try { _skillPlayer?.stop(); } catch (_) {}
+    try { _stepPlayer?.stop(); } catch (_) {}
+    try { _fanfarePlayer?.stop(); } catch (_) {}
+    try { _whistlePlayer?.stop(); } catch (_) {}
   }
 
   // ---------------------------------------------------------------------------
@@ -56,19 +161,69 @@ class AudioService {
   String _currentBgmAsset = '';
   String get currentBgmAsset => _currentBgmAsset;
 
-  /// Play or loop retro arcade background music with support for custom tracks
+  Future<AudioPlayer> _ensureBgmPlayer() async {
+    if (_bgmPlayer == null) {
+      final player = AudioPlayer(playerId: 'pickleball_bgm_player');
+      try {
+        await player.setPlayerMode(PlayerMode.mediaPlayer);
+        await player.setReleaseMode(ReleaseMode.loop);
+        player.onPlayerComplete.listen((_) {
+          // Seamless loop recovery fallback for devices where native loop drops
+          if (_isBgmPlaying && !_isAppInBackground && _currentBgmAsset.isNotEmpty) {
+            player.play(AssetSource(_currentBgmAsset));
+          }
+        });
+      } catch (_) {}
+      _bgmPlayer = player;
+    }
+    return _bgmPlayer!;
+  }
+
+  /// Play or loop background music stably with race-condition protection and lifecycle checks
   Future<void> playBgm([String assetPath = menuBgm]) async {
-    if (_isTestEnvironment) return;
-    if (!_settings.musicEnabled || effectiveMusicVolume <= 0.01) return;
+    if (_isTestEnvironment) {
+      if (!_isAppInBackground && _settings.musicEnabled && effectiveMusicVolume > 0.01) {
+        _currentBgmAsset = assetPath;
+        _isBgmPlaying = true;
+      }
+      return;
+    }
+
+    final int currentId = ++_bgmRequestId;
+
+    // If app is currently minimized or phone is off, do NOT start audio
+    if (_isAppInBackground) {
+      _currentBgmAsset = assetPath;
+      _wasBgmPlayingBeforeBackground = true;
+      return;
+    }
+
+    if (!_settings.musicEnabled || effectiveMusicVolume <= 0.01) {
+      _currentBgmAsset = assetPath;
+      await stopBgm();
+      return;
+    }
 
     try {
-      _bgmPlayer ??= AudioPlayer();
-      await _bgmPlayer!.setReleaseMode(ReleaseMode.loop);
-      await _bgmPlayer!.setVolume(effectiveMusicVolume.clamp(0.0, 1.0));
-      if (_currentBgmAsset != assetPath || !_isBgmPlaying) {
-        await _bgmPlayer!.stop();
-        _currentBgmAsset = assetPath;
-        await _bgmPlayer!.play(AssetSource(assetPath));
+      final player = await _ensureBgmPlayer();
+
+      // If already playing this exact track stably, smoothly adjust volume without restarting
+      if (_currentBgmAsset == assetPath && _isBgmPlaying && player.state == PlayerState.playing) {
+        await player.setVolume(effectiveMusicVolume.clamp(0.0, 1.0));
+        return;
+      }
+
+      await player.stop();
+
+      // Guard against newer requests or app being backgrounded while stopping
+      if (currentId != _bgmRequestId || _isAppInBackground) return;
+
+      _currentBgmAsset = assetPath;
+      await player.setReleaseMode(ReleaseMode.loop);
+      await player.setVolume(effectiveMusicVolume.clamp(0.0, 1.0));
+      await player.play(AssetSource(assetPath));
+
+      if (currentId == _bgmRequestId) {
         _isBgmPlaying = true;
       }
     } catch (e) {
@@ -84,7 +239,10 @@ class AudioService {
 
   /// Pause retro arcade background music
   Future<void> pauseBgm() async {
-    if (_isTestEnvironment) return;
+    if (_isTestEnvironment) {
+      _isBgmPlaying = false;
+      return;
+    }
     try {
       if (_bgmPlayer != null && _isBgmPlaying) {
         await _bgmPlayer!.pause();
@@ -95,14 +253,27 @@ class AudioService {
 
   /// Resume retro arcade background music
   Future<void> resumeBgm() async {
-    if (_isTestEnvironment) return;
+    if (_isTestEnvironment) {
+      if (!_isAppInBackground && _settings.musicEnabled && effectiveMusicVolume > 0.01) {
+        _isBgmPlaying = true;
+      }
+      return;
+    }
+    if (_isAppInBackground) {
+      _wasBgmPlayingBeforeBackground = true;
+      return;
+    }
     if (!_settings.musicEnabled || effectiveMusicVolume <= 0.01) return;
 
     try {
-      if (_bgmPlayer != null) {
+      if (_bgmPlayer != null && _currentBgmAsset.isNotEmpty) {
         await _bgmPlayer!.setVolume(effectiveMusicVolume.clamp(0.0, 1.0));
-        await _bgmPlayer!.resume();
-        _isBgmPlaying = true;
+        if (_bgmPlayer!.state == PlayerState.paused) {
+          await _bgmPlayer!.resume();
+          _isBgmPlaying = true;
+        } else {
+          await playBgm(_currentBgmAsset);
+        }
       } else {
         await playBgm(_currentBgmAsset.isNotEmpty ? _currentBgmAsset : menuBgm);
       }
@@ -113,7 +284,11 @@ class AudioService {
 
   /// Stop retro arcade background music
   Future<void> stopBgm() async {
-    if (_isTestEnvironment) return;
+    if (_isTestEnvironment) {
+      _isBgmPlaying = false;
+      return;
+    }
+    _bgmRequestId++;
     try {
       if (_bgmPlayer != null) {
         await _bgmPlayer!.stop();
@@ -124,7 +299,12 @@ class AudioService {
 
   /// Handle live settings updates (music toggles, volume sliders)
   Future<void> onSettingsUpdated() async {
-    if (_isTestEnvironment) return;
+    if (_isTestEnvironment) {
+      if (!_settings.musicEnabled || effectiveMusicVolume <= 0.01) {
+        _isBgmPlaying = false;
+      }
+      return;
+    }
     try {
       if (!_settings.musicEnabled || effectiveMusicVolume <= 0.01) {
         if (_isBgmPlaying && _bgmPlayer != null) {
@@ -134,11 +314,11 @@ class AudioService {
       } else {
         if (_bgmPlayer != null) {
           await _bgmPlayer!.setVolume(effectiveMusicVolume.clamp(0.0, 1.0));
-          if (!_isBgmPlaying) {
+          if (!_isBgmPlaying && !_isAppInBackground) {
             await _bgmPlayer!.resume();
             _isBgmPlaying = true;
           }
-        } else {
+        } else if (!_isAppInBackground) {
           await playBgm();
         }
       }
@@ -150,7 +330,7 @@ class AudioService {
   // ---------------------------------------------------------------------------
 
   Future<void> _playSfxPlayer(AudioPlayer Function() playerGetter, String assetPath, double volume) async {
-    if (_isTestEnvironment) return;
+    if (_isTestEnvironment || _isAppInBackground) return;
     if (!_settings.sfxEnabled || volume <= 0.01) return;
 
     try {
@@ -274,10 +454,10 @@ class AudioService {
       } catch (_) {}
     }
 
-    if (!_settings.sfxEnabled || effectiveSfxVolume <= 0.01) return;
+    if (!_settings.sfxEnabled || effectiveSfxVolume <= 0.01 || _isAppInBackground) return;
     // Duck BGM during triumphant victory fanfare
     try {
-      if (_isBgmPlaying && _bgmPlayer != null) {
+      if (_isBgmPlaying && !_isAppInBackground && _bgmPlayer != null) {
         await _bgmPlayer!.setVolume((effectiveMusicVolume * 0.25).clamp(0.0, 1.0));
       }
     } catch (_) {}
@@ -287,7 +467,7 @@ class AudioService {
     // Restore BGM after fanfare finishes
     Future.delayed(const Duration(milliseconds: 1900), () {
       try {
-        if (_isBgmPlaying && _bgmPlayer != null) {
+        if (_isBgmPlaying && !_isAppInBackground && _bgmPlayer != null) {
           _bgmPlayer!.setVolume(effectiveMusicVolume.clamp(0.0, 1.0));
         }
       } catch (_) {}
@@ -302,10 +482,10 @@ class AudioService {
       } catch (_) {}
     }
 
-    if (!_settings.sfxEnabled || effectiveSfxVolume <= 0.01) return;
+    if (!_settings.sfxEnabled || effectiveSfxVolume <= 0.01 || _isAppInBackground) return;
     // Duck BGM during defeat jingle
     try {
-      if (_isBgmPlaying && _bgmPlayer != null) {
+      if (_isBgmPlaying && !_isAppInBackground && _bgmPlayer != null) {
         await _bgmPlayer!.setVolume((effectiveMusicVolume * 0.20).clamp(0.0, 1.0));
       }
     } catch (_) {}
@@ -315,7 +495,7 @@ class AudioService {
     // Restore BGM after defeat motif
     Future.delayed(const Duration(milliseconds: 1700), () {
       try {
-        if (_isBgmPlaying && _bgmPlayer != null) {
+        if (_isBgmPlaying && !_isAppInBackground && _bgmPlayer != null) {
           _bgmPlayer!.setVolume(effectiveMusicVolume.clamp(0.0, 1.0));
         }
       } catch (_) {}

@@ -585,9 +585,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
     );
-    // When returning to dashboard, restore portrait orientation
+    // When returning to dashboard, restore portrait orientation & resume menu music
     if (mounted) {
       _lockPortraitOrientation();
+      AudioService.instance.playMenuBgm();
     }
   }
 
@@ -602,32 +603,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
           builder: (context, constraints) {
             final isWide = constraints.maxWidth >= AppTheme.compactBreakpoint;
 
-            return Scaffold(
-              backgroundColor: AppTheme.background,
-              body: SmoothLightsAlphabetBackground(
-                child: SafeArea(
-                  child: Column(
-                    children: [
-                      // Top Player Profile & Currencies Header
-                      _buildTopHeader(context, state),
-                      const Divider(color: AppTheme.surfaceBorder, height: 1),
-                      // Body Area
-                      Expanded(
-                        child: isWide
-                            ? Row(
-                                children: [
-                                  _buildNavigationRail(),
-                                  const VerticalDivider(color: AppTheme.surfaceBorder, width: 1),
-                                  Expanded(child: _buildCurrentView()),
-                                ],
-                              )
-                            : _buildCurrentView(),
-                      ),
-                    ],
+            return PopScope(
+              canPop: true,
+              onPopInvokedWithResult: (didPop, result) {
+                if (didPop) {
+                  // User backed out of the app to mobile home screen
+                  AudioService.instance.stopBgm();
+                }
+              },
+              child: Scaffold(
+                backgroundColor: AppTheme.background,
+                body: SmoothLightsAlphabetBackground(
+                  child: SafeArea(
+                    child: Column(
+                      children: [
+                        // Top Player Profile & Currencies Header
+                        _buildTopHeader(context, state),
+                        const Divider(color: AppTheme.surfaceBorder, height: 1),
+                        // Body Area
+                        Expanded(
+                          child: isWide
+                              ? Row(
+                                  children: [
+                                    _buildNavigationRail(),
+                                    const VerticalDivider(color: AppTheme.surfaceBorder, width: 1),
+                                    Expanded(child: _buildCurrentView()),
+                                  ],
+                                )
+                              : _buildCurrentView(),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+                bottomNavigationBar: isWide ? null : _buildBottomNavigationBar(),
               ),
-              bottomNavigationBar: isWide ? null : _buildBottomNavigationBar(),
             );
           },
         );

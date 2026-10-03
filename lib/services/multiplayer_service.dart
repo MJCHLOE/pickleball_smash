@@ -829,14 +829,22 @@ class MultiplayerService extends ChangeNotifier {
     // 2. Dispatch to local game engine
     _packetStreamController.add(packet);
 
-    // Handle in-lobby character change from remote guest
-    if (packet.type == PacketType.playerState && packet.data.containsKey('characterChange')) {
+    // Handle in-lobby character/loadout change from remote guest
+    if (packet.type == PacketType.playerState && (packet.data.containsKey('characterChange') || packet.data.containsKey('loadoutChange'))) {
       final charId = packet.data['characterId'] as String?;
-      if (charId != null && _currentRoom != null) {
+      final ballId = packet.data['ballId'] as String?;
+      final courtId = packet.data['courtId'] as String?;
+      if (_currentRoom != null) {
         final slots = List<RoomPlayerSlot>.from(_currentRoom!.slots);
         final idx = slots.indexWhere((s) => s.playerId == packet.senderId);
         if (idx != -1) {
-          slots[idx] = slots[idx].copyWith(characterId: charId, playerAvatar: charId);
+          slots[idx] = slots[idx].copyWith(
+            characterId: charId ?? slots[idx].characterId,
+            playerAvatar: charId ?? slots[idx].playerAvatar,
+            ballId: ballId ?? slots[idx].ballId,
+            courtId: courtId ?? slots[idx].courtId,
+            hasSelectedLoadout: true,
+          );
           _currentRoom = _currentRoom!.copyWith(slots: slots);
           notifyListeners();
           _broadcastRoomState();
@@ -1255,6 +1263,66 @@ class MultiplayerService extends ChangeNotifier {
     }
   }
 
+  /// Updates current player's loadout (Character -> Ball -> Court) and synchronizes to all room players
+  Future<void> updateMyLoadout({
+    required String characterId,
+    required String ballId,
+    required String courtId,
+  }) async {
+    final state = GameStateManager.instance;
+    state.equipCharacter(characterId);
+    state.equipBall(ballId);
+    state.equipCourt(courtId);
+
+    if (_currentRoom == null) {
+      notifyListeners();
+      return;
+    }
+
+    final slots = List<RoomPlayerSlot>.from(_currentRoom!.slots);
+    final myIdx = slots.indexWhere((s) => s.playerId == _myProfile.playerId);
+    if (myIdx != -1) {
+      final isHost = slots[myIdx].isHost;
+      slots[myIdx] = slots[myIdx].copyWith(
+        characterId: characterId,
+        playerAvatar: characterId,
+        ballId: ballId,
+        courtId: courtId,
+        hasSelectedLoadout: true,
+      );
+      _currentRoom = _currentRoom!.copyWith(
+        slots: slots,
+        courtId: isHost ? courtId : _currentRoom!.courtId,
+      );
+      _broadcastRoomState();
+
+      if (_currentRoom!.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+        await FirebaseMultiplayerService.instance.updateSlotLoadout(
+          _currentRoom!.roomCode,
+          _myProfile.playerId,
+          characterId: characterId,
+          ballId: ballId,
+          courtId: courtId,
+        );
+      } else {
+        if (!_isHost && _clientSocket != null && _clientSocket!.readyState == WebSocket.open) {
+          _clientSocket!.add(jsonEncode(MultiplayerPacket(
+            type: PacketType.playerState,
+            timestamp: DateTime.now().millisecondsSinceEpoch,
+            senderId: _myProfile.playerId,
+            data: {
+              'loadoutChange': true,
+              'characterId': characterId,
+              'ballId': ballId,
+              'courtId': courtId,
+            },
+          ).toJson()));
+        }
+      }
+      notifyListeners();
+    }
+  }
+
   void kickPlayer(int slotIndex) {
     if (_currentRoom == null) return;
     final slots = List<RoomPlayerSlot>.from(_currentRoom!.slots);
@@ -1548,8 +1616,8 @@ class MultiplayerService extends ChangeNotifier {
   }
 }
 
-/// Dead-reckoning and Hermite cubic interpolation helper for buttery smooth
-/// 60 FPS remote player movement with zero jitter.
+/// Advanced dead-reckoning and continuous Hermite cubic extrapolation helper
+/// for buttery-smooth 60 FPS remote player movement with zero jitter or rubber-banding.
 class RemotePlayerInterpolator {
   double currentX = 0.0;
   double currentY = 0.0;
@@ -1558,15 +1626,17 @@ class RemotePlayerInterpolator {
   double velocityX = 0.0;
   double velocityY = 0.0;
   double lastPacketTimestamp = 0.0;
+  double extrapolationTime = 0.0;
 
   RemotePlayerInterpolator({required double startX, required double startY}) {
     currentX = startX;
     currentY = startY;
     targetX = startX;
     targetY = startY;
+    lastPacketTimestamp = DateTime.now().millisecondsSinceEpoch.toDouble();
   }
 
-  /// Updates target destination from incoming network packet
+  /// Updates target destination and velocity from incoming network packet
   void onPacketReceived({
     required double x,
     required double y,
@@ -1577,18 +1647,117 @@ class RemotePlayerInterpolator {
     targetY = y;
     velocityX = vx;
     velocityY = vy;
+    extrapolationTime = 0.0;
     lastPacketTimestamp = DateTime.now().millisecondsSinceEpoch.toDouble();
   }
 
-  /// Computes smoothed position on each 60 FPS tick (dt is delta time in seconds)
+  /// Computes smoothed dead-reckoned position on each 60 FPS tick (dt in seconds)
   void update(double dt) {
-    // Hermite dead-reckoning extrapolation
-    final predictedX = targetX + (velocityX * dt * 0.4);
-    final predictedY = targetY + (velocityY * dt * 0.4);
+    extrapolationTime += dt;
+    // Dead-reckoning: predict ahead along velocity (capped at 120ms to prevent overshoot)
+    final clampedTime = extrapolationTime.clamp(0.0, 0.12);
+    final extX = targetX + (velocityX * clampedTime);
+    final extY = targetY + (velocityY * clampedTime);
 
-    // Exponential smoothing / lerp (0.35 blend factor per frame)
-    final factor = (18.0 * dt).clamp(0.0, 1.0);
-    currentX += (predictedX - currentX) * factor;
-    currentY += (predictedY - currentY) * factor;
+    final dx = extX - currentX;
+    final dy = extY - currentY;
+    final distSq = dx * dx + dy * dy;
+
+    // If large teleport/desync (> 220px), snap directly to avoid rubber-banding
+    if (distSq > 48400.0) {
+      currentX = extX;
+      currentY = extY;
+    } else {
+      // Exponential convergence (adaptive smoothing rate)
+      final factor = (22.0 * dt).clamp(0.0, 1.0);
+      currentX += dx * factor;
+      currentY += dy * factor;
+    }
+  }
+}
+
+/// Client-side reconciliation and smooth trajectory tracking for the pickleball ball.
+/// Eliminates rubber-banding, snapping, and boomerang effects during online play.
+class BallInterpolator {
+  double currentX = 0.0;
+  double currentY = 0.0;
+  double currentZ = 0.0;
+  double targetX = 0.0;
+  double targetY = 0.0;
+  double targetZ = 0.0;
+  double velocityX = 0.0;
+  double velocityY = 0.0;
+  double zVelocity = 0.0;
+  double spin = 0.0;
+
+  BallInterpolator({required double startX, required double startY, double startZ = 0.0}) {
+    currentX = startX;
+    currentY = startY;
+    currentZ = startZ;
+    targetX = startX;
+    targetY = startY;
+    targetZ = startZ;
+  }
+
+  /// Sets immediate trajectory when a new strike or serve occurs
+  void onStrikeReceived({
+    required double x,
+    required double y,
+    required double z,
+    required double vx,
+    required double vy,
+    required double vz,
+    required double ballSpin,
+  }) {
+    currentX = x;
+    currentY = y;
+    currentZ = z;
+    targetX = x;
+    targetY = y;
+    targetZ = z;
+    velocityX = vx;
+    velocityY = vy;
+    zVelocity = vz;
+    spin = ballSpin;
+  }
+
+  /// Reconciles ball state during flight without visual snapping
+  void onSyncReceived({
+    required double x,
+    required double y,
+    required double z,
+    required double vx,
+    required double vy,
+    required double vz,
+    required double ballSpin,
+  }) {
+    targetX = x;
+    targetY = y;
+    targetZ = z;
+    velocityX = vx;
+    velocityY = vy;
+    zVelocity = vz;
+    spin = ballSpin;
+
+    final dx = x - currentX;
+    final dy = y - currentY;
+    final distSq = dx * dx + dy * dy;
+
+    // If drift is huge (> 85px), snap directly to avoid major desync
+    if (distSq > 7225.0) {
+      currentX = x;
+      currentY = y;
+      currentZ = z;
+    }
+  }
+
+  void update(double dt) {
+    final dx = targetX - currentX;
+    final dy = targetY - currentY;
+    final dz = targetZ - currentZ;
+    final blend = (18.0 * dt).clamp(0.0, 1.0);
+    currentX += dx * blend;
+    currentY += dy * blend;
+    currentZ += dz * blend;
   }
 }

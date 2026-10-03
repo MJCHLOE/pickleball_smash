@@ -104,26 +104,20 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   void queueTechnique(BattleTechnique tech) {
     activeTechnique = tech;
     techniquePrimeTimer = 4.5;
-    if (!currentGame.isWaitingForServe) {
-      final ball = currentGame.ball;
-      final distY = (ball.position.y - position.y).abs();
-      final distX = (ball.position.x - position.x).abs();
-      if (distY < 100 && distX < 80) {
-        strike();
-      }
-    }
   }
 
   void clearTechnique() {
     activeTechnique = BattleTechnique.none;
     techniquePrimeTimer = 0.0;
-    try {
-      currentGame.leftSpinButton?.isPrimed = false;
-      currentGame.rightSpinButton?.isPrimed = false;
-      currentGame.dashButton?.isPrimed = false;
-      currentGame.thunderButton?.isPrimed = false;
-      currentGame.phantomButton?.isPrimed = false;
-    } catch (_) {}
+    if (isPlayerOne && !isAI) {
+      try {
+        currentGame.leftSpinButton?.isPrimed = false;
+        currentGame.rightSpinButton?.isPrimed = false;
+        currentGame.dashButton?.isPrimed = false;
+        currentGame.thunderButton?.isPrimed = false;
+        currentGame.phantomButton?.isPrimed = false;
+      } catch (_) {}
+    }
   }
 
   // Dash Movement Skill Properties
@@ -880,7 +874,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
 
     final distY = (ball.position.y - position.y).abs();
     final distX = (ball.position.x - position.x).abs();
-    if (ball.velocity.y > 0 && distY < 115 && distX < 95) {
+    if (ball.velocity.y > 0 && distY <= 58.0 && distX <= 48.0) {
       // Ball must bounce first on the court floor before striking
       if (ball.bounceCountCurrentSide >= 1) {
         strike();
@@ -1038,7 +1032,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     final distY = (ball.position.y - position.y).abs();
     final distX = (ball.position.x - position.x).abs();
 
-    if (ball.velocity.y < 0 && distY < 115 && distX < 95) {
+    if (ball.velocity.y < 0 && distY <= 58.0 && distX <= 48.0) {
       // Ball must bounce first on the court floor before striking
       if (ball.bounceCountCurrentSide >= 1) {
         strike();
@@ -1131,11 +1125,11 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
         );
       }
     } else {
-      // Process ball hit if ball is within striking range
+      // Process ball hit if ball is within short smash range
       final ball = currentGame.ball;
       final distY = (ball.position.y - position.y).abs();
       final distX = (ball.position.x - position.x).abs();
-      if (distY < 95 && distX < 75) {
+      if (distY <= 55.0 && distX <= 58.0) {
         final bool trainingMode = currentGame.settings?.requireFloorBounceAllShots ?? false;
         // In training mode or when outside court before floor bounce, require bounce
         if ((trainingMode || isOutsideCourt) && ball.bounceCountCurrentSide == 0) {

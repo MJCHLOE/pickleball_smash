@@ -550,6 +550,9 @@ class RoomPlayerSlot {
   final bool isBot;
   final int pingMs;
   final String characterId;
+  final String ballId;
+  final String courtId;
+  final bool hasSelectedLoadout;
 
   const RoomPlayerSlot({
     required this.slotIndex,
@@ -563,6 +566,9 @@ class RoomPlayerSlot {
     this.isBot = false,
     this.pingMs = 24,
     this.characterId = 'alex_classic',
+    this.ballId = 'ball_elite',
+    this.courtId = 'court_pro_stadium',
+    this.hasSelectedLoadout = false,
   });
 
   bool get isEmpty => playerId == null;
@@ -579,6 +585,9 @@ class RoomPlayerSlot {
     bool? isBot,
     int? pingMs,
     String? characterId,
+    String? ballId,
+    String? courtId,
+    bool? hasSelectedLoadout,
     bool clearPlayer = false,
   }) {
     if (clearPlayer) {
@@ -594,6 +603,9 @@ class RoomPlayerSlot {
         isBot: false,
         pingMs: 0,
         characterId: 'alex_classic',
+        ballId: 'ball_elite',
+        courtId: 'court_pro_stadium',
+        hasSelectedLoadout: false,
       );
     }
     return RoomPlayerSlot(
@@ -608,6 +620,9 @@ class RoomPlayerSlot {
       isBot: isBot ?? this.isBot,
       pingMs: pingMs ?? this.pingMs,
       characterId: characterId ?? this.characterId,
+      ballId: ballId ?? this.ballId,
+      courtId: courtId ?? this.courtId,
+      hasSelectedLoadout: hasSelectedLoadout ?? this.hasSelectedLoadout,
     );
   }
 
@@ -623,6 +638,9 @@ class RoomPlayerSlot {
         'isBot': isBot,
         'pingMs': pingMs,
         'characterId': characterId,
+        'ballId': ballId,
+        'courtId': courtId,
+        'hasSelectedLoadout': hasSelectedLoadout,
       };
 
   factory RoomPlayerSlot.fromJson(Map<String, dynamic> json) => RoomPlayerSlot(
@@ -646,6 +664,11 @@ class RoomPlayerSlot {
             : ((json['playerAvatar'] as String?)?.isNotEmpty == true
                 ? json['playerAvatar'] as String
                 : 'alex_classic'),
+        ballId: (json['ballId'] as String?)?.isNotEmpty == true ? json['ballId'] as String : 'ball_elite',
+        courtId: (json['courtId'] as String?)?.isNotEmpty == true ? json['courtId'] as String : 'court_pro_stadium',
+        hasSelectedLoadout: (json['isBot'] as bool? ?? false)
+            ? true
+            : (json['hasSelectedLoadout'] as bool? ?? false),
       );
 }
 
@@ -933,6 +956,7 @@ enum PacketType {
   roomSync,
   playerState,
   ballStrike,
+  ballSync,
   serveAction,
   scoreSync,
   matchStart,
