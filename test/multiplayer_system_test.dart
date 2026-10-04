@@ -595,7 +595,7 @@ void main() {
       );
 
       // Trigger packet handler through stream or directly test notification
-      multi.hostDisconnectedNotifier.value = leavePacket.data?['reason'] as String?;
+      multi.hostDisconnectedNotifier.value = leavePacket.data['reason'] as String?;
       expect(alertReason, equals('Host has disconnected. The match has ended.'));
       multi.hostDisconnectedNotifier.value = null;
     });
