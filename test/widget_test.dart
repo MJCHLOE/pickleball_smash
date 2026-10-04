@@ -3158,10 +3158,14 @@ void main() {
       expect(find.text('Maya Swift'), findsOneWidget);
 
       // Verify default spotlight shows equipped character (Alex)
-      expect(find.text('FRONT VIEW SPOTLIGHT: ALEX SMASH'), findsOneWidget);
+      expect(find.text('ALEX SMASH • POWER SMASHER'), findsOneWidget);
 
-      // Drag ListView up to reveal Chloe Frost
-      await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+      // Scroll ListView up to reveal Chloe Frost
+      await tester.scrollUntilVisible(
+        find.text('Chloe Frost'),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pumpAndSettle();
       expect(find.text('Chloe Frost'), findsOneWidget);
 
@@ -3169,7 +3173,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('shop_char_female2_frost')));
       await tester.pumpAndSettle();
 
-      expect(find.text('FRONT VIEW SPOTLIGHT: CHLOE FROST'), findsOneWidget);
+      expect(find.text('CHLOE FROST • SPIN SPECIALIST'), findsOneWidget);
 
       // Toggle pose chips
       expect(find.text('Run'), findsOneWidget);

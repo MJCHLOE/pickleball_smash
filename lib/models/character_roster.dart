@@ -60,6 +60,21 @@ class CharacterInfo {
         return 'assets/images/male1_sprite/male_p1sideidle.png';
     }
   }
+
+  String get iconPath {
+    switch (type) {
+      case CharacterType.female1:
+        return 'assets/images/female1 sprite (reworked)/female1_icon.png';
+      case CharacterType.female2:
+        return 'assets/images/female2_sprite/female2_icon.png';
+      case CharacterType.male1:
+        return 'assets/images/male1_sprite/male1_icon.png';
+      case CharacterType.male2:
+        return 'assets/images/male2_sprite/male2_icon.png';
+      case CharacterType.male3:
+        return 'assets/images/male3_sprite/male3_icon.png';
+    }
+  }
 }
 
 class CharacterRoster {

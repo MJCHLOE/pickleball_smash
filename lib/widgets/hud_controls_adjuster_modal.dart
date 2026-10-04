@@ -2908,22 +2908,16 @@ class _CourtCharactersOverlay extends StatelessWidget {
             SizedBox(
               width: height,
               height: height,
-              child: ClipRect(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: 0.5,
-                  child: Image.asset(
-                    char.charSelectIdlePath,
-                    width: height * 2,
-                    height: height,
-                    fit: BoxFit.fill,
-                    filterQuality: FilterQuality.none,
-                    errorBuilder: (_, _, _) => Icon(
-                      isOpponent ? Icons.smart_toy_rounded : Icons.person_rounded,
-                      color: isOpponent ? Colors.white54 : AppTheme.neonLime,
-                      size: height * 0.7,
-                    ),
-                  ),
+              child: Image.asset(
+                char.iconPath,
+                width: height,
+                height: height,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.none,
+                errorBuilder: (_, _, _) => Icon(
+                  isOpponent ? Icons.smart_toy_rounded : Icons.person_rounded,
+                  color: isOpponent ? Colors.white54 : AppTheme.neonLime,
+                  size: height * 0.7,
                 ),
               ),
             ),

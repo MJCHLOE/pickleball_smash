@@ -40,7 +40,7 @@ class PlayerAvatar {
       gradientColors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
       borderColor: Color(0xFF38BDF8),
       icon: Icons.sports_tennis_rounded,
-      assetPath: 'assets/images/male1_sprite/male_charselectidle.png',
+      assetPath: 'assets/images/male1_sprite/male1_icon.png',
     ),
     PlayerAvatar(
       id: 'maya_speed',
@@ -50,7 +50,7 @@ class PlayerAvatar {
       gradientColors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
       borderColor: Color(0xFFC084FC),
       icon: Icons.flash_on_rounded,
-      assetPath: 'assets/images/female1_sprite/female_charselectidle.png',
+      assetPath: 'assets/images/female1 sprite (reworked)/female1_icon.png',
     ),
     PlayerAvatar(
       id: 'male2_blaze',
@@ -60,7 +60,7 @@ class PlayerAvatar {
       gradientColors: [Color(0xFFEA580C), Color(0xFFC2410C)],
       borderColor: Color(0xFFF97316),
       icon: Icons.local_fire_department_rounded,
-      assetPath: 'assets/images/male2_sprite/male2_charselectidle.png',
+      assetPath: 'assets/images/male2_sprite/male2_icon.png',
     ),
     PlayerAvatar(
       id: 'male3_thunder',
@@ -70,7 +70,7 @@ class PlayerAvatar {
       gradientColors: [Color(0xFF0D9488), Color(0xFF0F766E)],
       borderColor: Color(0xFF2DD4BF),
       icon: Icons.bolt_rounded,
-      assetPath: 'assets/images/male3_sprite/male3_charselectidle.png',
+      assetPath: 'assets/images/male3_sprite/male3_icon.png',
     ),
     PlayerAvatar(
       id: 'female2_frost',
@@ -80,7 +80,7 @@ class PlayerAvatar {
       gradientColors: [Color(0xFFEC4899), Color(0xFFBE185D)],
       borderColor: Color(0xFFF472B6),
       icon: Icons.diamond_rounded,
-      assetPath: 'assets/images/female2_sprite/female2_charselectidle.png',
+      assetPath: 'assets/images/female2_sprite/female2_icon.png',
     ),
     PlayerAvatar(
       id: 'leo_spin',
