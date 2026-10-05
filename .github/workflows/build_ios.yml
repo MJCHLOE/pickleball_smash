@@ -20,11 +20,20 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Install Dependencies
+      - name: Precache iOS Engine
+        run: flutter precache --ios
+
+      - name: Install Flutter Dependencies
         run: flutter pub get
 
+      - name: Install CocoaPods Dependencies
+        run: |
+          cd ios
+          pod install --repo-update
+
       - name: Build iOS App (Unsigned Release Bundle)
-        run: flutter build ios --release --no-codesign
+        run: |
+          flutter build ios --release --no-codesign -v
 
       - name: Package Payload as IPA
         run: |
@@ -32,10 +41,13 @@ jobs:
           mkdir -p Payload
           cp -r Runner.app Payload/
           zip -r ../../../PickleballSmash-Release.ipa Payload
+          cd ../../..
+          zip -r PickleballSmash-RunnerApp.zip build/ios/iphoneos/Runner.app
 
-      - name: Upload iOS Release IPA
+      - name: Upload iOS Release Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: PickleballSmash-Release-iOS
-          path: PickleballSmash-Release.ipa
-
+          path: |
+            PickleballSmash-Release.ipa
+            PickleballSmash-RunnerApp.zip
