@@ -280,10 +280,16 @@ class HomeView extends StatelessWidget {
                       return CharacterGender.female;
                     case CharacterType.female2:
                       return CharacterGender.female2;
+                    case CharacterType.female3:
+                      return CharacterGender.female3;
+                    case CharacterType.female4:
+                      return CharacterGender.female4;
                     case CharacterType.male2:
                       return CharacterGender.male2;
                     case CharacterType.male3:
                       return CharacterGender.male3;
+                    case CharacterType.male4:
+                      return CharacterGender.male4;
                     case CharacterType.male1:
                       return CharacterGender.male;
                   }
@@ -295,10 +301,16 @@ class HomeView extends StatelessWidget {
                       return CharacterType.female1;
                     case CharacterGender.female2:
                       return CharacterType.female2;
+                    case CharacterGender.female3:
+                      return CharacterType.female3;
+                    case CharacterGender.female4:
+                      return CharacterType.female4;
                     case CharacterGender.male2:
                       return CharacterType.male2;
                     case CharacterGender.male3:
                       return CharacterType.male3;
+                    case CharacterGender.male4:
+                      return CharacterType.male4;
                     case CharacterGender.male:
                       return CharacterType.male1;
                   }
@@ -311,7 +323,7 @@ class HomeView extends StatelessWidget {
                     // Active Character Tag with tap-to-swap
                     InkWell(
                       key: const ValueKey('dash_hero_badge'),
-                      onTap: () => AvatarPickerDialog.show(context),
+                      onTap: () => AvatarPickerDialog.show(context, showChampions: true),
                       borderRadius: BorderRadius.circular(6),
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 6),
@@ -384,7 +396,7 @@ class HomeView extends StatelessWidget {
                             if (state.isCharacterUnlocked(targetChar.id) || targetChar.isDefaultUnlocked) {
                               state.updatePlayerAvatar(targetChar.id);
                             } else {
-                              AvatarPickerDialog.show(context);
+                              AvatarPickerDialog.show(context, showChampions: true);
                             }
                           },
                         ),

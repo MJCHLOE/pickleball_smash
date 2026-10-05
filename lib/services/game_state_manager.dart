@@ -7,6 +7,7 @@ import '../models/tournament_model.dart';
 import '../models/game_settings.dart';
 import 'audio_service.dart';
 import 'database_service.dart';
+import 'multiplayer_service.dart';
 
 class GameStateManager extends ChangeNotifier {
   // Singleton pattern for easy global access
@@ -19,10 +20,29 @@ class GameStateManager extends ChangeNotifier {
   // Account State
   int? currentUserId;
   String currentUsername = 'Guest Player';
+  String _customPlayerName = '';
   bool isGuest = true;
 
   // Player Profile State
-  String get playerName => isGuest ? 'Guest Player' : currentUsername;
+  String get playerName {
+    if (_customPlayerName.isNotEmpty) return _customPlayerName;
+    return isGuest ? 'Guest Player' : currentUsername;
+  }
+
+  /// Updates player's nickname/display name and synchronizes with databases
+  Future<void> updatePlayerName(String newName) async {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) return;
+    _customPlayerName = trimmed;
+    currentUsername = trimmed;
+    if (!isGuest && currentUserId != null) {
+      await DatabaseService.instance.updateUsername(currentUserId!, trimmed);
+    }
+    try {
+      MultiplayerService.instance.updateMyName(trimmed);
+    } catch (_) {}
+    notifyListeners();
+  }
   String playerAvatarId = 'alex_classic';
   int playerLevel = 1;
   int playerXp = 0;
@@ -37,6 +57,9 @@ class GameStateManager extends ChangeNotifier {
     'male2_blaze',
     'male3_thunder',
     'female2_frost',
+    'female3',
+    'male4_nard',
+    'female4_ashley',
   };
 
   bool isCharacterUnlocked(String charId) => true;
@@ -162,7 +185,7 @@ class GameStateManager extends ChangeNotifier {
     currentStreak = 0;
     unlockedCharacterIds
       ..clear()
-      ..addAll(['alex_classic', 'maya_speed', 'male2_blaze', 'male3_thunder', 'female2_frost']);
+      ..addAll(['alex_classic', 'maya_speed', 'male2_blaze', 'male3_thunder', 'female2_frost', 'female3', 'male4_nard', 'female4_ashley']);
     unlockedCourtIds
       ..clear()
       ..addAll(['court_pro_stadium', 'court_beach_resort', 'court_cyber_arcade', 'court_forest_park', 'court_magma_stadium']);
@@ -692,6 +715,7 @@ class GameStateManager extends ChangeNotifier {
   void loginAsGuest() {
     currentUserId = null;
     currentUsername = 'Guest Player';
+    _customPlayerName = '';
     playerAvatarId = 'alex_classic';
     isGuest = true;
     _guestMatchHistory.clear();

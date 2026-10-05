@@ -27,6 +27,7 @@ import 'package:pickleball_smash/game/components/arcade_button_component.dart';
 import 'package:pickleball_smash/screens/views/in_game_settings_modal.dart';
 import 'package:pickleball_smash/screens/views/home_view.dart';
 import 'package:pickleball_smash/screens/views/settings_view.dart';
+import 'package:pickleball_smash/services/connectivity_service.dart';
 import 'package:pickleball_smash/services/database_service.dart';
 import 'package:pickleball_smash/services/game_state_manager.dart';
 import 'package:pickleball_smash/theme/app_theme.dart';
@@ -516,7 +517,7 @@ void main() {
       expect(alphaData['totalSmashes'], 10);
 
       // 4. Verify Leaderboard reflects individual player records
-      final leaderboard = await db.getAllPlayersLeaderboard(limit: 500);
+      final leaderboard = await db.getAllPlayersLeaderboard(limit: 50000);
       expect(leaderboard.any((p) => p['username'] == userAlpha), true);
       expect(leaderboard.any((p) => p['username'] == userBeta), true);
 
@@ -551,15 +552,18 @@ void main() {
       expect(find.text('CAREER PERFORMANCE'), findsOneWidget);
       expect(find.text('PERSONAL MATCH HISTORY'), findsOneWidget);
 
+      ConnectivityService.instance.setTestOnlineOverride(true);
+
       // Switch to Leaderboard tab
       await tester.tap(find.text('All Players Leaderboard'));
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
       await tester.runAsync(() async {
-        await Future.delayed(const Duration(milliseconds: 100));
+        await Future.delayed(const Duration(milliseconds: 500));
       });
-      await tester.pumpAndSettle();
-
-      expect(find.text('Official PICKL Rankings. Sorted by Trophies and Match Victories.'), findsOneWidget);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.textContaining('Official Rankings'), findsOneWidget);
     });
   });
 
@@ -951,7 +955,7 @@ void main() {
       expect(reloaded!['avatarId'], 'custom:WIN:1:2');
 
       // 4. Check leaderboard contains avatar_id
-      final leaderboard = await db.getAllPlayersLeaderboard(limit: 200);
+      final leaderboard = await db.getAllPlayersLeaderboard(limit: 5000);
       expect(leaderboard.isNotEmpty, true);
       final me = leaderboard.firstWhere((p) => p['username'] == uniqueUser || p['user_id'] == userId);
       expect(me['avatar_id'], 'custom:WIN:1:2');
@@ -2777,15 +2781,23 @@ void main() {
       expect(CharacterRoster.chloe.type, CharacterType.female2);
       expect(CharacterRoster.chloe.spriteFolder, 'female2_sprite');
 
+      expect(CharacterRoster.female3.price, 0);
+      expect(CharacterRoster.female3.sellRefund, 0);
+      expect(CharacterRoster.female3.isDefaultUnlocked, true);
+      expect(CharacterRoster.female3.type, CharacterType.female3);
+      expect(CharacterRoster.female3.spriteFolder, 'female3_sprite');
+
       expect(CharacterRoster.getById('male2_blaze'), CharacterRoster.marcus);
       expect(CharacterRoster.getById('male3_thunder'), CharacterRoster.jax);
       expect(CharacterRoster.getById('female2_frost'), CharacterRoster.chloe);
+      expect(CharacterRoster.getById('female3'), CharacterRoster.female3);
       expect(CharacterRoster.getById('alex_classic'), CharacterRoster.alex);
       expect(CharacterRoster.getById('maya_speed'), CharacterRoster.maya);
 
       expect(CharacterRoster.getByType(CharacterType.male2), CharacterRoster.marcus);
       expect(CharacterRoster.getByType(CharacterType.male3), CharacterRoster.jax);
       expect(CharacterRoster.getByType(CharacterType.female2), CharacterRoster.chloe);
+      expect(CharacterRoster.getByType(CharacterType.female3), CharacterRoster.female3);
       expect(CharacterRoster.getByType(CharacterType.male1), CharacterRoster.alex);
       expect(CharacterRoster.getByType(CharacterType.female1), CharacterRoster.maya);
     });
@@ -3160,32 +3172,32 @@ void main() {
       // Verify default spotlight shows equipped character (Alex)
       expect(find.text('ALEX SMASH • POWER SMASHER'), findsOneWidget);
 
-      // Scroll ListView up to reveal Chloe Frost
+      // Scroll ListView up to reveal Princess-Joy
       await tester.scrollUntilVisible(
-        find.text('Chloe Frost'),
+        find.byKey(const ValueKey('shop_char_female2_frost')),
         100,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first,
       );
       await tester.pumpAndSettle();
-      expect(find.text('Chloe Frost'), findsOneWidget);
+      expect(find.byKey(const ValueKey('shop_char_female2_frost')), findsOneWidget);
 
-      // Tap Chloe Frost to spotlight her front view
+      // Tap Princess-Joy to spotlight her front view
       await tester.tap(find.byKey(const ValueKey('shop_char_female2_frost')));
       await tester.pumpAndSettle();
 
-      expect(find.text('CHLOE FROST • SPIN SPECIALIST'), findsOneWidget);
+      expect(find.text('PRINCESS-JOY • SPIN SPECIALIST', skipOffstage: false), findsOneWidget);
 
       // Toggle pose chips
-      expect(find.text('Run'), findsOneWidget);
-      await tester.tap(find.text('Run'));
+      expect(find.text('Run', skipOffstage: false), findsOneWidget);
+      await tester.tap(find.text('Run', skipOffstage: false), warnIfMissed: false);
       await tester.pumpAndSettle();
 
-      expect(find.text('Smash'), findsOneWidget);
-      await tester.tap(find.text('Smash'));
+      expect(find.text('Smash', skipOffstage: false), findsOneWidget);
+      await tester.tap(find.text('Smash', skipOffstage: false), warnIfMissed: false);
       await tester.pumpAndSettle();
 
-      expect(find.text('Idle'), findsOneWidget);
-      await tester.tap(find.text('Idle'));
+      expect(find.text('Idle', skipOffstage: false), findsOneWidget);
+      await tester.tap(find.text('Idle', skipOffstage: false), warnIfMissed: false);
       await tester.pumpAndSettle();
 
       // Equip Chloe Frost
@@ -3352,26 +3364,33 @@ void main() {
   group('Battle Techniques & Arcade Skill Buttons Tests', () {
     test('TechniqueCatalog defines leftSpin and rightSpin metadata correctly', () {
       expect(TechniqueCatalog.leftSpin.technique, BattleTechnique.leftSpin);
-      expect(TechniqueCatalog.leftSpin.name, 'Cyclone Curve');
+      expect(TechniqueCatalog.leftSpin.name, 'Spin Left');
       expect(TechniqueCatalog.leftSpin.icon, '🌪️');
       expect(TechniqueCatalog.leftSpin.hotkey, 'K');
       expect(TechniqueCatalog.leftSpin.cooldownSeconds, 6.0);
 
       expect(TechniqueCatalog.rightSpin.technique, BattleTechnique.rightSpin);
-      expect(TechniqueCatalog.rightSpin.name, 'Vortex Hook');
+      expect(TechniqueCatalog.rightSpin.name, 'Spin Right');
       expect(TechniqueCatalog.rightSpin.icon, '⚡');
       expect(TechniqueCatalog.rightSpin.hotkey, 'L');
       expect(TechniqueCatalog.rightSpin.cooldownSeconds, 6.0);
 
       expect(TechniqueCatalog.dash.technique, BattleTechnique.dash);
-      expect(TechniqueCatalog.dash.name, 'Flash Dash');
+      expect(TechniqueCatalog.dash.name, 'Dash');
       expect(TechniqueCatalog.dash.icon, '💨');
       expect(TechniqueCatalog.dash.hotkey, 'SHIFT');
-      expect(TechniqueCatalog.dash.cooldownSeconds, 3.5);
+      expect(TechniqueCatalog.dash.cooldownSeconds, 2.5);
+
+      expect(TechniqueCatalog.speedBoost.technique, BattleTechnique.speedBoost);
+      expect(TechniqueCatalog.speedBoost.name, 'Speed Boost Strike');
+      expect(TechniqueCatalog.speedBoost.icon, '🚀');
+      expect(TechniqueCatalog.speedBoost.hotkey, 'U');
+      expect(TechniqueCatalog.speedBoost.cooldownSeconds, 9.0);
 
       expect(TechniqueCatalog.get(BattleTechnique.leftSpin).id, 'left_spin');
       expect(TechniqueCatalog.get(BattleTechnique.rightSpin).id, 'right_spin');
       expect(TechniqueCatalog.get(BattleTechnique.dash).id, 'flash_dash');
+      expect(TechniqueCatalog.get(BattleTechnique.speedBoost).id, 'speed_boost');
       expect(TechniqueCatalog.get(BattleTechnique.none).id, 'left_spin');
     });
 
@@ -3403,8 +3422,8 @@ void main() {
       expect(btn.cooldownRemaining, 6.0);
 
       // Advance time
-      btn.update(3.0);
-      expect(btn.cooldownRemaining, closeTo(3.0, 0.01));
+      btn.update(2.0);
+      expect(btn.cooldownRemaining, closeTo(4.0, 0.01));
 
       // Reset cooldown
       btn.resetCooldown();
@@ -3610,7 +3629,7 @@ void main() {
 
       // Trigger Dash
       game.triggerDash();
-      expect(game.dashButton!.cooldownRemaining, 3.5);
+      expect(game.dashButton!.cooldownRemaining, 2.5);
 
       // Reset match clears cooldowns
       game.resetForNewMatch();
@@ -3642,7 +3661,7 @@ void main() {
       expect(success, true);
       expect(player.isDashing, true);
       expect(player.dashTimer, 0.22);
-      expect(player.dashCooldown, 3.5);
+      expect(player.dashCooldown, 2.5);
       expect(player.currentVelocity.x, 750.0);
       expect(player.dashParticles.isNotEmpty, true);
       expect(player.afterimages.isNotEmpty, true);

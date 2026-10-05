@@ -100,25 +100,42 @@ class GameSettings {
   final double joystickMarginY; // Vertical offset from screen bottom (12 to 120)
   final double skillButtonScale; // Skill button scale multiplier (0.65 to 1.6)
   final double smashScale; // Smash button scale multiplier (0.65 to 1.6)
-  final double leftSpinScale; // Cyclone Curve (Skill 1) scale multiplier (0.65 to 1.6)
-  final double rightSpinScale; // Vortex Hook (Skill 2) scale multiplier (0.65 to 1.6)
-  final double dashScale; // Flash Dash (Skill 3) scale multiplier (0.65 to 1.6)
+  final double leftSpinScale; // Spin Left (Skill 1) scale multiplier (0.65 to 1.6)
+  final double rightSpinScale; // Spin Right (Skill 2) scale multiplier (0.65 to 1.6)
+  final double dashScale; // Dash (Skill 3) scale multiplier (0.65 to 1.6)
+  final double speedBoostScale; // Speed Boost Strike (Skill 4) scale multiplier (0.65 to 1.6)
   final double skillMarginX; // Horizontal offset for skill buttons (12 to 120)
   final double skillMarginY; // Vertical offset for skill buttons (12 to 120)
   final double skillSpacing; // Spacing between skill cluster buttons (60 to 140)
-  final String controlsPreset; // 'Mobile Legends (Default)', 'Default Arcade', 'Compact', 'Pro Wide', 'Left-Handed', 'Custom'
+  final String controlsPreset; // 'Control Default', 'Default Arcade', 'Compact', 'Pro Wide', 'Left-Handed', 'Custom'
 
-  // Mobile Legends: Bang Bang (MLBB) Default Controller Layout Constants
-  static const double mlbbJoystickX = 0.16;
-  static const double mlbbJoystickY = 0.78;
-  static const double mlbbSmashX = 0.86;
-  static const double mlbbSmashY = 0.80;
-  static const double mlbbLeftSpinX = 0.72;
-  static const double mlbbLeftSpinY = 0.82;
-  static const double mlbbRightSpinX = 0.76;
-  static const double mlbbRightSpinY = 0.67;
-  static const double mlbbDashX = 0.86;
-  static const double mlbbDashY = 0.63;
+  // Control Default (Radial Fan) Controller Layout Constants
+  static const double controlDefaultJoystickX = 0.16;
+  static const double controlDefaultJoystickY = 0.79;
+  static const double controlDefaultSmashX = 0.88;
+  static const double controlDefaultSmashY = 0.81;
+  static const double controlDefaultLeftSpinX = 0.76;
+  static const double controlDefaultLeftSpinY = 0.84;
+  static const double controlDefaultRightSpinX = 0.85;
+  static const double controlDefaultRightSpinY = 0.62;
+  static const double controlDefaultDashX = 0.93;
+  static const double controlDefaultDashY = 0.62;
+  static const double controlDefaultSpeedBoostX = 0.79;
+  static const double controlDefaultSpeedBoostY = 0.72;
+
+  // Backward compatibility MLBB aliases
+  static const double mlbbJoystickX = controlDefaultJoystickX;
+  static const double mlbbJoystickY = controlDefaultJoystickY;
+  static const double mlbbSmashX = controlDefaultSmashX;
+  static const double mlbbSmashY = controlDefaultSmashY;
+  static const double mlbbLeftSpinX = controlDefaultLeftSpinX;
+  static const double mlbbLeftSpinY = controlDefaultLeftSpinY;
+  static const double mlbbRightSpinX = controlDefaultRightSpinX;
+  static const double mlbbRightSpinY = controlDefaultRightSpinY;
+  static const double mlbbDashX = controlDefaultDashX;
+  static const double mlbbDashY = controlDefaultDashY;
+  static const double mlbbSpeedBoostX = controlDefaultSpeedBoostX;
+  static const double mlbbSpeedBoostY = controlDefaultSpeedBoostY;
 
   // Classic Arcade 2x2 Layout Constants
   static const double arcadeJoystickX = 0.14;
@@ -131,6 +148,8 @@ class GameSettings {
   static const double arcadeRightSpinY = 0.68;
   static const double arcadeDashX = 0.76;
   static const double arcadeDashY = 0.68;
+  static const double arcadeSpeedBoostX = 0.66;
+  static const double arcadeSpeedBoostY = 0.72;
 
   // Free Drag & Drop Positioning (Normalized 0.0 to 1.0 screen coordinates)
   final bool freePositioning;
@@ -144,6 +163,8 @@ class GameSettings {
   final double rightSpinPosY;
   final double dashPosX;
   final double dashPosY;
+  final double speedBoostPosX;
+  final double speedBoostPosY;
 
   // Gameplay & Scoring Rules
   final String scoringMode; // 'rally' (Major League / Arcade) or 'sideOut' (Traditional USA Pickleball)
@@ -195,21 +216,24 @@ class GameSettings {
     this.leftSpinScale = 1.0,
     this.rightSpinScale = 1.0,
     this.dashScale = 1.0,
+    this.speedBoostScale = 1.0,
     this.skillMarginX = 36.0,
     this.skillMarginY = 36.0,
     this.skillSpacing = 90.0,
-    this.controlsPreset = 'Mobile Legends (Default)',
+    this.controlsPreset = 'Control Default',
     this.freePositioning = true,
-    this.joystickPosX = mlbbJoystickX,
-    this.joystickPosY = mlbbJoystickY,
-    this.smashPosX = mlbbSmashX,
-    this.smashPosY = mlbbSmashY,
-    this.leftSpinPosX = mlbbLeftSpinX,
-    this.leftSpinPosY = mlbbLeftSpinY,
-    this.rightSpinPosX = mlbbRightSpinX,
-    this.rightSpinPosY = mlbbRightSpinY,
-    this.dashPosX = mlbbDashX,
-    this.dashPosY = mlbbDashY,
+    this.joystickPosX = controlDefaultJoystickX,
+    this.joystickPosY = controlDefaultJoystickY,
+    this.smashPosX = controlDefaultSmashX,
+    this.smashPosY = controlDefaultSmashY,
+    this.leftSpinPosX = controlDefaultLeftSpinX,
+    this.leftSpinPosY = controlDefaultLeftSpinY,
+    this.rightSpinPosX = controlDefaultRightSpinX,
+    this.rightSpinPosY = controlDefaultRightSpinY,
+    this.dashPosX = controlDefaultDashX,
+    this.dashPosY = controlDefaultDashY,
+    this.speedBoostPosX = controlDefaultSpeedBoostX,
+    this.speedBoostPosY = controlDefaultSpeedBoostY,
     this.scoringMode = 'rally',
     this.requireFloorBounceAllShots = false,
     this.aiDifficulty = AIDifficulty.normal,
@@ -254,6 +278,7 @@ class GameSettings {
     double? leftSpinScale,
     double? rightSpinScale,
     double? dashScale,
+    double? speedBoostScale,
     double? skillMarginX,
     double? skillMarginY,
     double? skillSpacing,
@@ -269,6 +294,8 @@ class GameSettings {
     double? rightSpinPosY,
     double? dashPosX,
     double? dashPosY,
+    double? speedBoostPosX,
+    double? speedBoostPosY,
     String? scoringMode,
     bool? requireFloorBounceAllShots,
     AIDifficulty? aiDifficulty,
@@ -316,6 +343,7 @@ class GameSettings {
       leftSpinScale: leftSpinScale ?? this.leftSpinScale,
       rightSpinScale: rightSpinScale ?? this.rightSpinScale,
       dashScale: dashScale ?? this.dashScale,
+      speedBoostScale: speedBoostScale ?? this.speedBoostScale,
       skillMarginX: skillMarginX ?? this.skillMarginX,
       skillMarginY: skillMarginY ?? this.skillMarginY,
       skillSpacing: skillSpacing ?? this.skillSpacing,
@@ -331,6 +359,8 @@ class GameSettings {
       rightSpinPosY: rightSpinPosY ?? this.rightSpinPosY,
       dashPosX: dashPosX ?? this.dashPosX,
       dashPosY: dashPosY ?? this.dashPosY,
+      speedBoostPosX: speedBoostPosX ?? this.speedBoostPosX,
+      speedBoostPosY: speedBoostPosY ?? this.speedBoostPosY,
       scoringMode: scoringMode ?? this.scoringMode,
       requireFloorBounceAllShots: requireFloorBounceAllShots ?? this.requireFloorBounceAllShots,
       aiDifficulty: aiDifficulty ?? this.aiDifficulty,
@@ -377,6 +407,7 @@ class GameSettings {
       'leftSpinScale': leftSpinScale,
       'rightSpinScale': rightSpinScale,
       'dashScale': dashScale,
+      'speedBoostScale': speedBoostScale,
       'skillMarginX': skillMarginX,
       'skillMarginY': skillMarginY,
       'skillSpacing': skillSpacing,
@@ -392,6 +423,8 @@ class GameSettings {
       'rightSpinPosY': rightSpinPosY,
       'dashPosX': dashPosX,
       'dashPosY': dashPosY,
+      'speedBoostPosX': speedBoostPosX,
+      'speedBoostPosY': speedBoostPosY,
       'scoringMode': scoringMode,
       'requireFloorBounceAllShots': requireFloorBounceAllShots ? 1 : 0,
       'aiDifficulty': aiDifficulty.name,
@@ -452,21 +485,30 @@ class GameSettings {
       dashScale: (map['dashScale'] as num?)?.toDouble() ??
           (map['skillButtonScale'] as num?)?.toDouble() ??
           1.0,
+      speedBoostScale: (map['speedBoostScale'] as num?)?.toDouble() ??
+          (map['skillButtonScale'] as num?)?.toDouble() ??
+          1.0,
       skillMarginX: (map['skillMarginX'] as num?)?.toDouble() ?? 36.0,
       skillMarginY: (map['skillMarginY'] as num?)?.toDouble() ?? 36.0,
       skillSpacing: (map['skillSpacing'] as num?)?.toDouble() ?? 90.0,
-      controlsPreset: map['controlsPreset'] as String? ?? 'Mobile Legends (Default)',
+      controlsPreset: (map['controlsPreset'] == 'Mobile Legends (Default)' ||
+              map['controlsPreset'] == 'MLBB Default' ||
+              map['controlsPreset'] == null)
+          ? 'Control Default'
+          : (map['controlsPreset'] as String),
       freePositioning: (map['freePositioning'] as int? ?? 1) == 1,
-      joystickPosX: (map['joystickPosX'] as num?)?.toDouble() ?? mlbbJoystickX,
-      joystickPosY: (map['joystickPosY'] as num?)?.toDouble() ?? mlbbJoystickY,
-      smashPosX: (map['smashPosX'] as num?)?.toDouble() ?? mlbbSmashX,
-      smashPosY: (map['smashPosY'] as num?)?.toDouble() ?? mlbbSmashY,
-      leftSpinPosX: (map['leftSpinPosX'] as num?)?.toDouble() ?? mlbbLeftSpinX,
-      leftSpinPosY: (map['leftSpinPosY'] as num?)?.toDouble() ?? mlbbLeftSpinY,
-      rightSpinPosX: (map['rightSpinPosX'] as num?)?.toDouble() ?? mlbbRightSpinX,
-      rightSpinPosY: (map['rightSpinPosY'] as num?)?.toDouble() ?? mlbbRightSpinY,
-      dashPosX: (map['dashPosX'] as num?)?.toDouble() ?? mlbbDashX,
-      dashPosY: (map['dashPosY'] as num?)?.toDouble() ?? mlbbDashY,
+      joystickPosX: (map['joystickPosX'] as num?)?.toDouble() ?? controlDefaultJoystickX,
+      joystickPosY: (map['joystickPosY'] as num?)?.toDouble() ?? controlDefaultJoystickY,
+      smashPosX: (map['smashPosX'] as num?)?.toDouble() ?? controlDefaultSmashX,
+      smashPosY: (map['smashPosY'] as num?)?.toDouble() ?? controlDefaultSmashY,
+      leftSpinPosX: (map['leftSpinPosX'] as num?)?.toDouble() ?? controlDefaultLeftSpinX,
+      leftSpinPosY: (map['leftSpinPosY'] as num?)?.toDouble() ?? controlDefaultLeftSpinY,
+      rightSpinPosX: (map['rightSpinPosX'] as num?)?.toDouble() ?? controlDefaultRightSpinX,
+      rightSpinPosY: (map['rightSpinPosY'] as num?)?.toDouble() ?? controlDefaultRightSpinY,
+      dashPosX: (map['dashPosX'] as num?)?.toDouble() ?? controlDefaultDashX,
+      dashPosY: (map['dashPosY'] as num?)?.toDouble() ?? controlDefaultDashY,
+      speedBoostPosX: (map['speedBoostPosX'] as num?)?.toDouble() ?? controlDefaultSpeedBoostX,
+      speedBoostPosY: (map['speedBoostPosY'] as num?)?.toDouble() ?? controlDefaultSpeedBoostY,
       scoringMode: map['scoringMode'] as String? ?? 'rally',
       requireFloorBounceAllShots: (map['requireFloorBounceAllShots'] as int? ?? 0) == 1,
       aiDifficulty: () {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/multiplayer_models.dart';
 import '../services/audio_service.dart';
+import '../services/game_state_manager.dart';
 import '../services/multiplayer_service.dart';
 import '../theme/app_theme.dart';
 import 'avatar_picker_dialog.dart';
@@ -13,17 +14,24 @@ import 'player_avatar.dart';
 class PlayerProfileModal extends StatefulWidget {
   final String playerId;
   final bool isMyProfile;
+  final PlayerProfileModel? initialProfile;
 
   const PlayerProfileModal({
     super.key,
     required this.playerId,
     this.isMyProfile = false,
+    this.initialProfile,
   });
 
-  static void show(BuildContext context, {String? playerId}) {
+  static void show(BuildContext context, {String? playerId, PlayerProfileModel? initialProfile}) {
     final multi = MultiplayerService.instance;
-    final isMe = playerId == null || playerId == multi.myProfile.playerId;
-    final targetId = playerId ?? multi.myProfile.playerId;
+    if (initialProfile != null) {
+      multi.registerKnownProfile(initialProfile);
+    }
+    final isMe = (playerId == null && initialProfile == null) ||
+        playerId == multi.myProfile.playerId ||
+        playerId == multi.myProfile.id;
+    final targetId = playerId ?? initialProfile?.playerId ?? multi.myProfile.playerId;
 
     showModalBottomSheet(
       context: context,
@@ -33,6 +41,7 @@ class PlayerProfileModal extends StatefulWidget {
       builder: (ctx) => PlayerProfileModal(
         playerId: targetId,
         isMyProfile: isMe,
+        initialProfile: initialProfile,
       ),
     );
   }
@@ -61,7 +70,7 @@ class _PlayerProfileModalState extends State<PlayerProfileModal>
   @override
   Widget build(BuildContext context) {
     final multi = MultiplayerService.instance;
-    final profile = multi.getProfileForPlayer(widget.playerId);
+    final profile = widget.initialProfile ?? multi.getProfileForPlayer(widget.playerId);
     final screenHeight = MediaQuery.of(context).size.height;
 
     return Container(
@@ -124,6 +133,85 @@ class _PlayerProfileModalState extends State<PlayerProfileModal>
                 if (widget.isMyProfile) _buildPrivacyTab(profile, multi),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditNameDialog(BuildContext context) {
+    AudioService.instance.playButtonTap();
+    final controller = TextEditingController(text: GameStateManager.instance.playerName);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppTheme.electricCyan, width: 2),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.edit_rounded, color: AppTheme.electricCyan),
+            SizedBox(width: 8),
+            Text(
+              'EDIT PLAYER NAME',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter your desired player name:',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              maxLength: 20,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: const Color(0xFF1E293B),
+                hintText: 'Enter nickname...',
+                hintStyle: const TextStyle(color: AppTheme.textMuted),
+                counterStyle: const TextStyle(color: AppTheme.textMuted),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppTheme.surfaceBorder),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppTheme.electricCyan, width: 2),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL', style: TextStyle(color: AppTheme.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.electricCyan,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty) {
+                await GameStateManager.instance.updatePlayerName(newName);
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) setState(() {});
+              }
+            },
+            child: const Text('SAVE', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -222,14 +310,27 @@ class _PlayerProfileModalState extends State<PlayerProfileModal>
                 Row(
                   children: [
                     Flexible(
-                      child: Game2DText(
-                        profile.nickname,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        textColor: Colors.white,
-                        strokeWidth: 2.5,
+                      child: GestureDetector(
+                        onTap: widget.isMyProfile ? () => _showEditNameDialog(context) : null,
+                        child: Game2DText(
+                          profile.nickname,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          textColor: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
                       ),
                     ),
+                    if (widget.isMyProfile) ...[
+                      const SizedBox(width: 4),
+                      IconButton(
+                        icon: const Icon(Icons.edit_rounded, color: AppTheme.electricCyan, size: 16),
+                        tooltip: 'Edit Name',
+                        constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                        padding: EdgeInsets.zero,
+                        onPressed: () => _showEditNameDialog(context),
+                      ),
+                    ],
                     const SizedBox(width: 8),
                     // Status Badge
                     Container(

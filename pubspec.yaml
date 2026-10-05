@@ -74,9 +74,15 @@ flutter:
     - assets/images/male1_sprite/
     - assets/images/male2_sprite/
     - assets/images/male3_sprite/
+    - assets/images/male4_sprite/
+    - assets/images/female4_sprite/
+    - assets/images/background/male4_sprite/
+    - assets/images/background/female4_sprite/
     - assets/female1_sprite/
     - assets/images/female1_sprite/
     - assets/images/female2_sprite/
+    - assets/images/female3_sprite/
+    - "assets/images/female3 sprite/"
     - "assets/images/male1 sprite (reworked)/"
     - "assets/images/female1 sprite (reworked)/"
     - "assets/images/background reworked/"

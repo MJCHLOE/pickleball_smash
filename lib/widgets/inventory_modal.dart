@@ -543,130 +543,138 @@ class _InventoryModalState extends State<InventoryModal> with SingleTickerProvid
   }
 
   Widget _buildCharactersTab(GameStateManager state) {
-    final characters = CharacterRoster.allCharacters;
     final activeChar = _resolveInspectedCharacter(state);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
       children: [
+        _buildCharacterSelectorBar(state, activeChar),
+        const SizedBox(height: 10),
         _buildFighterShowcase(activeChar, state),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          child: Row(
-            children: [
-              const Icon(Icons.people_alt_rounded, color: AppTheme.textMuted, size: 14),
-              const SizedBox(width: 6),
-              Text(
-                'YOUR ROSTER (TAP TO PREVIEW & TEST SMASH)',
-                style: TextStyle(
-                  color: AppTheme.textMuted.withValues(alpha: 0.8),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
+      ],
+    );
+  }
+
+  Widget _buildCharacterSelectorBar(GameStateManager state, CharacterInfo activeChar) {
+    final characters = CharacterRoster.allCharacters;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final char in characters) ...[
+            _buildCharacterChip(
+              key: ValueKey('inv_char_${char.id}'),
+              char: char,
+              isSelected: char.id == activeChar.id,
+              isEquipped: state.playerAvatarId == char.id,
+              isUnlocked: state.isCharacterUnlocked(char.id),
+              onTap: () {
+                AudioService.instance.playButtonTap();
+                setState(() {
+                  _inspectedCharacterId = char.id;
+                });
+              },
+              onEquip: () {
+                AudioService.instance.playButtonTap();
+                state.equipCharacter(char.id);
+                setState(() {
+                  _inspectedCharacterId = char.id;
+                });
+                _showNotice('Equipped ${char.name}!');
+              },
+            ),
+            const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCharacterChip({
+    Key? key,
+    required CharacterInfo char,
+    required bool isSelected,
+    required bool isEquipped,
+    required bool isUnlocked,
+    required VoidCallback onTap,
+    required VoidCallback onEquip,
+  }) {
+    return InkWell(
+      key: key,
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? char.borderColor.withValues(alpha: 0.25) : const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? char.borderColor : AppTheme.surfaceBorder,
+            width: isSelected ? 2.0 : 1.2,
           ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: char.borderColor.withValues(alpha: 0.35),
+                    blurRadius: 8,
+                  ),
+                ]
+              : null,
         ),
-        const SizedBox(height: 6),
-        for (final char in characters) ...[
-          _buildInventoryCard(
-            key: ValueKey('inv_char_${char.id}'),
-            badge: char.badge,
-            title: char.name,
-            subtitle: char.title,
-            description: char.description,
-            accentColor: char.borderColor,
-            isUnlocked: state.isCharacterUnlocked(char.id),
-            isEquipped: state.playerAvatarId == char.id,
-            isInspected: char.id == activeChar.id,
-            isPurchasable: char.isPurchasable,
-            onTap: () {
-              setState(() {
-                _inspectedCharacterId = char.id;
-              });
-              AudioService.instance.playButtonTap();
-            },
-            previewWidget: Container(
-              width: 68,
-              height: 68,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: state.isCharacterUnlocked(char.id)
-                      ? char.gradientColors
-                      : [const Color(0xFF334155), const Color(0xFF1E293B)],
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(char.badge, style: const TextStyle(fontSize: 14)),
+            const SizedBox(width: 6),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  char.name,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.white70,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
                 ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: state.isCharacterUnlocked(char.id) ? char.borderColor : const Color(0xFF475569),
-                  width: 2,
-                ),
-                boxShadow: state.isCharacterUnlocked(char.id)
-                    ? [
-                        BoxShadow(
-                          color: char.borderColor.withValues(alpha: 0.3),
-                          blurRadius: 8,
-                        ),
-                      ]
-                    : null,
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    ReadyToServeCharacterWidget(
-                      character: char,
-                      action: 'idle',
-                      size: 56,
+                if (isEquipped)
+                  const Text(
+                    'EQUIPPED',
+                    style: TextStyle(
+                      color: AppTheme.neonLime,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 8.5,
                     ),
-                    Positioned(
-                      right: 4,
-                      bottom: 4,
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.65),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          char.badge,
-                          style: const TextStyle(fontSize: 11),
-                        ),
+                  )
+                else if (isUnlocked)
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onEquip,
+                    child: const Text(
+                      'EQUIP',
+                      style: TextStyle(
+                        color: Color(0xFF38BDF8),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 8.5,
                       ),
                     ),
-                  ],
-                ),
-              ),
+                  )
+                else
+                  const Text(
+                    'LOCKED',
+                    style: TextStyle(
+                      color: AppTheme.textMuted,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 8.5,
+                    ),
+                  ),
+              ],
             ),
-            onEquip: () {
-              AudioService.instance.playButtonTap();
-              state.equipCharacter(char.id);
-              setState(() {
-                _inspectedCharacterId = char.id;
-              });
-              _showNotice('Equipped ${char.name}!');
-            },
-            onSell: char.isPurchasable && state.isCharacterUnlocked(char.id)
-                ? () {
-                    final refund = char.sellRefund;
-                    if (state.sellCharacter(char.id)) {
-                      AudioService.instance.playPointScored();
-                      _showNotice('Sold ${char.name} for 🪙 $refund coins!');
-                    }
-                  }
-                : null,
-            onGoToShop: () {
-              Navigator.of(context).pop();
-              ShopModal.show(context, initialTabIndex: 0);
-            },
-          ),
-          const SizedBox(height: 10),
-        ],
-      ],
+          ],
+        ),
+      ),
     );
   }
 

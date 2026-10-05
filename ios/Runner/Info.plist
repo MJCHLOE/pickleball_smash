@@ -66,5 +66,22 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Pickleball Smash requires photo library access to choose custom player avatars.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Pickleball Smash requires camera access to capture custom profile photos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Pickleball Smash requires microphone access for voice communication during matches.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Pickleball Smash uses the local network to discover and join nearby Wi-Fi and Hotspot multiplayer rooms.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_pickleball._tcp</string>
+		<string>_pickleball._udp</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 </dict>
 </plist>

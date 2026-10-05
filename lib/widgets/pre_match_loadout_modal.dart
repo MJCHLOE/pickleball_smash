@@ -6,9 +6,9 @@ import '../services/audio_service.dart';
 import '../services/game_state_manager.dart';
 import '../services/multiplayer_service.dart';
 import '../theme/app_theme.dart';
+import 'animated_character_display.dart';
 import 'game_2d_button.dart';
 import 'game_2d_text.dart';
-import 'ready_to_serve_character_widget.dart';
 
 /// Pre-Match Loadout Selection Modal
 /// Required sequence before starting a match: Character -> Ball -> Court
@@ -447,33 +447,52 @@ class _PreMatchLoadoutModalState extends State<PreMatchLoadoutModal> {
       ),
       child: Column(
         children: [
-          // Top Badges: Class Badge & Selection status
+          // 1. Top Character Badge Pill matching Dashboard presentation
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.only(top: 10, left: 12, right: 12, bottom: 2),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
-                    color: char.borderColor.withValues(alpha: 0.2),
+                    gradient: LinearGradient(colors: char.gradientColors),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: char.borderColor, width: 1),
+                    border: Border.all(color: char.borderColor, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: char.borderColor.withValues(alpha: 0.35),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(char.badge, style: const TextStyle(fontSize: 11)),
-                      const SizedBox(width: 4),
+                      Text(char.badge, style: const TextStyle(fontSize: 13)),
+                      const SizedBox(width: 5),
                       Text(
-                        char.title.toUpperCase(),
-                        style: TextStyle(
-                          color: char.borderColor,
-                          fontSize: 10,
+                        char.name.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: 0.6,
+                          fontSize: 11,
+                          letterSpacing: 0.8,
                         ),
                       ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '• ${char.title.toUpperCase()}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      const Icon(Icons.swap_horiz_rounded, color: Colors.white70, size: 15),
                     ],
                   ),
                 ),
@@ -483,6 +502,12 @@ class _PreMatchLoadoutModalState extends State<PreMatchLoadoutModal> {
                     decoration: BoxDecoration(
                       color: AppTheme.neonLime,
                       borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.neonLime.withValues(alpha: 0.3),
+                          blurRadius: 6,
+                        ),
+                      ],
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
@@ -504,69 +529,64 @@ class _PreMatchLoadoutModalState extends State<PreMatchLoadoutModal> {
             ),
           ),
 
-          // Character Large Display: Front-facing sprite holding paddle with radial spotlight
+          // 2. Character Interactive Display: Front-facing sprite holding paddle with TAP TO SMASH & spotlight
           Expanded(
             child: Center(
               child: Stack(
-                alignment: Alignment.center,
+                alignment: Alignment.bottomCenter,
                 children: [
-                  // Glow aura circle
-                  Container(
-                    width: 140,
-                    height: 140,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          char.borderColor.withValues(alpha: 0.35),
-                          Colors.transparent,
+                  // Pixel spotlight glow under character
+                  Positioned(
+                    bottom: 12,
+                    child: Container(
+                      width: 140,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.rectangle,
+                        borderRadius: BorderRadius.circular(60),
+                        boxShadow: [
+                          BoxShadow(
+                            color: char.borderColor.withValues(alpha: 0.35),
+                            blurRadius: 26,
+                            spreadRadius: 8,
+                          ),
                         ],
                       ),
                     ),
                   ),
-                  // Animated front-facing pixel sprite holding paddle
-                  ReadyToServeCharacterWidget(
-                    character: char,
-                    size: 110,
-                    action: 'idle',
+
+                  // Animated Character Display with "TAP TO SMASH" badge & interactive paddle smash swing
+                  AnimatedCharacterDisplay(
+                    key: ValueKey('loadout_char_${char.id}'),
+                    initialGender: AnimatedCharacterDisplay.genderFromType(char.type),
+                    height: 165,
+                    showControls: false,
+                    showCharacterSwitcher: false,
+                    showActionControls: false,
                   ),
                 ],
               ),
             ),
           ),
 
-          // Character Name & Details
+          // 3. Character Description Footer
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: const BoxDecoration(
               color: Color(0xFF090E1B),
               borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  char.name.toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  char.description,
-                  style: const TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 11,
-                    height: 1.3,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+            child: Text(
+              char.description,
+              style: const TextStyle(
+                color: AppTheme.textMuted,
+                fontSize: 11,
+                height: 1.3,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
           ),
         ],
@@ -961,79 +981,82 @@ class _PreMatchLoadoutModalState extends State<PreMatchLoadoutModal> {
             ),
           ),
 
-          // Court Mini Visual Mockup
+          // Court Image Visual Showcase
           Expanded(
             child: Center(
               child: Container(
-                width: 170,
-                height: 110,
+                width: 220,
+                height: 125,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  gradient: LinearGradient(
-                    colors: court.previewGradient,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isSelected ? AppTheme.neonLime : court.accentColor.withValues(alpha: 0.6),
+                    width: isSelected ? 2.5 : 1.5,
                   ),
-                  border: Border.all(color: court.lineColor, width: 1.5),
                   boxShadow: [
                     BoxShadow(
-                      color: court.accentColor.withValues(alpha: 0.4),
-                      blurRadius: 14,
+                      color: (isSelected ? AppTheme.neonLime : court.accentColor).withValues(alpha: isSelected ? 0.45 : 0.25),
+                      blurRadius: isSelected ? 16 : 10,
+                      spreadRadius: isSelected ? 2 : 0,
                     ),
                   ],
                 ),
-                child: Stack(
-                  children: [
-                    // Center Net line
-                    Center(
-                      child: Container(
-                        height: 3,
-                        color: court.netTapeColor,
-                      ),
-                    ),
-                    // Kitchen Line
-                    Positioned(
-                      top: 36,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        height: 1.5,
-                        color: court.lineColor.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 36,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        height: 1.5,
-                        color: court.lineColor.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    // Center court logo seal
-                    Center(
-                      child: Container(
-                        width: 52,
-                        height: 52,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
-                          border: Border.all(color: const Color(0xFFE5A823), width: 2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.5),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: ClipOval(
-                          child: Image.asset(
-                            'assets/images/logo/court_center_logo.png',
-                            fit: BoxFit.cover,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Court Background Artwork Image
+                      Image.asset(
+                        court.fullAssetPath,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: court.previewGradient),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                      // Subtle dark vignette gradient overlay
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.2),
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.45),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Center court logo seal
+                      Center(
+                        child: Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                            border: Border.all(color: const Color(0xFFE5A823), width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.6),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/images/logo/court_center_logo.png',
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

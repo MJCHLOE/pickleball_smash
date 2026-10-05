@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/character_roster.dart';
 
-enum CharacterGender { male, female, male2, male3, female2 }
+enum CharacterGender { male, female, male2, male3, male4, female2, female3, female4 }
 enum CharacterAction { idle, run, smash }
 
 class AnimatedCharacterDisplay extends StatefulWidget {
@@ -36,10 +36,16 @@ class AnimatedCharacterDisplay extends StatefulWidget {
         return CharacterGender.female;
       case CharacterType.female2:
         return CharacterGender.female2;
+      case CharacterType.female3:
+        return CharacterGender.female3;
+      case CharacterType.female4:
+        return CharacterGender.female4;
       case CharacterType.male2:
         return CharacterGender.male2;
       case CharacterType.male3:
         return CharacterGender.male3;
+      case CharacterType.male4:
+        return CharacterGender.male4;
       case CharacterType.male1:
         return CharacterGender.male;
     }
@@ -51,10 +57,16 @@ class AnimatedCharacterDisplay extends StatefulWidget {
         return CharacterType.female1;
       case CharacterGender.female2:
         return CharacterType.female2;
+      case CharacterGender.female3:
+        return CharacterType.female3;
+      case CharacterGender.female4:
+        return CharacterType.female4;
       case CharacterGender.male2:
         return CharacterType.male2;
       case CharacterGender.male3:
         return CharacterType.male3;
+      case CharacterGender.male4:
+        return CharacterType.male4;
       case CharacterGender.male:
         return CharacterType.male1;
     }
@@ -100,9 +112,21 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
   static const String male3Run = 'assets/images/male3_sprite/male3_frontrun.png';
   static const String male3Smash = 'assets/images/male3_sprite/male3_frontslash.png';
 
+  static const String male4Idle = 'assets/images/male4_sprite/male4_charselectidle.png';
+  static const String male4Run = 'assets/images/male4_sprite/male4_frontrun.png';
+  static const String male4Smash = 'assets/images/male4_sprite/male4_frontslash.png';
+
   static const String female2Idle = 'assets/images/female2_sprite/female2_charselectidle.png';
   static const String female2Run = 'assets/images/female2_sprite/female2_frontrun.png';
   static const String female2Smash = 'assets/images/female2_sprite/female2_frontslash.png';
+
+  static const String female3Idle = 'assets/images/female3_sprite/female3_charselectidle.png';
+  static const String female3Run = 'assets/images/female3_sprite/female3_frontrun.png';
+  static const String female3Smash = 'assets/images/female3_sprite/female3_frontslash.png';
+
+  static const String female4Idle = 'assets/images/female4_sprite/female4_charselectidle.png';
+  static const String female4Run = 'assets/images/female4_sprite/female4_frontrun.png';
+  static const String female4Smash = 'assets/images/female4_sprite/female4_frontslash.png';
 
   @override
   void initState() {
@@ -156,9 +180,18 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
       male3Idle,
       male3Run,
       male3Smash,
+      male4Idle,
+      male4Run,
+      male4Smash,
       female2Idle,
       female2Run,
       female2Smash,
+      female3Idle,
+      female3Run,
+      female3Smash,
+      female4Idle,
+      female4Run,
+      female4Smash,
     ];
 
     try {
@@ -305,6 +338,15 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
         case CharacterAction.smash:
           return male3Smash;
       }
+    } else if (_gender == CharacterGender.male4) {
+      switch (_action) {
+        case CharacterAction.idle:
+          return male4Idle;
+        case CharacterAction.run:
+          return male4Run;
+        case CharacterAction.smash:
+          return male4Smash;
+      }
     } else if (_gender == CharacterGender.female2) {
       switch (_action) {
         case CharacterAction.idle:
@@ -313,6 +355,24 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
           return female2Run;
         case CharacterAction.smash:
           return female2Smash;
+      }
+    } else if (_gender == CharacterGender.female3) {
+      switch (_action) {
+        case CharacterAction.idle:
+          return female3Idle;
+        case CharacterAction.run:
+          return female3Run;
+        case CharacterAction.smash:
+          return female3Smash;
+      }
+    } else if (_gender == CharacterGender.female4) {
+      switch (_action) {
+        case CharacterAction.idle:
+          return female4Idle;
+        case CharacterAction.run:
+          return female4Run;
+        case CharacterAction.smash:
+          return female4Smash;
       }
     } else {
       switch (_action) {
@@ -493,8 +553,14 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
                                 return const Color(0xFFFF9100).withValues(alpha: 0.25);
                               } else if (_gender == CharacterGender.male3) {
                                 return const Color(0xFF00E5FF).withValues(alpha: 0.25);
+                              } else if (_gender == CharacterGender.male4) {
+                                return const Color(0xFF0284C7).withValues(alpha: 0.25);
                               } else if (_gender == CharacterGender.female2) {
                                 return const Color(0xFFEC4899).withValues(alpha: 0.25);
+                              } else if (_gender == CharacterGender.female3) {
+                                return const Color(0xFF2563EB).withValues(alpha: 0.25);
+                              } else if (_gender == CharacterGender.female4) {
+                                return const Color(0xFF9333EA).withValues(alpha: 0.25);
                               } else {
                                 return const Color(0xFFFF4081).withValues(alpha: 0.25);
                               }
@@ -539,12 +605,36 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
                             icon: const Icon(Icons.flash_on, size: 14),
                           ),
                           ButtonSegment(
+                            value: CharacterGender.male4,
+                            label: Text(
+                              isCompact ? "Nard" : "Nard (M4)",
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            icon: const Icon(Icons.track_changes_rounded, size: 14),
+                          ),
+                          ButtonSegment(
                             value: CharacterGender.female2,
                             label: Text(
-                              isCompact ? "Chloe" : "Chloe (F2)",
+                              isCompact ? "Joy" : "Princess-Joy",
                               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                             icon: const Icon(Icons.diamond_rounded, size: 14),
+                          ),
+                          ButtonSegment(
+                            value: CharacterGender.female3,
+                            label: Text(
+                              isCompact ? "Disney" : "Disneykirk",
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            icon: const Icon(Icons.waves_rounded, size: 14),
+                          ),
+                          ButtonSegment(
+                            value: CharacterGender.female4,
+                            label: Text(
+                              isCompact ? "Ashley" : "Ashley (F4)",
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            icon: const Icon(Icons.auto_awesome_rounded, size: 14),
                           ),
                         ],
                         selected: {_gender},
@@ -599,8 +689,14 @@ class _AnimatedCharacterDisplayState extends State<AnimatedCharacterDisplay>
         return const Color(0xFFFF9100);
       case CharacterGender.male3:
         return const Color(0xFF00E5FF);
+      case CharacterGender.male4:
+        return const Color(0xFF0284C7);
       case CharacterGender.female2:
         return const Color(0xFFEC4899);
+      case CharacterGender.female3:
+        return const Color(0xFF3B82F6);
+      case CharacterGender.female4:
+        return const Color(0xFF9333EA);
     }
   }
 

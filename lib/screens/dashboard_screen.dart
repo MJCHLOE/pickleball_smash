@@ -64,6 +64,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final codeCtrl = TextEditingController();
     final rootNav = Navigator.of(context);
     multi.startLocalBeaconDiscovery();
+    multi.refreshCloudRooms();
 
     String detectedIp = '127.0.0.1';
     multi.getLocalIpAddress().then((ip) {
@@ -353,6 +354,146 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
 
               const SizedBox(height: 16),
+
+              // Discovered Online Cloud Rooms (Firebase)
+              if (selectedMode == MultiplayerConnectionMode.onlineCloud) ...[
+                Row(
+                  children: [
+                    const Icon(Icons.cloud_done_rounded, color: AppTheme.neonLime, size: 16),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: Text(
+                        'LIVE CLOUD ROOMS (ONLINE LOBBY)',
+                        style: TextStyle(color: AppTheme.neonLime, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh_rounded, color: AppTheme.electricCyan, size: 18),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      tooltip: 'Refresh Cloud Rooms',
+                      onPressed: () => multi.refreshCloudRooms(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ValueListenableBuilder<List<BattleRoomModel>>(
+                  valueListenable: multi.cloudRoomsNotifier,
+                  builder: (context, cloudRooms, _) {
+                    final openRooms = cloudRooms.where((r) => r.status == 'waiting' && !r.isFull).toList();
+                    if (openRooms.isEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                        margin: const EdgeInsets.only(bottom: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B).withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.surfaceBorder),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.cloud_queue_rounded, color: AppTheme.textMuted, size: 18),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'No other online players are hosting right now. Create a room above to be listed on cloud!',
+                                style: TextStyle(color: AppTheme.textMuted, fontSize: 11.5),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return Column(
+                      children: openRooms.map((r) {
+                        final activeCount = r.slots.where((s) => !s.isEmpty).length;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppTheme.neonLime.withValues(alpha: 0.5)),
+                          ),
+                          child: Row(
+                            children: [
+                              PlayerAvatarWidget(avatarId: r.hostAvatar, size: 36),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            r.roomName,
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.electricCyan.withValues(alpha: 0.2),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            r.roomCode,
+                                            style: const TextStyle(color: AppTheme.electricCyan, fontSize: 9.5, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Text(
+                                      'Host: ${r.hostName} • ${r.gameMode} • $activeCount/${r.maxPlayers} Players',
+                                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Game2DButton(
+                                onPressed: isConnecting
+                                    ? null
+                                    : () async {
+                                        final sheetNav = Navigator.of(ctx);
+                                        setSheetState(() {
+                                          isConnecting = true;
+                                          connectionError = null;
+                                        });
+                                        final err = await multi.joinRoom(
+                                          hostAddress: r.hostAddress ?? '127.0.0.1',
+                                          roomCode: r.roomCode,
+                                          mode: MultiplayerConnectionMode.onlineCloud,
+                                        );
+                                        if (err != null) {
+                                          setSheetState(() {
+                                            isConnecting = false;
+                                            connectionError = err;
+                                          });
+                                        } else {
+                                          sheetNav.pop();
+                                          rootNav.push(
+                                            MaterialPageRoute(builder: (c) => const BattleRoomScreen()),
+                                          );
+                                        }
+                                      },
+                                text: 'JOIN',
+                                icon: Icons.login_rounded,
+                                variant: GameButtonVariant.primary,
+                                size: GameButtonSize.small,
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+              ],
 
               // Discovered Local Rooms (Hotspot/Wi-Fi mode)
               if (selectedMode == MultiplayerConnectionMode.lanHotspot) ...[

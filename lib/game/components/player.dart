@@ -80,6 +80,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   final CharacterType characterType;
   final bool isAI;
   final int playerSlot; // 1 = Primary, 2 = Partner
+  final String? displayName;
   JoystickComponent? joystick;
   
   final double speed = 280.0;
@@ -114,6 +115,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
         currentGame.leftSpinButton?.isPrimed = false;
         currentGame.rightSpinButton?.isPrimed = false;
         currentGame.dashButton?.isPrimed = false;
+        currentGame.speedBoostButton?.isPrimed = false;
         currentGame.thunderButton?.isPrimed = false;
         currentGame.phantomButton?.isPrimed = false;
       } catch (_) {}
@@ -127,7 +129,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
   static const double dashSpeed = 750.0;
   Vector2 dashDirection = Vector2.zero();
   double dashCooldown = 0.0;
-  static const double defaultDashCooldown = 3.5;
+  static const double defaultDashCooldown = 2.5;
   final List<PlayerAfterimage> afterimages = [];
   double _afterimageSpawnTimer = 0.0;
   final List<DashDustParticle> dashParticles = [];
@@ -286,6 +288,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     this.joystick,
     bool? isAI,
     this.playerSlot = 1,
+    this.displayName,
   })  : isAI = isAI ?? (!isPlayerOne),
         characterType = characterType ??
             (isFemale == true
@@ -294,7 +297,10 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
                     ? CharacterType.male1
                     : (!isPlayerOne ? CharacterType.female1 : CharacterType.male1))),
         isFemale = characterType != null
-            ? (characterType == CharacterType.female1 || characterType == CharacterType.female2)
+            ? (characterType == CharacterType.female1 ||
+                characterType == CharacterType.female2 ||
+                characterType == CharacterType.female3 ||
+                characterType == CharacterType.female4)
             : (isFemale ?? (!isPlayerOne)),
         currentDirection = isPlayerOne ? PlayerDirection.front : PlayerDirection.behind {
     size = Vector2(64, 64);
@@ -338,6 +344,10 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
         keysPressed.contains(LogicalKeyboardKey.shiftRight) ||
         keysPressed.contains(LogicalKeyboardKey.keyI)) {
       currentGame.triggerDash();
+    }
+    if (keysPressed.contains(LogicalKeyboardKey.keyU) ||
+        keysPressed.contains(LogicalKeyboardKey.keyO)) {
+      currentGame.triggerSpeedBoost();
     }
 
     return super.onKeyEvent(event, keysPressed);
@@ -479,6 +489,120 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
 
         behindSlash = await _loadAnimation([
           'female2_sprite/female2_behindslash.png',
+        ], amount: 6, loop: false, stepTime: 0.06);
+      } else if (characterType == CharacterType.female3) {
+        // Female 3 sprites
+        frontRun = await _loadAnimation([
+          'female3_sprite/female3_frontrun.png',
+          'female3 sprite/female3_frontrun.png',
+        ], amount: 8);
+        behindRun = await _loadAnimation([
+          'female3_sprite/female3_behindrun.png',
+          'female3 sprite/female3_behindrun.png',
+        ], amount: 8);
+        leftRun = await _loadAnimation([
+          'female3_sprite/female3_leftrun.png',
+          'female3 sprite/female3_leftrun.png',
+        ], amount: 8);
+        rightRun = await _loadAnimation([
+          'female3_sprite/female3_rightrun.png',
+          'female3 sprite/female3_rightrun.png',
+        ], amount: 8);
+
+        p1Idle = await _loadAnimation([
+          'female3_sprite/female3_p1sideidle.png',
+          'female3 sprite/female3_p1sideidle.png',
+        ], amount: 2, stepTime: 0.35);
+
+        p2Idle = await _loadAnimation([
+          'female3_sprite/female3_p2sideidle.png',
+          'female3 sprite/female3_p2sideidle.png',
+        ], amount: 2, stepTime: 0.35);
+
+        frontSlash = await _loadAnimation([
+          'female3_sprite/female3_frontslash.png',
+          'female3 sprite/female3_frontslash.png',
+        ], amount: 6, loop: false, stepTime: 0.06);
+
+        behindSlash = await _loadAnimation([
+          'female3_sprite/female3_behindslash.png',
+          'female3 sprite/female3_behindslash.png',
+        ], amount: 6, loop: false, stepTime: 0.06);
+      } else if (characterType == CharacterType.male4) {
+        // Male 4 (Nard) sprites
+        frontRun = await _loadAnimation([
+          'male4_sprite/male4_frontrun.png',
+          'background/male4_sprite/male4_frontrun.png',
+        ], amount: 8);
+        behindRun = await _loadAnimation([
+          'male4_sprite/male4_behindrun.png',
+          'background/male4_sprite/male4_behindrun.png',
+        ], amount: 8);
+        leftRun = await _loadAnimation([
+          'male4_sprite/male4_leftrun.png',
+          'background/male4_sprite/male4_leftrun.png',
+        ], amount: 8);
+        rightRun = await _loadAnimation([
+          'male4_sprite/male4_rightrun.png',
+          'background/male4_sprite/male4_rightrun.png',
+        ], amount: 8);
+
+        p1Idle = await _loadAnimation([
+          'male4_sprite/male4_p1sideidle.png',
+          'background/male4_sprite/male4_p1sideidle.png',
+        ], amount: 2, stepTime: 0.35);
+
+        p2Idle = await _loadAnimation([
+          'male4_sprite/male4_p2sideidle.png',
+          'background/male4_sprite/male4_p2sideidle.png',
+        ], amount: 2, stepTime: 0.35);
+
+        frontSlash = await _loadAnimation([
+          'male4_sprite/male4_frontslash.png',
+          'background/male4_sprite/male4_frontslash.png',
+        ], amount: 6, loop: false, stepTime: 0.06);
+
+        behindSlash = await _loadAnimation([
+          'male4_sprite/male4_behindslash.png',
+          'background/male4_sprite/male4_behindslash.png',
+        ], amount: 6, loop: false, stepTime: 0.06);
+      } else if (characterType == CharacterType.female4) {
+        // Female 4 (Ashley) sprites
+        frontRun = await _loadAnimation([
+          'female4_sprite/female4_frontrun.png',
+          'background/female4_sprite/female4_frontrun.png',
+        ], amount: 8);
+        behindRun = await _loadAnimation([
+          'female4_sprite/female4_behindrun.png',
+          'background/female4_sprite/female4_behindrun.png',
+        ], amount: 8);
+        leftRun = await _loadAnimation([
+          'female4_sprite/female4_leftrun.png',
+          'background/female4_sprite/female4_leftrun.png',
+        ], amount: 8);
+        rightRun = await _loadAnimation([
+          'female4_sprite/female4_rightrun.png',
+          'background/female4_sprite/female4_rightrun.png',
+        ], amount: 8);
+
+        p1Idle = await _loadAnimation([
+          'female4_sprite/female4_p1sideidle.png',
+          'background/female4_sprite/female4_p1sideidle.png',
+        ], amount: 2, stepTime: 0.35);
+
+        p2Idle = await _loadAnimation([
+          'female4_sprite/female4_p2sideidle.png',
+          'background/female4_sprite/female4_p2sideidle.png',
+        ], amount: 2, stepTime: 0.35);
+
+        frontSlash = await _loadAnimation([
+          'female4_sprite/female4_frontslash.png',
+          'background/female4_sprite/female4_frontslash.png',
+        ], amount: 6, loop: false, stepTime: 0.06);
+
+        behindSlash = await _loadAnimation([
+          'female4_sprite/female4_behindslash.png',
+          'background/female4_sprite/female4_behindslash.png',
         ], amount: 6, loop: false, stepTime: 0.06);
       } else {
         // Male 1 (Alex Smash) reworked sprites
@@ -661,7 +785,8 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
         }
 
         if (isMoving) {
-          final targetVel = moveDelta * speed;
+          final double effectiveSpeed = (activeTechnique == BattleTechnique.speedBoost) ? speed * 1.55 : speed;
+          final targetVel = moveDelta * effectiveSpeed;
           currentVelocity.lerp(targetVel, (dt * 14.0).clamp(0.0, 1.0));
           changeDirection(newDirection);
           position.add(currentVelocity * dt);
@@ -832,6 +957,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       final targetVel = moveVec * aiSpeed;
       aiVelocity.lerp(targetVel, (dt * 12.0).clamp(0.0, 1.0));
       position += aiVelocity * dt;
+      currentVelocity = aiVelocity;
 
       if (!isDashing && math.Random().nextDouble() < 0.18) {
         dashParticles.add(
@@ -864,8 +990,10 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       aiVelocity.lerp(Vector2.zero(), (dt * 14.0).clamp(0.0, 1.0));
       if (aiVelocity.length > 5.0) {
         position += aiVelocity * dt;
+        currentVelocity = aiVelocity;
       } else {
         aiVelocity = Vector2.zero();
+        currentVelocity = Vector2.zero();
         stopRunning();
       }
     }
@@ -874,7 +1002,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
 
     final distY = (ball.position.y - position.y).abs();
     final distX = (ball.position.x - position.x).abs();
-    if (ball.velocity.y > 0 && distY <= 58.0 && distX <= 48.0) {
+    if (ball.velocity.y > 0 && distY <= 64.0 && distX <= 52.0) {
       // Ball must bounce first on the court floor before striking
       if (ball.bounceCountCurrentSide >= 1) {
         strike();
@@ -988,6 +1116,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       final targetVel = moveVec * aiSpeed;
       aiVelocity.lerp(targetVel, (dt * 12.0).clamp(0.0, 1.0));
       position += aiVelocity * dt;
+      currentVelocity = aiVelocity;
 
       final bool enableParticles = currentGame.settings?.particlesEnabled ?? true;
       if (enableParticles && !isDashing && dashParticles.length < 8 && math.Random().nextDouble() < 0.18) {
@@ -1021,8 +1150,10 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       aiVelocity.lerp(Vector2.zero(), (dt * 14.0).clamp(0.0, 1.0));
       if (aiVelocity.length > 5.0) {
         position += aiVelocity * dt;
+        currentVelocity = aiVelocity;
       } else {
         aiVelocity = Vector2.zero();
+        currentVelocity = Vector2.zero();
         stopRunning();
       }
     }
@@ -1032,7 +1163,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     final distY = (ball.position.y - position.y).abs();
     final distX = (ball.position.x - position.x).abs();
 
-    if (ball.velocity.y < 0 && distY <= 58.0 && distX <= 48.0) {
+    if (ball.velocity.y < 0 && distY <= 64.0 && distX <= 52.0) {
       // Ball must bounce first on the court floor before striking
       if (ball.bounceCountCurrentSide >= 1) {
         strike();
@@ -1298,8 +1429,16 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     // 6. Render active battle technique primed aura
     if (activeTechnique != BattleTechnique.none) {
       final pulse = math.sin((currentGame.elapsedTime) * 10.0) * 3.0;
-      final isLeft = activeTechnique == BattleTechnique.leftSpin;
-      final auraColor = isLeft ? const Color(0xFF10B981) : const Color(0xFFA855F7);
+      final Color auraColor;
+      if (activeTechnique == BattleTechnique.leftSpin) {
+        auraColor = const Color(0xFF10B981);
+      } else if (activeTechnique == BattleTechnique.rightSpin) {
+        auraColor = const Color(0xFFA855F7);
+      } else if (activeTechnique == BattleTechnique.speedBoost) {
+        auraColor = const Color(0xFFFF6D00); // Fiery Orange
+      } else {
+        auraColor = const Color(0xFF38BDF8);
+      }
 
       _auraPaint.color = auraColor.withAlpha(140);
       canvas.drawCircle(Offset(size.x / 2, size.y * 0.55), size.x * 0.45 + pulse, _auraPaint);
@@ -1307,5 +1446,57 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       _glowPaint.color = auraColor.withAlpha(50);
       canvas.drawCircle(Offset(size.x / 2, size.y * 0.55), size.x * 0.42 + pulse, _glowPaint);
     }
+
+    // 7. Render arcade overhead player name badge
+    _renderNameTag(canvas);
+  }
+
+  TextPainter? _nameTextPainter;
+  String? _lastPaintedName;
+
+  void _renderNameTag(Canvas canvas) {
+    if (displayName == null || displayName!.trim().isEmpty) return;
+    final name = displayName!.trim();
+    if (_nameTextPainter == null || _lastPaintedName != name) {
+      _lastPaintedName = name;
+      final Color tagColor = isPlayerOne ? const Color(0xFF38BDF8) : const Color(0xFFFFD54F);
+      final textSpan = TextSpan(
+        text: isAI ? '[BOT] $name' : name,
+        style: TextStyle(
+          color: tagColor,
+          fontSize: 8.5,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.4,
+          shadows: const [
+            Shadow(color: Colors.black, blurRadius: 3, offset: Offset(0, 1)),
+          ],
+        ),
+      );
+      _nameTextPainter = TextPainter(
+        text: textSpan,
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
+
+    final tp = _nameTextPainter!;
+    final pillW = tp.width + 10.0;
+    final pillH = tp.height + 4.0;
+    final pillLeft = (size.x - pillW) / 2;
+    final pillTop = -pillH - 4.0;
+
+    final pillRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(pillLeft, pillTop, pillW, pillH),
+      const Radius.circular(5.0),
+    );
+
+    final bgPaint = Paint()..color = const Color(0xDD0A0F1E);
+    final borderPaint = Paint()
+      ..color = (isPlayerOne ? const Color(0xFF38BDF8) : const Color(0xFFFFD54F)).withValues(alpha: 0.75)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    canvas.drawRRect(pillRect, bgPaint);
+    canvas.drawRRect(pillRect, borderPaint);
+    tp.paint(canvas, Offset(pillLeft + 5.0, pillTop + 2.0));
   }
 }

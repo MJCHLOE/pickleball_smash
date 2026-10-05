@@ -7,6 +7,8 @@ import '../models/player_avatar.dart';
 import '../services/audio_service.dart';
 import '../services/game_state_manager.dart';
 import '../theme/app_theme.dart';
+import 'animated_character_display.dart';
+import 'dashboard_character_card_feature.dart';
 import 'game_2d_button.dart';
 import 'player_avatar.dart';
 import 'ready_to_serve_character_widget.dart';
@@ -603,6 +605,36 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
           style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
         ),
         const SizedBox(height: 12),
+
+        // Featured Active Champion Showcase matching Dashboard & Pre-Match style
+        Center(
+          child: DashboardCharacterCardFeature(
+            character: CharacterRoster.getById(_selectedAvatarId),
+            height: 155,
+            showBadge: true,
+            showSwapIcon: true,
+            onBadgeTap: () {
+              final all = CharacterRoster.allCharacters;
+              final current = CharacterRoster.getById(_selectedAvatarId);
+              final idx = all.indexWhere((c) => c.id == current.id);
+              final next = all[(idx + 1) % all.length];
+              if (state.isCharacterUnlocked(next.id) || next.isDefaultUnlocked) {
+                _applyAvatar(next.id);
+              }
+              AudioService.instance.playButtonTap();
+            },
+            showSpotlight: true,
+            showCharacterSwitcher: true,
+            showActionControls: true,
+            onGenderChanged: (newGender) {
+              final targetChar = CharacterRoster.getByType(AnimatedCharacterDisplay.typeFromGender(newGender));
+              if (state.isCharacterUnlocked(targetChar.id) || targetChar.isDefaultUnlocked) {
+                _applyAvatar(targetChar.id);
+              }
+            },
+          ),
+        ),
+        const SizedBox(height: 14),
 
         // Champion Cards
         ListView.separated(

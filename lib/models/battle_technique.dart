@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 
 enum BattleTechnique {
   none,
-  leftSpin,   // K: Spin on the left (Cyclone Curve)
-  rightSpin,  // L: Spin to the right (Vortex Hook)
-  dash,       // Shift / I: Flash Dash / Burst Sprint
+  leftSpin,   // K: Spin Left
+  rightSpin,  // L: Spin Right
+  dash,       // Shift: Dash
+  speedBoost, // Speed Boost Strike
 }
 
 class TechniqueInfo {
@@ -39,8 +40,8 @@ class TechniqueCatalog {
   static const TechniqueInfo leftSpin = TechniqueInfo(
     technique: BattleTechnique.leftSpin,
     id: 'left_spin',
-    name: 'Cyclone Curve',
-    title: 'Left Spin Slice',
+    name: 'Spin Left',
+    title: 'Spin Left',
     description: 'Wicked curving slice that bends left in the air and kicks sharply off the bounce.',
     icon: '🌪️',
     cooldownSeconds: 6.0,
@@ -53,8 +54,8 @@ class TechniqueCatalog {
   static const TechniqueInfo rightSpin = TechniqueInfo(
     technique: BattleTechnique.rightSpin,
     id: 'right_spin',
-    name: 'Vortex Hook',
-    title: 'Right Spin Hook',
+    name: 'Spin Right',
+    title: 'Spin Right',
     description: 'Fierce curving hook shot that bends right in the air and kicks sharply off the bounce.',
     icon: '⚡',
     cooldownSeconds: 6.0,
@@ -67,15 +68,29 @@ class TechniqueCatalog {
   static const TechniqueInfo dash = TechniqueInfo(
     technique: BattleTechnique.dash,
     id: 'flash_dash',
-    name: 'Flash Dash',
-    title: 'Burst Sprint',
+    name: 'Dash',
+    title: 'Dash',
     description: 'Lightning-fast directional sprint to reach distant balls and recover court position.',
     icon: '💨',
-    cooldownSeconds: 3.5,
+    cooldownSeconds: 2.5,
     buttonColor: Color(0xFF0284C7), // Sky Blue / Cyan Burst
     bevelColor: Color(0xFF0369A1),
     glowColor: Color(0xFF38BDF8),
     hotkey: 'SHIFT',
+  );
+
+  static const TechniqueInfo speedBoost = TechniqueInfo(
+    technique: BattleTechnique.speedBoost,
+    id: 'speed_boost',
+    name: 'Speed Boost Strike',
+    title: 'Speed Boost Strike',
+    description: 'Explosive acceleration surge empowering movement and unleashing a high-speed supersonic power strike.',
+    icon: '🚀',
+    cooldownSeconds: 9.0,
+    buttonColor: Color(0xFFEA580C), // Fiery Orange
+    bevelColor: Color(0xFFC2410C),
+    glowColor: Color(0xFFFB923C),
+    hotkey: 'U',
   );
 
   // Backward compatibility getters
@@ -90,6 +105,8 @@ class TechniqueCatalog {
         return rightSpin;
       case BattleTechnique.dash:
         return dash;
+      case BattleTechnique.speedBoost:
+        return speedBoost;
       case BattleTechnique.none:
         return leftSpin;
     }

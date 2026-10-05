@@ -97,6 +97,7 @@ class MultiplayerService extends ChangeNotifier {
 
     _firebasePacketSub?.cancel();
     _firebasePacketSub = FirebaseMultiplayerService.instance.onPacketReceived.listen((pkt) {
+      _handleIncomingPacket(pkt);
       _packetStreamController.add(pkt);
     });
   }
@@ -118,6 +119,29 @@ class MultiplayerService extends ChangeNotifier {
     'Rematch? 🏆',
     'GG well played! 🌟',
   ];
+
+  // Public Cloud Rooms Listing
+  final ValueNotifier<List<BattleRoomModel>> cloudRoomsNotifier =
+      ValueNotifier<List<BattleRoomModel>>([]);
+  final List<BattleRoomModel> _cloudRoomsFallback = [];
+
+  Future<List<BattleRoomModel>> refreshCloudRooms() async {
+    final List<BattleRoomModel> results = [];
+    try {
+      final remoteRooms = await FirebaseMultiplayerService.instance.fetchPublicCloudRooms();
+      results.addAll(remoteRooms);
+    } catch (_) {}
+
+    // Merge fallback local rooms if not already in results
+    for (final fb in _cloudRoomsFallback) {
+      if (!results.any((r) => r.roomCode == fb.roomCode)) {
+        results.add(fb);
+      }
+    }
+
+    cloudRoomsNotifier.value = results;
+    return results;
+  }
 
   void _initDefaultProfile() {
     final state = GameStateManager.instance;
@@ -176,6 +200,17 @@ class MultiplayerService extends ChangeNotifier {
     if (level >= 6 || wins >= 8) return RankTier.master;
     if (level >= 3 || wins >= 3) return RankTier.elite;
     return RankTier.warrior;
+  }
+
+  /// Updates current player's display name and nickname across multiplayer
+  void updateMyName(String newName) {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) return;
+    _myProfile = _myProfile.copyWith(
+      username: trimmed,
+      nickname: trimmed,
+    );
+    notifyListeners();
   }
 
   /// Loads real saved friends and requests from SQLite persistence
@@ -272,9 +307,20 @@ class MultiplayerService extends ChangeNotifier {
     notifyListeners();
   }
 
+  final Map<String, PlayerProfileModel> _knownProfiles = {};
+
+  void registerKnownProfile(PlayerProfileModel profile) {
+    _knownProfiles[profile.id] = profile;
+    _knownProfiles[profile.playerId] = profile;
+    notifyListeners();
+  }
+
   PlayerProfileModel getProfileForPlayer(String playerId) {
     if (playerId == _myProfile.id || playerId == _myProfile.playerId) {
       return _myProfile;
+    }
+    if (_knownProfiles.containsKey(playerId)) {
+      return _knownProfiles[playerId]!;
     }
     // Search friends
     final friend = _friends.firstWhere(
@@ -384,6 +430,10 @@ class MultiplayerService extends ChangeNotifier {
 
   /// Sends a friend request to a real player
   Future<bool> sendFriendRequest(FriendModel target) async {
+    // Guest accounts cannot add friends
+    if (GameStateManager.instance.isGuest) {
+      return false;
+    }
     // Check if already friends
     if (_friends.any((f) => f.id == target.id || f.playerId == target.playerId)) {
       return false;
@@ -728,6 +778,9 @@ class MultiplayerService extends ChangeNotifier {
         await FirebaseMultiplayerService.instance.createRoom(room);
         _listenToFirebaseRoom(room.roomCode);
         _connectToCloudServer(room, isHost: true);
+        _cloudRoomsFallback.removeWhere((r) => r.roomCode == room.roomCode);
+        _cloudRoomsFallback.insert(0, room);
+        cloudRoomsNotifier.value = List.from(_cloudRoomsFallback);
       }
 
       _startHeartbeatPing();
@@ -939,7 +992,7 @@ class MultiplayerService extends ChangeNotifier {
 
   /// Connects to a room as a guest over Wi-Fi/Hotspot IP or Online Cloud
   Future<String?> joinRoom({
-    required String hostAddress,
+    String hostAddress = '127.0.0.1',
     required String roomCode,
     int port = 8088,
     MultiplayerConnectionMode mode = MultiplayerConnectionMode.lanHotspot,
@@ -1157,6 +1210,10 @@ class MultiplayerService extends ChangeNotifier {
         _myProfile.playerId,
         _isHost,
       );
+      if (_isHost) {
+        _cloudRoomsFallback.removeWhere((r) => r.roomCode == _currentRoom!.roomCode);
+        cloudRoomsNotifier.value = List.from(_cloudRoomsFallback);
+      }
     }
     _firebaseRoomSub?.cancel();
     _firebaseRoomSub = null;
@@ -1332,21 +1389,28 @@ class MultiplayerService extends ChangeNotifier {
     slots[slotIndex] = slots[slotIndex].copyWith(clearPlayer: true);
     _currentRoom = _currentRoom!.copyWith(slots: slots);
     _broadcastRoomState();
+    if (_currentRoom!.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+      FirebaseMultiplayerService.instance.updateRoomSlots(_currentRoom!.roomCode, slots);
+    }
     notifyListeners();
   }
 
-  void addCpuOpponent() {
+  void addCpuOpponent({int? slotIndex, String? botName, String? characterId}) {
     if (_currentRoom == null) return;
     final slots = List<RoomPlayerSlot>.from(_currentRoom!.slots);
-    final emptyIndex = slots.indexWhere((s) => s.isEmpty);
-    if (emptyIndex != -1) {
-      slots[emptyIndex] = RoomPlayerSlot(
-        slotIndex: emptyIndex,
-        team: (emptyIndex % 2 == 0) ? 'A' : 'B',
+    final targetIndex = (slotIndex != null && slotIndex >= 0 && slotIndex < slots.length && slots[slotIndex].isEmpty)
+        ? slotIndex
+        : slots.indexWhere((s) => s.isEmpty);
+    if (targetIndex != -1) {
+      final char = characterId ?? 'alex_classic';
+      final name = botName ?? 'CPU Challenger';
+      slots[targetIndex] = RoomPlayerSlot(
+        slotIndex: targetIndex,
+        team: (targetIndex % 2 == 0) ? 'A' : 'B',
         playerId: 'cpu_${DateTime.now().millisecondsSinceEpoch}',
-        playerName: 'CPU Challenger',
-        playerAvatar: 'alex_classic',
-        characterId: 'alex_classic',
+        playerName: name,
+        playerAvatar: char,
+        characterId: char,
         isHost: false,
         isReady: true,
         isBot: true,
@@ -1354,6 +1418,9 @@ class MultiplayerService extends ChangeNotifier {
       );
       _currentRoom = _currentRoom!.copyWith(slots: slots);
       _broadcastRoomState();
+      if (_currentRoom!.connectionMode == MultiplayerConnectionMode.onlineCloud) {
+        FirebaseMultiplayerService.instance.updateRoomSlots(_currentRoom!.roomCode, slots);
+      }
       notifyListeners();
     }
   }

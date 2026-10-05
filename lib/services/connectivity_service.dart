@@ -13,6 +13,11 @@ class ConnectivityService extends ChangeNotifier {
   factory ConnectivityService() => instance;
 
   ConnectivityService._internal() {
+    if (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST')) {
+      _testOverride = true;
+      _isOnline = true;
+      return;
+    }
     // Initial connectivity check
     checkInternetAccess();
     // Periodic background check every 6 seconds
@@ -20,7 +25,19 @@ class ConnectivityService extends ChangeNotifier {
   }
 
   bool _isOnline = true;
-  bool get isOnline => _isOnline;
+  bool get isOnline => _testOverride ?? _isOnline;
+
+  bool? _testOverride;
+  void setTestOnlineOverride(bool? override) {
+    _testOverride = override;
+    _monitorTimer?.cancel();
+    _monitorTimer = null;
+    if (override != null) {
+      _isOnline = override;
+      isOnlineNotifier.value = override;
+      notifyListeners();
+    }
+  }
 
   final ValueNotifier<bool> isOnlineNotifier = ValueNotifier<bool>(true);
 
@@ -42,6 +59,11 @@ class ConnectivityService extends ChangeNotifier {
 
   /// Actively tests real internet reachability via DNS lookup to public DNS/Firebase endpoints.
   Future<bool> checkInternetAccess() async {
+    if (_testOverride != null) {
+      _isOnline = _testOverride!;
+      isOnlineNotifier.value = _testOverride!;
+      return _isOnline;
+    }
     if (_isChecking) return _isOnline;
     _isChecking = true;
 

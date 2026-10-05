@@ -493,7 +493,11 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
         child: InkWell(
           onTap: () {
             AudioService.instance.playButtonTap();
-            FriendsModal.show(context);
+            if (mySlot.isHost) {
+              _showAddPlayerOrBotSheet(context, multi, slot.slotIndex);
+            } else {
+              FriendsModal.show(context);
+            }
           },
           borderRadius: BorderRadius.circular(16),
           child: Padding(
@@ -501,11 +505,11 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.person_add_rounded, color: AppTheme.textMuted, size: 20),
+                Icon(mySlot.isHost ? Icons.add_circle_outline_rounded : Icons.person_add_rounded, color: AppTheme.electricCyan, size: 20),
                 const SizedBox(width: 8),
-                const Text(
-                  'EMPTY SLOT — TAP TO INVITE FRIEND',
-                  style: TextStyle(
+                Text(
+                  mySlot.isHost ? 'EMPTY SLOT — TAP TO INVITE OR ADD BOT' : 'EMPTY SLOT — WAITING FOR PLAYER',
+                  style: const TextStyle(
                     color: AppTheme.textMuted,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -602,6 +606,26 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    if (slot.isBot) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.6), width: 1),
+                        ),
+                        child: const Text(
+                          'BOT',
+                          style: TextStyle(
+                            color: Color(0xFFEF4444),
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
                     if (isMe) ...[
                       const SizedBox(width: 6),
                       Container(
@@ -898,11 +922,11 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
                   },
                 ),
 
-              // Host kick button (for guests)
+              // Host kick button (for guests or bots)
               if (mySlot.isHost && !slot.isHost)
                 IconButton(
                   icon: const Icon(Icons.remove_circle_outline_rounded, color: Colors.redAccent, size: 20),
-                  tooltip: 'Kick Player',
+                  tooltip: slot.isBot ? 'Remove Bot' : 'Kick Player',
                   onPressed: () {
                     AudioService.instance.playButtonTap();
                     multi.kickPlayer(slot.slotIndex);
@@ -1136,6 +1160,132 @@ class _BattleRoomScreenState extends State<BattleRoomScreen> {
               child: const Text('SAVE SETTINGS', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddPlayerOrBotSheet(BuildContext context, MultiplayerService multi, int slotIndex) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+        decoration: const BoxDecoration(
+          color: Color(0xFF0F172A),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border(top: BorderSide(color: AppTheme.electricCyan, width: 2)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const Row(
+                children: [
+                  Icon(Icons.person_add_alt_1_rounded, color: AppTheme.electricCyan, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'FILL EMPTY SLOT',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Invite a real friend or add an intelligent AI Bot to play immediately.',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+              ),
+              const SizedBox(height: 18),
+
+              // Option 1: Invite Friends
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: const BorderSide(color: AppTheme.surfaceBorder),
+                ),
+                tileColor: const Color(0xFF1E293B),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.electricCyan.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.group_add_rounded, color: AppTheme.electricCyan, size: 22),
+                ),
+                title: const Text(
+                  'INVITE ONLINE FRIEND',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                subtitle: const Text(
+                  'Send battle invitation from your friends list',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                ),
+                trailing: const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.electricCyan, size: 14),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  FriendsModal.show(context);
+                },
+              ),
+              const SizedBox(height: 12),
+
+              // Option 2: Add AI Bot (CPU)
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: const BorderSide(color: AppTheme.neonLime),
+                ),
+                tileColor: const Color(0xFF1E293B),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.neonLime.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.smart_toy_rounded, color: AppTheme.neonLime, size: 22),
+                ),
+                title: const Text(
+                  'ADD AI BOT (CPU)',
+                  style: TextStyle(color: AppTheme.neonLime, fontWeight: FontWeight.w900, fontSize: 13),
+                ),
+                subtitle: const Text(
+                  'Add intelligent CPU opponent with dynamic gameplay',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                ),
+                trailing: const Icon(Icons.add_circle_rounded, color: AppTheme.neonLime, size: 18),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  AudioService.instance.playButtonTap();
+                  multi.addCpuOpponent(slotIndex: slotIndex);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('AI Bot added to slot!'),
+                      duration: Duration(seconds: 1),
+                      backgroundColor: AppTheme.surface,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

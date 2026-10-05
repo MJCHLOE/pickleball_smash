@@ -114,7 +114,7 @@ void main() {
       expect(find.text('LIVE HUD PREVIEW • ⚡ RALLY SCORING'), findsOneWidget);
 
       // Presets
-      expect(find.text('Mobile Legends (Default)'), findsOneWidget);
+      expect(find.text('Control Default'), findsOneWidget);
       expect(find.text('Default Arcade Layout'), findsOneWidget);
       expect(find.text('Compact Mode', skipOffstage: false), findsOneWidget);
       expect(find.text('Pro Gamer / Wide', skipOffstage: false), findsOneWidget);
@@ -140,7 +140,7 @@ void main() {
       await tester.tap(find.text('Skills'));
       await tester.pumpAndSettle();
       expect(find.text('Show On-Screen Skills & Smash'), findsOneWidget);
-      expect(find.text('Skill & Action Button Scale'), findsOneWidget);
+      expect(find.textContaining('Smash Button Size'), findsOneWidget);
 
       // Check Scoring Rules Tab
       await tester.tap(find.text('Scoring Rules'));
@@ -156,40 +156,46 @@ void main() {
       expect(find.text('HUD & CONTROLS ADJUSTER'), findsNothing);
     });
 
-    test('Mobile Legends: Bang Bang (MLBB) Default Controller Layout Constants', () {
+    test('Control Default Controller Layout Constants', () {
       const defaultSettings = GameSettings();
-      expect(defaultSettings.controlsPreset, 'Mobile Legends (Default)');
+      expect(defaultSettings.controlsPreset, 'Control Default');
       expect(defaultSettings.freePositioning, isTrue);
 
       // Movement Wheel (Joystick) at bottom-left
-      expect(defaultSettings.joystickPosX, GameSettings.mlbbJoystickX);
-      expect(defaultSettings.joystickPosY, GameSettings.mlbbJoystickY);
+      expect(defaultSettings.joystickPosX, GameSettings.controlDefaultJoystickX);
+      expect(defaultSettings.joystickPosY, GameSettings.controlDefaultJoystickY);
       expect(defaultSettings.joystickPosX, 0.16);
-      expect(defaultSettings.joystickPosY, 0.78);
+      expect(defaultSettings.joystickPosY, 0.79);
 
       // Smash (Basic Attack) at bottom-right
-      expect(defaultSettings.smashPosX, GameSettings.mlbbSmashX);
-      expect(defaultSettings.smashPosY, GameSettings.mlbbSmashY);
-      expect(defaultSettings.smashPosX, 0.86);
-      expect(defaultSettings.smashPosY, 0.80);
+      expect(defaultSettings.smashPosX, GameSettings.controlDefaultSmashX);
+      expect(defaultSettings.smashPosY, GameSettings.controlDefaultSmashY);
+      expect(defaultSettings.smashPosX, 0.88);
+      expect(defaultSettings.smashPosY, 0.81);
 
-      // Skill 1 (Cyclone Curve / Left Spin K) to the left of Attack
-      expect(defaultSettings.leftSpinPosX, GameSettings.mlbbLeftSpinX);
-      expect(defaultSettings.leftSpinPosY, GameSettings.mlbbLeftSpinY);
-      expect(defaultSettings.leftSpinPosX, 0.72);
-      expect(defaultSettings.leftSpinPosY, 0.82);
+      // Skill 1 (Spin Left K) to the left of Attack
+      expect(defaultSettings.leftSpinPosX, GameSettings.controlDefaultLeftSpinX);
+      expect(defaultSettings.leftSpinPosY, GameSettings.controlDefaultLeftSpinY);
+      expect(defaultSettings.leftSpinPosX, 0.76);
+      expect(defaultSettings.leftSpinPosY, 0.84);
 
-      // Skill 2 (Vortex Hook / Right Spin L) diagonally upper-left of Attack
-      expect(defaultSettings.rightSpinPosX, GameSettings.mlbbRightSpinX);
-      expect(defaultSettings.rightSpinPosY, GameSettings.mlbbRightSpinY);
-      expect(defaultSettings.rightSpinPosX, 0.76);
-      expect(defaultSettings.rightSpinPosY, 0.67);
+      // Skill 2 (Spin Right L) diagonally upper-left of Attack
+      expect(defaultSettings.rightSpinPosX, GameSettings.controlDefaultRightSpinX);
+      expect(defaultSettings.rightSpinPosY, GameSettings.controlDefaultRightSpinY);
+      expect(defaultSettings.rightSpinPosX, 0.85);
+      expect(defaultSettings.rightSpinPosY, 0.62);
 
-      // Skill 3 / Spell (Flash Dash) directly above Attack
-      expect(defaultSettings.dashPosX, GameSettings.mlbbDashX);
-      expect(defaultSettings.dashPosY, GameSettings.mlbbDashY);
-      expect(defaultSettings.dashPosX, 0.86);
-      expect(defaultSettings.dashPosY, 0.63);
+      // Skill 3 / Spell (Dash) directly above Attack
+      expect(defaultSettings.dashPosX, GameSettings.controlDefaultDashX);
+      expect(defaultSettings.dashPosY, GameSettings.controlDefaultDashY);
+      expect(defaultSettings.dashPosX, 0.93);
+      expect(defaultSettings.dashPosY, 0.62);
+
+      // Skill 4 (Speed Boost Strike)
+      expect(defaultSettings.speedBoostPosX, GameSettings.controlDefaultSpeedBoostX);
+      expect(defaultSettings.speedBoostPosY, GameSettings.controlDefaultSpeedBoostY);
+      expect(defaultSettings.speedBoostPosX, 0.79);
+      expect(defaultSettings.speedBoostPosY, 0.72);
     });
 
     test('Player can freely position controller anywhere on screen', () {
@@ -261,11 +267,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('FREE DRAG HUD EDITOR'), findsOneWidget);
-      expect(find.text('MLBB DEFAULT'), findsOneWidget);
+      expect(find.text('CONTROL DEFAULT'), findsAtLeastNWidgets(1));
       expect(find.text('SAVE & APPLY'), findsOneWidget);
 
-      // Tap MLBB DEFAULT
-      await tester.tap(find.text('MLBB DEFAULT'));
+      // Tap CONTROL DEFAULT
+      await tester.tap(find.text('CONTROL DEFAULT').first);
       await tester.pumpAndSettle();
 
       // Tap SAVE & APPLY
@@ -274,7 +280,7 @@ void main() {
 
       expect(find.text('FREE DRAG HUD EDITOR'), findsNothing);
       expect(savedSettings, isNotNull);
-      expect(savedSettings!.controlsPreset, 'Mobile Legends (Default)');
+      expect(savedSettings!.controlsPreset, 'Control Default');
     });
   });
 }

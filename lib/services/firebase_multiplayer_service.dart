@@ -202,6 +202,12 @@ class FirebaseMultiplayerService extends ChangeNotifier {
     return _cachedRoom;
   }
 
+  Future<void> updateRoomSlots(String roomCode, List<RoomPlayerSlot> slots) async {
+    _cachedRoom = _cachedRoom?.copyWith(slots: slots);
+    notifyListeners();
+    await _updateRemoteRoomSlots(roomCode, slots);
+  }
+
   Future<void> _updateRemoteRoomSlots(String roomCode, List<RoomPlayerSlot> slots) async {
     try {
       final uri = Uri.parse('$databaseUrl/rooms/$roomCode/slots.json');
@@ -728,6 +734,38 @@ class FirebaseMultiplayerService extends ChangeNotifier {
     _criticalPacketQueue.clear();
     _pendingLivePacket = null;
     notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public Cloud Rooms Discovery
+  // ---------------------------------------------------------------------------
+
+  /// Fetches all active waiting cloud rooms on Firebase RTDB
+  Future<List<BattleRoomModel>> fetchPublicCloudRooms() async {
+    final list = <BattleRoomModel>[];
+    try {
+      final uri = Uri.parse('$databaseUrl/rooms.json');
+      final response = await _httpClient.get(uri).timeout(const Duration(seconds: 4));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final body = response.body;
+        if (body != 'null' && body.isNotEmpty) {
+          final data = jsonDecode(body) as Map<String, dynamic>;
+          for (final entry in data.entries) {
+            if (entry.value is Map) {
+              final roomMap = Map<String, dynamic>.from(entry.value as Map);
+              final status = roomMap['status'] as String? ?? 'waiting';
+              if (status == 'waiting') {
+                final room = _parseFirebaseRoom(roomMap);
+                list.add(room);
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('fetchPublicCloudRooms notice: $e');
+    }
+    return list;
   }
 
   // ---------------------------------------------------------------------------

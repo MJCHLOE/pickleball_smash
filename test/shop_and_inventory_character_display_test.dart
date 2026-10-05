@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pickleball_smash/models/character_roster.dart';
-import 'package:pickleball_smash/services/game_state_manager.dart';
 import 'package:pickleball_smash/widgets/animated_character_display.dart';
 import 'package:pickleball_smash/widgets/dashboard_character_card_feature.dart';
 import 'package:pickleball_smash/widgets/inventory_modal.dart';
@@ -11,9 +10,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Shop and Inventory Character Feature Tests (All Characters)', () {
-    test('All 5 characters have valid roster configurations and gender mappings', () {
+    test('All 8 characters have valid roster configurations and gender mappings', () {
       final characters = CharacterRoster.allCharacters;
-      expect(characters.length, equals(5));
+      expect(characters.length, equals(8));
 
       final expectedIds = [
         'alex_classic',
@@ -21,6 +20,9 @@ void main() {
         'male2_blaze',
         'male3_thunder',
         'female2_frost',
+        'female3',
+        'male4_nard',
+        'female4_ashley',
       ];
 
       for (final id in expectedIds) {
@@ -62,7 +64,7 @@ void main() {
       expect(find.byType(AnimatedCharacterDisplay), findsOneWidget);
     });
 
-    testWidgets('DashboardCharacterCardFeature renders for all 5 characters', (tester) async {
+    testWidgets('DashboardCharacterCardFeature renders for all 6 characters', (tester) async {
       for (final char in CharacterRoster.allCharacters) {
         await tester.pumpWidget(
           MaterialApp(
@@ -84,7 +86,7 @@ void main() {
       }
     });
 
-    testWidgets('ShopModal renders featured character showcase and all 5 character cards', (tester) async {
+    testWidgets('ShopModal renders featured character showcase and all 6 character cards', (tester) async {
       tester.view.physicalSize = const Size(1280, 1000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -105,7 +107,7 @@ void main() {
       expect(find.text('FEATURED FIGHTER'), findsOneWidget);
       expect(find.byType(DashboardCharacterCardFeature), findsOneWidget);
 
-      // All 5 character item keys exist in the roster list and can be scrolled into view
+      // All 6 character item keys exist in the roster list and can be scrolled into view
       for (final char in CharacterRoster.allCharacters) {
         final itemFinder = find.byKey(ValueKey('shop_char_${char.id}'));
         await tester.scrollUntilVisible(
@@ -117,7 +119,7 @@ void main() {
       }
     });
 
-    testWidgets('InventoryModal renders locker character showcase and all 5 roster cards', (tester) async {
+    testWidgets('InventoryModal renders locker character showcase and all 6 roster cards', (tester) async {
       tester.view.physicalSize = const Size(1280, 1000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -137,7 +139,7 @@ void main() {
       expect(find.text('LOCKER & INVENTORY'), findsOneWidget);
       expect(find.byType(DashboardCharacterCardFeature), findsOneWidget);
 
-      // All 5 character cards in inventory can be scrolled into view
+      // All 6 character cards in inventory can be scrolled into view
       for (final char in CharacterRoster.allCharacters) {
         final itemFinder = find.byKey(ValueKey('inv_char_${char.id}'));
         await tester.scrollUntilVisible(

@@ -55,6 +55,7 @@ class ArcadeSkillButtonComponent extends HudMarginComponent with TapCallbacks {
     this.opacity = opacity.clamp(0.1, 1.0);
     if (margin != null) {
       this.margin = margin;
+      position.setValues(margin.left, margin.top);
     }
     size = Vector2(radius * 2 + 8, radius * 2 + 12);
   }

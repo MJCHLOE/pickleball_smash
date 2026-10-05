@@ -414,6 +414,34 @@ class DatabaseService {
     }
   }
 
+  /// Updates player's username in persistent storage and active session
+  Future<void> updateUsername(int userId, String newUsername) async {
+    final trimmed = newUsername.trim();
+    final db = await database;
+    if (db != null) {
+      try {
+        await db.update(
+          'users',
+          {'username': trimmed},
+          where: 'id = ?',
+          whereArgs: [userId],
+        );
+        await db.update(
+          'active_session',
+          {'username': trimmed},
+          where: 'user_id = ?',
+          whereArgs: [userId],
+        );
+      } catch (_) {}
+    }
+    if (_fallbackUsers.containsKey(userId)) {
+      _fallbackUsers[userId]!['username'] = trimmed;
+    }
+    if (_fallbackActiveSession != null && _fallbackActiveSession!['userId'] == userId) {
+      _fallbackActiveSession!['username'] = trimmed;
+    }
+  }
+
   Future<Map<String, dynamic>?> getActiveSession() async {
     final db = await database;
     if (db != null) {
@@ -737,12 +765,17 @@ class DatabaseService {
             COALESCE(p.current_streak, 0) as current_streak
           FROM users u
           LEFT JOIN player_data p ON u.id = p.user_id
-          ORDER BY COALESCE(p.trophies, 0) DESC, COALESCE(p.matches_won, 0) DESC, COALESCE(p.player_level, 1) DESC, u.id DESC
+          ORDER BY 
+            (CASE WHEN COALESCE(p.matches_played, 0) > 0 THEN (CAST(COALESCE(p.matches_won, 0) AS REAL) / p.matches_played) ELSE 0.0 END) DESC,
+            COALESCE(p.matches_played, 0) DESC,
+            COALESCE(p.trophies, 0) DESC,
+            COALESCE(p.player_level, 1) DESC,
+            u.id DESC
           LIMIT ?
         ''', [limit]);
 
         if (results.isNotEmpty) {
-          return results.map((row) {
+          final mapped = results.map((row) {
             final played = (row['matches_played'] as num?)?.toInt() ?? 0;
             final won = (row['matches_won'] as num?)?.toInt() ?? 0;
             final winRate = played > 0 ? ((won / played) * 100).round() : 0;
@@ -753,6 +786,19 @@ class DatabaseService {
               'matches_lost': played - won,
             };
           }).toList();
+
+          mapped.sort((a, b) {
+            final wrA = a['win_rate'] as int;
+            final wrB = b['win_rate'] as int;
+            if (wrB != wrA) return wrB.compareTo(wrA);
+            final mpA = a['matches_played'] as int;
+            final mpB = b['matches_played'] as int;
+            if (mpB != mpA) return mpB.compareTo(mpA);
+            final tA = a['trophies'] as int;
+            final tB = b['trophies'] as int;
+            return tB.compareTo(tA);
+          });
+          return mapped;
         }
       } catch (e) {
         debugPrint('SQLite getAllPlayersLeaderboard error: $e');
@@ -787,12 +833,15 @@ class DatabaseService {
     }
 
     list.sort((a, b) {
+      final wrA = a['win_rate'] as int;
+      final wrB = b['win_rate'] as int;
+      if (wrB != wrA) return wrB.compareTo(wrA);
+      final mpA = a['matches_played'] as int;
+      final mpB = b['matches_played'] as int;
+      if (mpB != mpA) return mpB.compareTo(mpA);
       final tA = a['trophies'] as int;
       final tB = b['trophies'] as int;
-      if (tB != tA) return tB.compareTo(tA);
-      final wA = a['matches_won'] as int;
-      final wB = b['matches_won'] as int;
-      return wB.compareTo(wA);
+      return tB.compareTo(tA);
     });
 
     return list.take(limit).toList();

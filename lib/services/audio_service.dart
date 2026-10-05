@@ -42,7 +42,6 @@ class AudioService with WidgetsBindingObserver {
   bool get isAppInBackground => _isAppInBackground;
 
   bool _wasBgmPlayingBeforeBackground = false;
-  String? _bgmAssetBeforeBackground;
   int _bgmRequestId = 0;
 
   /// Check whether running inside automated unit test environment
@@ -112,7 +111,6 @@ class AudioService with WidgetsBindingObserver {
     _isAppInBackground = true;
     if (_isBgmPlaying) {
       _wasBgmPlayingBeforeBackground = true;
-      _bgmAssetBeforeBackground = _currentBgmAsset;
       pauseBgm();
     }
     _stopAllSfx();
@@ -122,20 +120,15 @@ class AudioService with WidgetsBindingObserver {
   void _handleAppForegrounded() {
     _isAppInBackground = false;
     if (_wasBgmPlayingBeforeBackground && _settings.musicEnabled && effectiveMusicVolume > 0.01) {
-      final targetAsset = (_bgmAssetBeforeBackground != null && _bgmAssetBeforeBackground!.isNotEmpty)
-          ? _bgmAssetBeforeBackground!
-          : (_currentBgmAsset.isNotEmpty ? _currentBgmAsset : menuBgm);
-      playBgm(targetAsset);
+      resumeBgm();
     }
     _wasBgmPlayingBeforeBackground = false;
-    _bgmAssetBeforeBackground = null;
   }
 
   /// Called when app is backed out of or terminated
   void _handleAppDetached() {
     _isAppInBackground = true;
     _wasBgmPlayingBeforeBackground = false;
-    _bgmAssetBeforeBackground = null;
     stopBgm();
     _stopAllSfx();
   }
@@ -213,6 +206,14 @@ class AudioService with WidgetsBindingObserver {
         return;
       }
 
+      // If the exact same track is already paused, RESUME IT rather than restarting from intro!
+      if (_currentBgmAsset == assetPath && player.state == PlayerState.paused) {
+        await player.setVolume(effectiveMusicVolume.clamp(0.0, 1.0));
+        await player.resume();
+        _isBgmPlaying = true;
+        return;
+      }
+
       await player.stop();
 
       // Guard against newer requests or app being backgrounded while stopping
@@ -251,7 +252,7 @@ class AudioService with WidgetsBindingObserver {
     } catch (_) {}
   }
 
-  /// Resume retro arcade background music
+  /// Resume retro arcade background music from where it was paused
   Future<void> resumeBgm() async {
     if (_isTestEnvironment) {
       if (!_isAppInBackground && _settings.musicEnabled && effectiveMusicVolume > 0.01) {
@@ -266,19 +267,20 @@ class AudioService with WidgetsBindingObserver {
     if (!_settings.musicEnabled || effectiveMusicVolume <= 0.01) return;
 
     try {
-      if (_bgmPlayer != null && _currentBgmAsset.isNotEmpty) {
+      if (_bgmPlayer != null) {
         await _bgmPlayer!.setVolume(effectiveMusicVolume.clamp(0.0, 1.0));
         if (_bgmPlayer!.state == PlayerState.paused) {
           await _bgmPlayer!.resume();
           _isBgmPlaying = true;
-        } else {
-          await playBgm(_currentBgmAsset);
+          return;
         }
-      } else {
-        await playBgm(_currentBgmAsset.isNotEmpty ? _currentBgmAsset : menuBgm);
       }
-    } catch (_) {
       await playBgm(_currentBgmAsset.isNotEmpty ? _currentBgmAsset : menuBgm);
+    } catch (_) {
+      try {
+        await _bgmPlayer?.resume();
+        _isBgmPlaying = true;
+      } catch (_) {}
     }
   }
 
@@ -397,6 +399,9 @@ class AudioService with WidgetsBindingObserver {
     if (!_settings.sfxEnabled || effectiveSfxVolume <= 0.01) return;
     await _playSfxPlayer(() => _smashPlayer ??= AudioPlayer(), 'audio/sfx_smash.wav', effectiveSfxVolume);
   }
+
+  /// 4.1 Play power smash / speed boost strike sound (alias for playSmash)
+  Future<void> playPowerSmash() async => playSmash();
 
   /// 5. Play Flash Dash swoosh sound & light haptics
   Future<void> playDash() async {

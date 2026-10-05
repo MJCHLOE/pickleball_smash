@@ -301,7 +301,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
         // Serving flow: Player must manually serve before game starts.
         // CPU waits 1.2s before executing serve so player can get ready.
         _serveTimer += dt;
-        final bool isCpu = !currentGame.isMultiplayer && !currentGame.isLocalPlayerServing;
+        final bool isCpu = serverComp.isAI && (!currentGame.isMultiplayer || currentGame.isHost || _serveTimer > 3.0);
         final bool autoServeEnabled = currentGame.settings?.autoServe ?? false;
         final double threshold = isCpu ? 1.2 : (autoServeEnabled ? 1.8 : double.infinity);
 
@@ -483,6 +483,17 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     _bounceEffectRadius = 6.0;
     squashFactor = 0.72; // Squashes on impact with court floor
 
+    // 1.4. Speed Boost Strike check-up bite: bounces on the court slowly a little bit
+    final bool isSpeedBoostBounce = (activeTechniqueType == BattleTechnique.speedBoost);
+    if (isSpeedBoostBounce) {
+      velocity.x *= 0.78;
+      velocity.y *= 0.78;
+      speed = velocity.length;
+      squashFactor = 0.65; // Deeper compression on bounce
+      _bounceEffectRadius = 9.0;
+      AudioService.instance.playPowerSmash();
+    }
+
     // 1.5. Heavy sidespin kicks the ball sharply sideways on the floor bounce
     if (spin != 0.0) {
       velocity.x += 160.0 * spin;
@@ -493,7 +504,8 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
 
     // 2. Parabolic bounce restitution (generous pop-up arc for continuous play)
     if (zVelocity.abs() > 35.0) {
-      final popSpeed = max(175.0, zVelocity.abs() * 0.85);
+      final double popMultiplier = isSpeedBoostBounce ? 0.82 : 1.0;
+      final popSpeed = max(135.0, zVelocity.abs() * 0.85 * popMultiplier);
       zVelocity = popSpeed;
     } else {
       zVelocity = 0.0;
@@ -646,6 +658,17 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
           final sparkOffset = rel + Offset(cos(angle) * trailRad * 0.6, sin(angle) * trailRad * 0.6);
           _wispPaint.color = const Color(0xFFE9D5FF).withValues(alpha: trailAlpha * 0.85);
           canvas.drawCircle(sparkOffset, trailRad * 0.45, _wispPaint);
+        } else if (activeTechniqueType == BattleTechnique.speedBoost) {
+          // 🚀 Speed Boost Strike: Blazing fiery orange and golden solar trail
+          _trailFillPaint.color = (i % 2 == 0 ? const Color(0xFFFF5722) : const Color(0xFFFF9800))
+              .withValues(alpha: (trailAlpha * 1.8).clamp(0.0, 1.0));
+          canvas.drawCircle(rel, trailRad * 1.45, _trailFillPaint);
+
+          // Solar streak sparks
+          final angle = ballRotationAngle * 1.5 + (i * 0.5);
+          final sparkOffset = rel + Offset(cos(angle) * trailRad * 0.7, sin(angle) * trailRad * 0.7);
+          _wispPaint.color = const Color(0xFFFFEB3B).withValues(alpha: trailAlpha * 0.95);
+          canvas.drawCircle(sparkOffset, trailRad * 0.5, _wispPaint);
         } else {
           _trailFillPaint.color = _ballInfo.sparkColor.withValues(alpha: trailAlpha);
           canvas.drawCircle(rel, trailRad, _trailFillPaint);
@@ -692,6 +715,19 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
         canvas.drawCircle(Offset.zero, radius + 5.5, _auraFillPaint);
         _auraFillPaint.color = const Color(0xFFA855F7).withValues(alpha: 0.55);
         canvas.drawCircle(Offset.zero, radius + 2.5, _auraFillPaint);
+      }
+    } else if (activeTechniqueType == BattleTechnique.speedBoost) {
+      if (useBlur) {
+        _auraFillPaint.color = const Color(0xFFFF5722).withValues(alpha: 0.75);
+        _auraFillPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+        canvas.drawCircle(Offset.zero, radius + 5.0, _auraFillPaint);
+      } else {
+        // High-performance crisp arcade halo
+        _auraFillPaint.maskFilter = null;
+        _auraFillPaint.color = const Color(0xFFFF5722).withValues(alpha: 0.35);
+        canvas.drawCircle(Offset.zero, radius + 6.0, _auraFillPaint);
+        _auraFillPaint.color = const Color(0xFFFFB300).withValues(alpha: 0.65);
+        canvas.drawCircle(Offset.zero, radius + 3.0, _auraFillPaint);
       }
     } else if (_ballInfo.tier != BallTier.elite) {
       if (useBlur) {
@@ -750,7 +786,9 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
           ? const Color(0xFF34D399)
           : (activeTechniqueType == BattleTechnique.rightSpin)
               ? const Color(0xFFA855F7)
-              : (spin < 0 ? const Color(0xFF38BDF8) : const Color(0xFFFBBF24));
+              : (activeTechniqueType == BattleTechnique.speedBoost)
+                  ? const Color(0xFFFF9100)
+                  : (spin < 0 ? const Color(0xFF38BDF8) : const Color(0xFFFBBF24));
       _spinArcPaint.color = arcColor.withValues(alpha: 0.80);
       final double arcLen = (pi * 0.45) * (spin.abs().clamp(0.4, 1.0));
       // Two opposing swirling aerodynamic spin arcs
@@ -881,10 +919,12 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
         // AI bot counter during rally
         final aiDiff = currentGame.settings?.aiDifficulty ?? AIDifficulty.normal;
         final roll = Random().nextDouble();
-        if (roll < aiDiff.spinTechniqueChance * 0.5) {
+        if (roll < aiDiff.spinTechniqueChance * 0.35) {
           executedTechnique = BattleTechnique.leftSpin;
-        } else if (roll < aiDiff.spinTechniqueChance) {
+        } else if (roll < aiDiff.spinTechniqueChance * 0.70) {
           executedTechnique = BattleTechnique.rightSpin;
+        } else if (roll < aiDiff.spinTechniqueChance) {
+          executedTechnique = BattleTechnique.speedBoost;
         }
       }
     }
@@ -952,6 +992,42 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
 
       final double lateralAcc = spin * curveStrength;
       final double v0X = (targetX - position.x - 0.5 * lateralAcc * tBounce * tBounce) / tBounce;
+      final double v0Y = (targetY - position.y) / tBounce;
+      velocity = Vector2(v0X, v0Y);
+      speed = velocity.length;
+      position += velocity.normalized() * 10;
+      return;
+    } else if (executedTechnique == BattleTechnique.speedBoost) {
+      // 🚀 SPEED BOOST STRIKE:
+      // Controlled, brisk line-drive power shot that lands and bounces cleanly inside the enemy court!
+      spin = 0.0;
+      curveStrength = 0.0;
+      zVelocity = 175.0; // Brisk line-drive arc with controlled hangtime
+      squashFactor = 1.20;
+
+      tBounce = (zVelocity + sqrt(zVelocity * zVelocity + 4 * 170.0 * z)) / 340.0;
+
+      if (isPlayerOne) {
+        // Deep target inside enemy court (between kitchen line 280 and baseline 50)
+        targetY = 165.0;
+        final minX = Background.courtLeftAt(targetY) + 25.0;
+        final maxX = Background.courtRightAt(targetY) - 25.0;
+        final double aimX = player.horizontalMovement * 90.0;
+        targetX = (640.0 + aimX + (Random().nextDouble() - 0.5) * 50.0).clamp(minX, maxX);
+        currentGame.onAnnouncement?.call('🚀 SPEED BOOST STRIKE!', 'Crisp line-drive power shot!');
+        currentGame.onTechniqueExecuted(BattleTechnique.speedBoost, isLocalPlayer: true);
+      } else {
+        // Deep target inside bottom court (between kitchen line 440 and baseline 670)
+        targetY = 555.0;
+        final minX = Background.courtLeftAt(targetY) + 25.0;
+        final maxX = Background.courtRightAt(targetY) - 25.0;
+        targetX = (640.0 + (Random().nextDouble() - 0.5) * 100.0).clamp(minX, maxX);
+        final oppName = currentGame.isMultiplayer ? 'OPPONENT' : 'CPU';
+        currentGame.onAnnouncement?.call('🚀 $oppName SPEED BOOST STRIKE!', 'Watch out! Fast drive shot!');
+        currentGame.onTechniqueExecuted(BattleTechnique.speedBoost, isLocalPlayer: false);
+      }
+
+      final double v0X = (targetX - position.x) / tBounce;
       final double v0Y = (targetY - position.y) / tBounce;
       velocity = Vector2(v0X, v0Y);
       speed = velocity.length;

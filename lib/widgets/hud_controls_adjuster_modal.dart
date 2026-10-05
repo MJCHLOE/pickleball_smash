@@ -76,6 +76,8 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
         return _settings.rightSpinPosX;
       case 'dash':
         return _settings.dashPosX;
+      case 'speedBoost':
+        return _settings.speedBoostPosX;
       default:
         return 0.5;
     }
@@ -93,6 +95,8 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
         return _settings.rightSpinPosY;
       case 'dash':
         return _settings.dashPosY;
+      case 'speedBoost':
+        return _settings.speedBoostPosY;
       default:
         return 0.5;
     }
@@ -105,11 +109,13 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
       case 'smash':
         return 'Smash / Strike';
       case 'leftSpin':
-        return 'Cyclone Curve (K)';
+        return 'Spin Left (K)';
       case 'rightSpin':
-        return 'Vortex Hook (L)';
+        return 'Spin Right (L)';
       case 'dash':
-        return 'Flash Dash (Shift)';
+        return 'Dash (Shift)';
+      case 'speedBoost':
+        return 'Speed Boost Strike (U)';
       default:
         return 'Controller';
     }
@@ -160,6 +166,14 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
           freePositioning: true,
         );
         break;
+      case 'speedBoost':
+        updated = _settings.copyWith(
+          speedBoostPosX: clampedX,
+          speedBoostPosY: clampedY,
+          controlsPreset: 'Custom',
+          freePositioning: true,
+        );
+        break;
       default:
         return;
     }
@@ -170,26 +184,30 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
     AudioService.instance.playButtonTap();
     GameSettings presetSettings;
     switch (presetName) {
+      case 'Control Default':
       case 'Mobile Legends (Default)':
         presetSettings = _settings.copyWith(
-          controlsPreset: 'Mobile Legends (Default)',
+          controlsPreset: 'Control Default',
           freePositioning: true,
-          joystickPosX: GameSettings.mlbbJoystickX,
-          joystickPosY: GameSettings.mlbbJoystickY,
-          smashPosX: GameSettings.mlbbSmashX,
-          smashPosY: GameSettings.mlbbSmashY,
-          leftSpinPosX: GameSettings.mlbbLeftSpinX,
-          leftSpinPosY: GameSettings.mlbbLeftSpinY,
-          rightSpinPosX: GameSettings.mlbbRightSpinX,
-          rightSpinPosY: GameSettings.mlbbRightSpinY,
-          dashPosX: GameSettings.mlbbDashX,
-          dashPosY: GameSettings.mlbbDashY,
+          joystickPosX: GameSettings.controlDefaultJoystickX,
+          joystickPosY: GameSettings.controlDefaultJoystickY,
+          smashPosX: GameSettings.controlDefaultSmashX,
+          smashPosY: GameSettings.controlDefaultSmashY,
+          leftSpinPosX: GameSettings.controlDefaultLeftSpinX,
+          leftSpinPosY: GameSettings.controlDefaultLeftSpinY,
+          rightSpinPosX: GameSettings.controlDefaultRightSpinX,
+          rightSpinPosY: GameSettings.controlDefaultRightSpinY,
+          dashPosX: GameSettings.controlDefaultDashX,
+          dashPosY: GameSettings.controlDefaultDashY,
+          speedBoostPosX: GameSettings.controlDefaultSpeedBoostX,
+          speedBoostPosY: GameSettings.controlDefaultSpeedBoostY,
           joystickExpand: 1.0,
           skillButtonScale: 1.0,
           smashScale: 1.0,
           leftSpinScale: 1.0,
           rightSpinScale: 1.0,
           dashScale: 1.0,
+          speedBoostScale: 1.0,
           buttonSize: 'Normal',
           joystickOnLeft: true,
           showJoystick: true,
@@ -423,7 +441,7 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  'MLBB Arcade & Free Positioning',
+                  'Control Default & Free Positioning',
                   style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -440,12 +458,12 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
             onPressed: () => _openFullscreenEditor(context),
           ),
           const SizedBox(width: 6),
-          // Reset MLBB Default Button
+          // Reset Control Default Button
           if (MediaQuery.sizeOf(context).width < 450)
             IconButton(
               icon: const Icon(Icons.sports_esports_rounded, color: AppTheme.neonLime, size: 20),
-              tooltip: 'MLBB DEFAULT',
-              onPressed: () => _applyPreset('Mobile Legends (Default)'),
+              tooltip: 'CONTROL DEFAULT',
+              onPressed: () => _applyPreset('Control Default'),
             )
           else
             TextButton.icon(
@@ -454,8 +472,8 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
                 foregroundColor: AppTheme.neonLime,
               ),
               icon: const Icon(Icons.sports_esports_rounded, size: 16),
-              label: const Text('MLBB DEFAULT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-              onPressed: () => _applyPreset('Mobile Legends (Default)'),
+              label: const Text('CONTROL DEFAULT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              onPressed: () => _applyPreset('Control Default'),
             ),
           const SizedBox(width: 4),
           IconButton(
@@ -528,34 +546,41 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
                   top: 4,
                   left: 6,
                   right: 6,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.75),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AppTheme.neonLime.withValues(alpha: 0.4)),
-                        ),
-                        child: Text(
-                          'LIVE HUD PREVIEW • ${_settings.scoringMode == 'rally' ? '⚡ RALLY SCORING' : '🏓 SIDE-OUT SCORING'}',
-                          style: const TextStyle(color: AppTheme.neonLime, fontSize: 8.5, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: math.max(0.0, pWidth - 12)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          _buildQuickChip('MLBB', () => _applyPreset('Mobile Legends (Default)'), AppTheme.neonLime),
-                          const SizedBox(width: 4),
-                          _buildQuickChip('ARCADE', () => _applyPreset('Default Arcade'), AppTheme.electricCyan),
-                          const SizedBox(width: 4),
-                          _buildQuickChip('FLIP', () => _applySettings(_settings.copyWith(joystickOnLeft: !_settings.joystickOnLeft)), const Color(0xFFFF2A85)),
-                          const SizedBox(width: 4),
-                          _buildQuickChip('FULLSCREEN COURT', () => _openFullscreenEditor(context), AppTheme.goldCoin, icon: Icons.fullscreen_rounded),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.75),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppTheme.neonLime.withValues(alpha: 0.4)),
+                            ),
+                            child: Text(
+                              'LIVE HUD PREVIEW • ${_settings.scoringMode == 'rally' ? '⚡ RALLY SCORING' : '🏓 SIDE-OUT SCORING'}',
+                              style: const TextStyle(color: AppTheme.neonLime, fontSize: 8.5, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildQuickChip('DEFAULT', () => _applyPreset('Control Default'), AppTheme.neonLime),
+                              const SizedBox(width: 4),
+                              _buildQuickChip('ARCADE', () => _applyPreset('Default Arcade'), AppTheme.electricCyan),
+                              const SizedBox(width: 4),
+                              _buildQuickChip('FLIP', () => _applySettings(_settings.copyWith(joystickOnLeft: !_settings.joystickOnLeft)), const Color(0xFFFF2A85)),
+                              const SizedBox(width: 4),
+                              _buildQuickChip('FULLSCREEN COURT', () => _openFullscreenEditor(context), AppTheme.goldCoin, icon: Icons.fullscreen_rounded),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
 
@@ -645,25 +670,26 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
                           child: Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Image.asset(
-                                  'assets/images/items/paddle_wooden.png',
-                                  width: 13.0 * _settings.smashScale,
-                                  height: 13.0 * _settings.smashScale,
-                                  filterQuality: FilterQuality.none,
+                                  'assets/images/logo/smash_paddle.png',
+                                  width: (10.0 * _settings.smashScale).clamp(6.0, 15.0),
+                                  height: (10.0 * _settings.smashScale).clamp(6.0, 15.0),
+                                  filterQuality: FilterQuality.high,
                                   errorBuilder: (_, _, _) => const Icon(
                                     Icons.sports_tennis_rounded,
-                                    size: 11,
+                                    size: 9,
                                     color: Colors.white,
                                   ),
                                 ),
-                                const Text(
+                                Text(
                                   'SMASH',
                                   style: TextStyle(
-                                    color: Color(0xFFFFD700),
-                                    fontSize: 5.5,
+                                    color: const Color(0xFFFFD700),
+                                    fontSize: (4.0 * _settings.smashScale).clamp(2.8, 6.0),
                                     fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.3,
+                                    letterSpacing: 0.2,
                                   ),
                                 ),
                               ],
@@ -674,7 +700,7 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
                     ),
                   ),
 
-                // 3. DRAGGABLE LEFT SPIN (CYCLONE CURVE K)
+                // 3. DRAGGABLE LEFT SPIN (SPIN LEFT K)
                 if (_settings.showSkillButtons)
                   _buildDraggableElement(
                     element: 'leftSpin',
@@ -704,7 +730,7 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
                     ),
                   ),
 
-                // 4. DRAGGABLE RIGHT SPIN (VORTEX HOOK L)
+                // 4. DRAGGABLE RIGHT SPIN (SPIN RIGHT L)
                 if (_settings.showSkillButtons)
                   _buildDraggableElement(
                     element: 'rightSpin',
@@ -734,7 +760,7 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
                     ),
                   ),
 
-                // 5. DRAGGABLE FLASH DASH (SHIFT)
+                // 5. DRAGGABLE DASH (SHIFT)
                 if (_settings.showSkillButtons)
                   _buildDraggableElement(
                     element: 'dash',
@@ -759,6 +785,36 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
                         ),
                         child: const Center(
                           child: Text('💨', style: TextStyle(fontSize: 10)),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // 6. DRAGGABLE SPEED BOOST STRIKE (U)
+                if (_settings.showSkillButtons)
+                  _buildDraggableElement(
+                    element: 'speedBoost',
+                    pWidth: pWidth,
+                    pHeight: pHeight,
+                    isLeftHanded: isLeftHanded,
+                    size: 24.0 * _settings.speedBoostScale,
+                    onDrag: (details) => handleDrag('speedBoost', details),
+                    child: Opacity(
+                      opacity: opacity,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEA580C),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _selectedElement == 'speedBoost' ? AppTheme.neonLime : Colors.white,
+                            width: _selectedElement == 'speedBoost' ? 2.5 : 1.2,
+                          ),
+                          boxShadow: _selectedElement == 'speedBoost'
+                              ? [BoxShadow(color: AppTheme.neonLime.withValues(alpha: 0.6), blurRadius: 6)]
+                              : null,
+                        ),
+                        child: const Center(
+                          child: Text('🚀', style: TextStyle(fontSize: 10)),
                         ),
                       ),
                     ),
@@ -867,11 +923,11 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
   Widget _buildPresetsTab(bool isShortHeight) {
     final presets = [
       {
-        'id': 'Mobile Legends (Default)',
+        'id': 'Control Default',
         'icon': Icons.sports_esports_rounded,
         'color': AppTheme.neonLime,
-        'title': 'Mobile Legends (Default)',
-        'desc': 'Curved radial skill fan around Basic Attack + bottom-left movement wheel. (MLBB Signature Layout)',
+        'title': 'Control Default',
+        'desc': 'Curved radial skill fan around Basic Attack + bottom-left movement wheel. (Control Signature Layout)',
       },
       {
         'id': 'Default Arcade',
@@ -967,7 +1023,7 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
                           fontSize: 13,
                         ),
                       ),
-                      if (id == 'Mobile Legends (Default)') ...[
+                      if (id == 'Control Default' || id == 'Mobile Legends (Default)') ...[
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
@@ -1058,9 +1114,10 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
           children: [
             _buildElementSelectorChip('joystick', '🕹️ Movement Joystick'),
             _buildElementSelectorChip('smash', '💥 Smash / Attack'),
-            _buildElementSelectorChip('leftSpin', '🌪️ Cyclone (K)'),
-            _buildElementSelectorChip('rightSpin', '⚡ Vortex (L)'),
-            _buildElementSelectorChip('dash', '💨 Flash Dash'),
+            _buildElementSelectorChip('leftSpin', '🌪️ Spin Left (K)'),
+            _buildElementSelectorChip('rightSpin', '⚡ Spin Right (L)'),
+            _buildElementSelectorChip('dash', '💨 Dash (Shift)'),
+            _buildElementSelectorChip('speedBoost', '🚀 Speed Boost Strike (U)'),
           ],
         ),
 
@@ -1292,9 +1349,9 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
           onChanged: (val) => _applySettings(_settings.copyWith(smashScale: val)),
         ),
 
-        // Cyclone Curve (K) Scale
+        // Spin Left (K) Scale
         _buildSliderTile(
-          title: '🌪️ Cyclone Curve (K) Size',
+          title: '🌪️ Spin Left (K) Size',
           valueText: '${(_settings.leftSpinScale * 100).round()}%',
           value: _settings.leftSpinScale,
           min: 0.65,
@@ -1302,9 +1359,9 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
           onChanged: (val) => _applySettings(_settings.copyWith(leftSpinScale: val)),
         ),
 
-        // Vortex Hook (L) Scale
+        // Spin Right (L) Scale
         _buildSliderTile(
-          title: '⚡ Vortex Hook (L) Size',
+          title: '⚡ Spin Right (L) Size',
           valueText: '${(_settings.rightSpinScale * 100).round()}%',
           value: _settings.rightSpinScale,
           min: 0.65,
@@ -1312,14 +1369,24 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
           onChanged: (val) => _applySettings(_settings.copyWith(rightSpinScale: val)),
         ),
 
-        // Flash Dash (Shift) Scale
+        // Dash (Shift) Scale
         _buildSliderTile(
-          title: '💨 Flash Dash Size',
+          title: '💨 Dash (Shift) Size',
           valueText: '${(_settings.dashScale * 100).round()}%',
           value: _settings.dashScale,
           min: 0.65,
           max: 1.50,
           onChanged: (val) => _applySettings(_settings.copyWith(dashScale: val)),
+        ),
+
+        // Speed Boost Strike (U) Scale
+        _buildSliderTile(
+          title: '🚀 Speed Boost Strike (U) Size',
+          valueText: '${(_settings.speedBoostScale * 100).round()}%',
+          value: _settings.speedBoostScale,
+          min: 0.65,
+          max: 1.50,
+          onChanged: (val) => _applySettings(_settings.copyWith(speedBoostScale: val)),
         ),
 
         // Master Skill Button Scale (scales all skills)
@@ -1335,6 +1402,7 @@ class _HudControlsAdjusterModalState extends State<HudControlsAdjusterModal> wit
             leftSpinScale: val,
             rightSpinScale: val,
             dashScale: val,
+            speedBoostScale: val,
           )),
         ),
 
@@ -1658,6 +1726,8 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
         return _settings.rightSpinPosX;
       case 'dash':
         return _settings.dashPosX;
+      case 'speedBoost':
+        return _settings.speedBoostPosX;
       default:
         return 0.5;
     }
@@ -1675,6 +1745,8 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
         return _settings.rightSpinPosY;
       case 'dash':
         return _settings.dashPosY;
+      case 'speedBoost':
+        return _settings.speedBoostPosY;
       default:
         return 0.5;
     }
@@ -1687,11 +1759,13 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
       case 'smash':
         return 'Smash / Basic Attack';
       case 'leftSpin':
-        return 'Cyclone Curve (K)';
+        return 'Spin Left (K)';
       case 'rightSpin':
-        return 'Vortex Hook (L)';
+        return 'Spin Right (L)';
       case 'dash':
-        return 'Flash Dash (Shift)';
+        return 'Dash (Shift)';
+      case 'speedBoost':
+        return 'Speed Boost Strike (U)';
       default:
         return 'Controller';
     }
@@ -1717,6 +1791,9 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
         case 'dash':
           _settings = _settings.copyWith(dashPosX: clampedX, dashPosY: clampedY, controlsPreset: 'Custom', freePositioning: true);
           break;
+        case 'speedBoost':
+          _settings = _settings.copyWith(speedBoostPosX: clampedX, speedBoostPosY: clampedY, controlsPreset: 'Custom', freePositioning: true);
+          break;
       }
     });
   }
@@ -1734,51 +1811,58 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
     double defY = 0.5;
     switch (_selectedElement) {
       case 'joystick':
-        defX = GameSettings.mlbbJoystickX;
-        defY = GameSettings.mlbbJoystickY;
+        defX = GameSettings.controlDefaultJoystickX;
+        defY = GameSettings.controlDefaultJoystickY;
         break;
       case 'smash':
-        defX = GameSettings.mlbbSmashX;
-        defY = GameSettings.mlbbSmashY;
+        defX = GameSettings.controlDefaultSmashX;
+        defY = GameSettings.controlDefaultSmashY;
         break;
       case 'leftSpin':
-        defX = GameSettings.mlbbLeftSpinX;
-        defY = GameSettings.mlbbLeftSpinY;
+        defX = GameSettings.controlDefaultLeftSpinX;
+        defY = GameSettings.controlDefaultLeftSpinY;
         break;
       case 'rightSpin':
-        defX = GameSettings.mlbbRightSpinX;
-        defY = GameSettings.mlbbRightSpinY;
+        defX = GameSettings.controlDefaultRightSpinX;
+        defY = GameSettings.controlDefaultRightSpinY;
         break;
       case 'dash':
-        defX = GameSettings.mlbbDashX;
-        defY = GameSettings.mlbbDashY;
+        defX = GameSettings.controlDefaultDashX;
+        defY = GameSettings.controlDefaultDashY;
+        break;
+      case 'speedBoost':
+        defX = GameSettings.controlDefaultSpeedBoostX;
+        defY = GameSettings.controlDefaultSpeedBoostY;
         break;
     }
     _updatePos(_selectedElement, defX, defY);
   }
 
-  void _resetMlbb() {
+  void _resetControlDefault() {
     AudioService.instance.playButtonTap();
     setState(() {
       _settings = _settings.copyWith(
-        controlsPreset: 'Mobile Legends (Default)',
+        controlsPreset: 'Control Default',
         freePositioning: true,
-        joystickPosX: GameSettings.mlbbJoystickX,
-        joystickPosY: GameSettings.mlbbJoystickY,
-        smashPosX: GameSettings.mlbbSmashX,
-        smashPosY: GameSettings.mlbbSmashY,
-        leftSpinPosX: GameSettings.mlbbLeftSpinX,
-        leftSpinPosY: GameSettings.mlbbLeftSpinY,
-        rightSpinPosX: GameSettings.mlbbRightSpinX,
-        rightSpinPosY: GameSettings.mlbbRightSpinY,
-        dashPosX: GameSettings.mlbbDashX,
-        dashPosY: GameSettings.mlbbDashY,
+        joystickPosX: GameSettings.controlDefaultJoystickX,
+        joystickPosY: GameSettings.controlDefaultJoystickY,
+        smashPosX: GameSettings.controlDefaultSmashX,
+        smashPosY: GameSettings.controlDefaultSmashY,
+        leftSpinPosX: GameSettings.controlDefaultLeftSpinX,
+        leftSpinPosY: GameSettings.controlDefaultLeftSpinY,
+        rightSpinPosX: GameSettings.controlDefaultRightSpinX,
+        rightSpinPosY: GameSettings.controlDefaultRightSpinY,
+        dashPosX: GameSettings.controlDefaultDashX,
+        dashPosY: GameSettings.controlDefaultDashY,
+        speedBoostPosX: GameSettings.controlDefaultSpeedBoostX,
+        speedBoostPosY: GameSettings.controlDefaultSpeedBoostY,
         joystickExpand: 1.0,
         skillButtonScale: 1.0,
         smashScale: 1.0,
         leftSpinScale: 1.0,
         rightSpinScale: 1.0,
         dashScale: 1.0,
+        speedBoostScale: 1.0,
         joystickOnLeft: true,
       );
     });
@@ -1788,8 +1872,9 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
     AudioService.instance.playButtonTap();
     setState(() {
       switch (presetName) {
+        case 'Control Default':
         case 'Mobile Legends (Default)':
-          _resetMlbb();
+          _resetControlDefault();
           break;
         case 'Default Arcade':
           _settings = _settings.copyWith(
@@ -1805,12 +1890,15 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
             rightSpinPosY: GameSettings.arcadeRightSpinY,
             dashPosX: GameSettings.arcadeDashX,
             dashPosY: GameSettings.arcadeDashY,
+            speedBoostPosX: GameSettings.arcadeSpeedBoostX,
+            speedBoostPosY: GameSettings.arcadeSpeedBoostY,
             joystickExpand: 1.0,
             skillButtonScale: 1.0,
             smashScale: 1.0,
             leftSpinScale: 1.0,
             rightSpinScale: 1.0,
             dashScale: 1.0,
+            speedBoostScale: 1.0,
             joystickOnLeft: true,
           );
           break;
@@ -1828,12 +1916,15 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
             rightSpinPosY: 0.72,
             dashPosX: 0.90,
             dashPosY: 0.68,
+            speedBoostPosX: 0.72,
+            speedBoostPosY: 0.72,
             joystickExpand: 0.85,
             skillButtonScale: 0.85,
             smashScale: 0.85,
             leftSpinScale: 0.85,
             rightSpinScale: 0.85,
             dashScale: 0.85,
+            speedBoostScale: 0.85,
             joystickOnLeft: true,
           );
           break;
@@ -1851,12 +1942,15 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
             rightSpinPosY: 0.64,
             dashPosX: 0.84,
             dashPosY: 0.60,
+            speedBoostPosX: 0.62,
+            speedBoostPosY: 0.68,
             joystickExpand: 1.2,
             skillButtonScale: 1.15,
             smashScale: 1.2,
             leftSpinScale: 1.1,
             rightSpinScale: 1.1,
             dashScale: 1.1,
+            speedBoostScale: 1.1,
             joystickOnLeft: true,
           );
           break;
@@ -1944,12 +2038,12 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
                   borderGlow: const Color(0xFF34D399),
                   icon: '🌪️',
                   keyBadge: 'K',
-                  label: 'CYCLONE',
+                  label: 'SPIN LEFT',
                   element: 'leftSpin',
                 ),
               ),
 
-            // 7. Draggable Vortex Hook (Skill 2 - L)
+            // 7. Draggable Spin Right (Skill 2 - L)
             if (_settings.showSkillButtons)
               _buildDraggableWidget(
                 element: 'rightSpin',
@@ -1962,12 +2056,12 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
                   borderGlow: const Color(0xFFA78BFA),
                   icon: '⚡',
                   keyBadge: 'L',
-                  label: 'VORTEX',
+                  label: 'SPIN RIGHT',
                   element: 'rightSpin',
                 ),
               ),
 
-            // 8. Draggable Flash Dash (Skill 3 / Spell - Shift)
+            // 8. Draggable Dash (Skill 3 - Shift)
             if (_settings.showSkillButtons)
               _buildDraggableWidget(
                 element: 'dash',
@@ -1982,6 +2076,24 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
                   keyBadge: 'SHIFT',
                   label: 'DASH',
                   element: 'dash',
+                ),
+              ),
+
+            // 8.5. Draggable Speed Boost Strike (Skill 4 - U)
+            if (_settings.showSkillButtons)
+              _buildDraggableWidget(
+                element: 'speedBoost',
+                screenSize: screenSize,
+                isLeftHanded: isLeftHanded,
+                size: 58.0 * _settings.speedBoostScale,
+                child: _buildSkillGraphic(
+                  opacity: opacity,
+                  gradient: const [Color(0xFFEA580C), Color(0xFFC2410C)],
+                  borderGlow: const Color(0xFFFB923C),
+                  icon: '🚀',
+                  keyBadge: 'U',
+                  label: 'SPEED BOOST',
+                  element: 'speedBoost',
                 ),
               ),
 
@@ -2031,13 +2143,13 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
               ),
             ),
             const SizedBox(width: 8),
-            // MLBB Default Reset
+            // Control Default Reset
             Game2DButton(
-              text: 'MLBB DEFAULT',
+              text: 'CONTROL DEFAULT',
               icon: Icons.sports_esports_rounded,
               size: GameButtonSize.small,
               variant: GameButtonVariant.cyan,
-              onPressed: _resetMlbb,
+              onPressed: _resetControlDefault,
             ),
             const SizedBox(width: 6),
             // Flip Left / Right
@@ -2406,33 +2518,33 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
           child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Image.asset(
-                  'assets/images/items/paddle_wooden.png',
-                  width: 34.0 * _settings.smashScale,
-                  height: 34.0 * _settings.smashScale,
-                  filterQuality: FilterQuality.none,
+                  'assets/images/logo/smash_paddle.png',
+                  width: (32.0 * _settings.smashScale).clamp(20.0, 56.0),
+                  height: (32.0 * _settings.smashScale).clamp(20.0, 56.0),
+                  filterQuality: FilterQuality.high,
                   errorBuilder: (_, _, _) => const Icon(
                     Icons.sports_tennis_rounded,
                     color: Colors.white,
                     size: 30,
                   ),
                 ),
-                const SizedBox(height: 1),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.65),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'SMASH',
-                    style: TextStyle(
-                      color: Color(0xFFFFD700),
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
-                    ),
+                Text(
+                  'SMASH',
+                  style: TextStyle(
+                    color: const Color(0xFFFFD700),
+                    fontSize: (11.0 * _settings.smashScale).clamp(8.0, 18.0),
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                    shadows: const [
+                      Shadow(
+                        color: Colors.black,
+                        offset: Offset(1.5, 1.5),
+                        blurRadius: 3,
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -2520,7 +2632,9 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
                     ? _settings.rightSpinScale
                     : (_selectedElement == 'dash'
                         ? _settings.dashScale
-                        : _settings.skillButtonScale))));
+                        : (_selectedElement == 'speedBoost'
+                            ? _settings.speedBoostScale
+                            : _settings.skillButtonScale)))));
     final currentOpacity = _settings.transparentCapacity;
 
     return Positioned(
@@ -2545,11 +2659,13 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
               const SizedBox(width: 4),
               _buildInspectorChip('smash', '💥 Smash'),
               const SizedBox(width: 4),
-              _buildInspectorChip('leftSpin', '🌪️ Cyclone'),
+              _buildInspectorChip('leftSpin', '🌪️ Spin Left'),
               const SizedBox(width: 4),
-              _buildInspectorChip('rightSpin', '⚡ Vortex'),
+              _buildInspectorChip('rightSpin', '⚡ Spin Right'),
               const SizedBox(width: 4),
               _buildInspectorChip('dash', '💨 Dash'),
+              const SizedBox(width: 4),
+              _buildInspectorChip('speedBoost', '🚀 Speed Boost'),
               const SizedBox(width: 10),
 
               // Divider
@@ -2684,6 +2800,8 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
                           _settings = _settings.copyWith(rightSpinScale: val);
                         } else if (_selectedElement == 'dash') {
                           _settings = _settings.copyWith(dashScale: val);
+                        } else if (_selectedElement == 'speedBoost') {
+                          _settings = _settings.copyWith(speedBoostScale: val);
                         } else {
                           _settings = _settings.copyWith(skillButtonScale: val);
                         }
@@ -2724,7 +2842,7 @@ class _FullscreenHudEditorModalState extends State<FullscreenHudEditorModal> {
               const SizedBox(width: 8),
 
               // 5. Quick Presets Row
-              _buildPresetChip('MLBB', 'Mobile Legends (Default)', AppTheme.neonLime),
+              _buildPresetChip('CONTROL DEFAULT', 'Control Default', AppTheme.neonLime),
               const SizedBox(width: 4),
               _buildPresetChip('ARCADE', 'Default Arcade', AppTheme.electricCyan),
               const SizedBox(width: 4),

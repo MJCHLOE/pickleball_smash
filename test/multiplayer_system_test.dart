@@ -183,6 +183,7 @@ void main() {
 
     setUp(() {
       service = MultiplayerService.instance;
+      GameStateManager.instance.isGuest = false;
     });
 
     test('Service initializes with clean real player profile and no bot accounts', () {
@@ -192,6 +193,21 @@ void main() {
         expect(f.nickname, isNot('Luna Ace'));
         expect(f.nickname, isNot('Kai SmashGod'));
       }
+    });
+
+    test('Guest players cannot send friend requests', () async {
+      GameStateManager.instance.isGuest = true;
+      const guestTarget = FriendModel(
+        id: 'user_guest_target',
+        playerId: '#PB-9999',
+        nickname: 'TargetPlayer',
+        avatarId: 'alex_classic',
+        status: PlayerPresenceStatus.online,
+        rankTier: RankTier.warrior,
+      );
+      final sent = await service.sendFriendRequest(guestTarget);
+      expect(sent, isFalse);
+      GameStateManager.instance.isGuest = false;
     });
 
     test('Can send, accept, and remove real friends', () async {
@@ -549,8 +565,8 @@ void main() {
       await state.updatePlayerAvatar('chloe_frost');
       await tester.pumpAndSettle();
 
-      // Verify Chloe is now shown on the dashboard
-      expect(find.textContaining('CHLOE'), findsWidgets);
+      // Verify Princess-Joy is now shown on the dashboard
+      expect(find.textContaining('PRINCESS-JOY'), findsWidgets);
     });
   });
 

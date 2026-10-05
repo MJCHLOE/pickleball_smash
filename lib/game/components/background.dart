@@ -257,6 +257,9 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
       }
       canvas.drawPicture(_cachedCourtPicture!);
     }
+
+    // 3. Render animated spectator crowd & stadium atmosphere
+    _renderAudienceCrowd(canvas);
   }
 
   void _recordProceduralCourt(Rect floorRect) {
@@ -681,4 +684,363 @@ class Background extends SpriteComponent with HasGameReference<PickleballGame> {
         break;
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Animated Crowd & Spectator Atmosphere
+  // ---------------------------------------------------------------------------
+  double _crowdAnimTime = 0.0;
+  double _flashTimer = 0.0;
+  final List<_CameraFlash> _activeFlashes = [];
+  static final List<_Spectator> _cachedAudience = _generateAudience();
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    _crowdAnimTime += dt;
+    _flashTimer += dt;
+    if (_flashTimer > 0.45) {
+      _flashTimer = 0.0;
+      final rand = math.Random();
+      if (rand.nextDouble() < 0.75) {
+        final fx = 80.0 + rand.nextDouble() * 1120.0;
+        final fy = -22.0 + rand.nextDouble() * 55.0;
+        _activeFlashes.add(_CameraFlash(Offset(fx, fy)));
+      }
+    }
+    for (int i = _activeFlashes.length - 1; i >= 0; i--) {
+      _activeFlashes[i].life -= dt;
+      if (_activeFlashes[i].life <= 0) {
+        _activeFlashes.removeAt(i);
+      }
+    }
+  }
+
+  void _renderAudienceCrowd(Canvas canvas) {
+    // 1. Top Grandstand Backdrop & Bleachers (Y: -35 to 48)
+    final bleacherBase = Paint()..color = const Color(0xFF0F172A);
+    final bleacherStep1 = Paint()..color = const Color(0xFF1E293B);
+    final bleacherStep2 = Paint()..color = const Color(0xFF334155);
+
+    // Bleacher floor tiers
+    canvas.drawRect(const Rect.fromLTRB(40, -35, 1240, -5), bleacherBase);
+    canvas.drawRect(const Rect.fromLTRB(40, -5, 1240, 22), bleacherStep1);
+    canvas.drawRect(const Rect.fromLTRB(40, 22, 1240, 44), bleacherStep2);
+
+    // Bleacher seat lines
+    final seatLinePaint = Paint()
+      ..color = const Color(0xFF475569)
+      ..strokeWidth = 2.0;
+    canvas.drawLine(const Offset(40, -5), const Offset(1240, -5), seatLinePaint);
+    canvas.drawLine(const Offset(40, 22), const Offset(1240, 22), seatLinePaint);
+
+    // 2. Render each animated spectator
+    for (final s in _cachedAudience) {
+      final bob = math.sin(_crowdAnimTime * s.animSpeed + s.animPhase) * 2.8;
+      final curY = s.baseRowY + bob;
+
+      // Shirt / Torso
+      final shirtPaint = Paint()..color = s.shirtColor;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTWH(s.x - 7, curY + 6, 14, 11), const Radius.circular(2)),
+        shirtPaint,
+      );
+
+      // Head
+      final skinPaint = Paint()..color = s.skinColor;
+      canvas.drawCircle(Offset(s.x, curY + 2), 5.0, skinPaint);
+
+      // Hair or Cap
+      final hairPaint = Paint()..color = s.hairColor;
+      canvas.drawArc(
+        Rect.fromLTWH(s.x - 5.0, curY - 3.5, 10.0, 6.5),
+        math.pi,
+        math.pi,
+        true,
+        hairPaint,
+      );
+
+      // Eyes
+      final eyePaint = Paint()..color = const Color(0xFF0F172A);
+      canvas.drawCircle(Offset(s.x - 1.8, curY + 2.0), 0.8, eyePaint);
+      canvas.drawCircle(Offset(s.x + 1.8, curY + 2.0), 0.8, eyePaint);
+
+      // Spectator cheering prop / arms
+      if (s.actionType == 1) {
+        // Holding up & waving mini pickleball paddle
+        final paddleArmY = curY + 2 + math.sin(_crowdAnimTime * 4.5 + s.animPhase) * 3.0;
+        final armPaint = Paint()
+          ..color = s.skinColor
+          ..strokeWidth = 2.0;
+        canvas.drawLine(Offset(s.x + 5, curY + 8), Offset(s.x + 9, paddleArmY), armPaint);
+        // Mini paddle
+        final paddlePaint = Paint()..color = const Color(0xFFE2E8F0);
+        canvas.drawOval(Rect.fromLTWH(s.x + 7, paddleArmY - 7, 7, 6), paddlePaint);
+        final paddleRim = Paint()
+          ..color = const Color(0xFF0284C7)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0;
+        canvas.drawOval(Rect.fromLTWH(s.x + 7, paddleArmY - 7, 7, 6), paddleRim);
+      } else if (s.actionType == 2) {
+        // Waving pennant flag
+        final flagY = curY + 1 + math.sin(_crowdAnimTime * 3.8 + s.animPhase) * 2.5;
+        final stickPaint = Paint()
+          ..color = const Color(0xFFCBD5E1)
+          ..strokeWidth = 1.5;
+        canvas.drawLine(Offset(s.x - 5, curY + 8), Offset(s.x - 8, flagY - 10), stickPaint);
+        // Flag pennant triangle
+        final flagPaint = Paint()..color = const Color(0xFF00E5FF);
+        final flagPath = Path()
+          ..moveTo(s.x - 8, flagY - 10)
+          ..lineTo(s.x - 18 + math.sin(_crowdAnimTime * 5.0 + s.animPhase) * 2, flagY - 6)
+          ..lineTo(s.x - 8, flagY - 2)
+          ..close();
+        canvas.drawPath(flagPath, flagPaint);
+      } else if (s.actionType == 3) {
+        // Double hands in air cheering
+        final cheerArmY = curY - 3 + math.sin(_crowdAnimTime * 4.0 + s.animPhase) * 2.5;
+        final armPaint = Paint()
+          ..color = s.skinColor
+          ..strokeWidth = 2.0;
+        canvas.drawLine(Offset(s.x - 6, curY + 8), Offset(s.x - 10, cheerArmY), armPaint);
+        canvas.drawLine(Offset(s.x + 6, curY + 8), Offset(s.x + 10, cheerArmY), armPaint);
+      } else {
+        // Clapping / resting arms
+        final armPaint = Paint()
+          ..color = s.skinColor
+          ..strokeWidth = 2.0;
+        final clapOffset = math.sin(_crowdAnimTime * 6.0 + s.animPhase) * 1.5;
+        canvas.drawLine(Offset(s.x - 5, curY + 9), Offset(s.x - 1 - clapOffset, curY + 11), armPaint);
+        canvas.drawLine(Offset(s.x + 5, curY + 9), Offset(s.x + 1 + clapOffset, curY + 11), armPaint);
+      }
+    }
+
+    // 3. Grandstand Safety Railing & Sponsorship Banners along Y = 43..48
+    final railPaint = Paint()
+      ..color = const Color(0xFF64748B)
+      ..strokeWidth = 3.0;
+    canvas.drawLine(const Offset(36, 44), const Offset(1244, 44), railPaint);
+
+    // Railing vertical posts
+    final postPaint = Paint()
+      ..color = const Color(0xFF475569)
+      ..strokeWidth = 2.5;
+    for (double rx = 40; rx <= 1240; rx += 50) {
+      canvas.drawLine(Offset(rx, 42), Offset(rx, 49), postPaint);
+    }
+
+    // Sponsorship Banners along the railing
+    _renderAudienceBanners(canvas);
+
+    // 4. Camera Flash VFX Bursts
+    for (final flash in _activeFlashes) {
+      final p = (1.0 - (flash.life / 0.22)).clamp(0.0, 1.0);
+      final alpha = ((1.0 - p) * 255).round().clamp(0, 255);
+
+      // Halo ring
+      final haloPaint = Paint()
+        ..color = Color.fromARGB((alpha * 0.5).round(), 255, 255, 255)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0;
+      canvas.drawCircle(flash.pos, 4.0 + p * 12.0, haloPaint);
+
+      // Starburst diamond core
+      final corePaint = Paint()..color = Color.fromARGB(alpha, 255, 255, 255);
+      final s = 7.0 * (1.0 - p * 0.5);
+      final star = Path()
+        ..moveTo(flash.pos.dx, flash.pos.dy - s)
+        ..lineTo(flash.pos.dx + s * 0.35, flash.pos.dy)
+        ..lineTo(flash.pos.dx + s, flash.pos.dy)
+        ..lineTo(flash.pos.dx + s * 0.35, flash.pos.dy + s * 0.35)
+        ..lineTo(flash.pos.dx, flash.pos.dy + s)
+        ..lineTo(flash.pos.dx - s * 0.35, flash.pos.dy + s * 0.35)
+        ..lineTo(flash.pos.dx - s, flash.pos.dy)
+        ..lineTo(flash.pos.dx - s * 0.35, flash.pos.dy)
+        ..close();
+      canvas.drawPath(star, corePaint);
+    }
+  }
+
+  void _renderAudienceBanners(Canvas canvas) {
+    const banners = [
+      '★ PICKLEBALL SMASH ★',
+      'MISAMIS UNIVERSITY',
+      '⚡ POWER SMASH ⚡',
+      'WORLD TOURNAMENT',
+      '🔥 COURT MASTERS 🔥',
+      'ARCADE SLAM LEAGUE',
+    ];
+    const bannerColors = [
+      Color(0xFF00E5FF),
+      Color(0xFFFBBF24),
+      Color(0xFF39FF14),
+      Color(0xFFFF0055),
+      Color(0xFFF97316),
+      Color(0xFFA855F7),
+    ];
+
+    double bx = 60.0;
+    for (int i = 0; i < banners.length; i++) {
+      final bColor = bannerColors[i % bannerColors.length];
+      final bRect = Rect.fromLTWH(bx, 44, 170, 7);
+
+      canvas.drawRect(bRect, Paint()..color = const Color(0xFF0F172A));
+      canvas.drawRect(
+        bRect,
+        Paint()
+          ..color = bColor.withValues(alpha: 0.6)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0,
+      );
+
+      // Subtle banner color accent pill inside
+      canvas.drawRect(
+        Rect.fromLTWH(bx + 4, 46, 162, 3),
+        Paint()..color = bColor.withValues(alpha: 0.8),
+      );
+
+      bx += 195.0;
+    }
+  }
+
+  static List<_Spectator> _generateAudience() {
+    final list = <_Spectator>[];
+    const shirtColors = [
+      Color(0xFF00E5FF),
+      Color(0xFF39FF14),
+      Color(0xFFFF0055),
+      Color(0xFFFFB300),
+      Color(0xFF9D00FF),
+      Color(0xFF3B82F6),
+      Color(0xFFEF4444),
+      Color(0xFFFFFFFF),
+      Color(0xFFF97316),
+      Color(0xFF10B981),
+    ];
+
+    const skinTones = [
+      Color(0xFFFFDFC4),
+      Color(0xFFF0C8A0),
+      Color(0xFFD4A373),
+      Color(0xFF8D5524),
+      Color(0xFF5A3825),
+    ];
+
+    const hairColors = [
+      Color(0xFF1E293B),
+      Color(0xFF78350F),
+      Color(0xFFFBBF24),
+      Color(0xFFDC2626),
+      Color(0xFF94A3B8),
+      Color(0xFF0284C7),
+    ];
+
+    final rand = math.Random(1337);
+
+    // Row 1 (Top Tier, Y = -18)
+    for (int i = 0; i < 28; i++) {
+      final x = 60.0 + i * 42.0 + rand.nextDouble() * 6.0;
+      list.add(_Spectator(
+        x: x,
+        baseRowY: -18.0,
+        shirtColor: shirtColors[rand.nextInt(shirtColors.length)],
+        skinColor: skinTones[rand.nextInt(skinTones.length)],
+        hairColor: hairColors[rand.nextInt(hairColors.length)],
+        animPhase: rand.nextDouble() * math.pi * 2,
+        animSpeed: 2.8 + rand.nextDouble() * 1.8,
+        actionType: rand.nextInt(5),
+      ));
+    }
+
+    // Row 2 (Middle Tier, Y = 6.0)
+    for (int i = 0; i < 27; i++) {
+      final x = 75.0 + i * 42.0 + rand.nextDouble() * 6.0;
+      list.add(_Spectator(
+        x: x,
+        baseRowY: 6.0,
+        shirtColor: shirtColors[rand.nextInt(shirtColors.length)],
+        skinColor: skinTones[rand.nextInt(skinTones.length)],
+        hairColor: hairColors[rand.nextInt(hairColors.length)],
+        animPhase: rand.nextDouble() * math.pi * 2,
+        animSpeed: 2.8 + rand.nextDouble() * 1.8,
+        actionType: rand.nextInt(5),
+      ));
+    }
+
+    // Row 3 (Bottom Tier, Y = 26.0)
+    for (int i = 0; i < 26; i++) {
+      final x = 85.0 + i * 43.0 + rand.nextDouble() * 5.0;
+      list.add(_Spectator(
+        x: x,
+        baseRowY: 26.0,
+        shirtColor: shirtColors[rand.nextInt(shirtColors.length)],
+        skinColor: skinTones[rand.nextInt(skinTones.length)],
+        hairColor: hairColors[rand.nextInt(hairColors.length)],
+        animPhase: rand.nextDouble() * math.pi * 2,
+        animSpeed: 2.8 + rand.nextDouble() * 1.8,
+        actionType: rand.nextInt(5),
+      ));
+    }
+
+    // Left VIP Bleachers (X = 90..190, Y = 80..620)
+    for (double y = 80; y <= 620; y += 75) {
+      for (double x = 110; x <= 170; x += 35) {
+        list.add(_Spectator(
+          x: x + rand.nextDouble() * 4.0,
+          baseRowY: y + rand.nextDouble() * 4.0,
+          shirtColor: shirtColors[rand.nextInt(shirtColors.length)],
+          skinColor: skinTones[rand.nextInt(skinTones.length)],
+          hairColor: hairColors[rand.nextInt(hairColors.length)],
+          animPhase: rand.nextDouble() * math.pi * 2,
+          animSpeed: 2.5 + rand.nextDouble() * 1.5,
+          actionType: rand.nextInt(4),
+        ));
+      }
+    }
+
+    // Right VIP Bleachers (X = 1080..1180, Y = 80..620)
+    for (double y = 80; y <= 620; y += 75) {
+      for (double x = 1100; x <= 1160; x += 35) {
+        list.add(_Spectator(
+          x: x + rand.nextDouble() * 4.0,
+          baseRowY: y + rand.nextDouble() * 4.0,
+          shirtColor: shirtColors[rand.nextInt(shirtColors.length)],
+          skinColor: skinTones[rand.nextInt(skinTones.length)],
+          hairColor: hairColors[rand.nextInt(hairColors.length)],
+          animPhase: rand.nextDouble() * math.pi * 2,
+          animSpeed: 2.5 + rand.nextDouble() * 1.5,
+          actionType: rand.nextInt(4),
+        ));
+      }
+    }
+
+    return list;
+  }
+}
+
+class _Spectator {
+  final double x;
+  final double baseRowY;
+  final Color shirtColor;
+  final Color skinColor;
+  final Color hairColor;
+  final double animPhase;
+  final double animSpeed;
+  final int actionType;
+
+  const _Spectator({
+    required this.x,
+    required this.baseRowY,
+    required this.shirtColor,
+    required this.skinColor,
+    required this.hairColor,
+    required this.animPhase,
+    required this.animSpeed,
+    required this.actionType,
+  });
+}
+
+class _CameraFlash {
+  final Offset pos;
+  double life = 0.22;
+  _CameraFlash(this.pos);
 }

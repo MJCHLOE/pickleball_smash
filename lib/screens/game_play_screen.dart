@@ -7,6 +7,7 @@ import '../game/pickleball_game.dart';
 import '../models/ball_catalog.dart';
 import '../models/character_roster.dart';
 import '../models/court_catalog.dart';
+import '../models/multiplayer_models.dart';
 import '../models/player_avatar.dart';
 import '../services/audio_service.dart';
 import '../services/game_state_manager.dart';
@@ -79,6 +80,27 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
   String? _opponentPlayerName;
   String? _partnerAvatarId;
   String? _opponentPartnerAvatarId;
+  bool _isOpponentBot = false;
+  ChatMessageModel? _activeFloatingChat;
+  Timer? _chatBubbleTimer;
+
+  void _onInGameChatReceived() {
+    final msg = MultiplayerService.instance.latestInGameChatNotifier.value;
+    if (msg != null && mounted) {
+      setState(() {
+        _activeFloatingChat = msg;
+      });
+      AudioService.instance.playPaddleHit();
+      _chatBubbleTimer?.cancel();
+      _chatBubbleTimer = Timer(const Duration(milliseconds: 3500), () {
+        if (mounted) {
+          setState(() {
+            _activeFloatingChat = null;
+          });
+        }
+      });
+    }
+  }
 
   @visibleForTesting
   void setViolationForTest(String type, String desc, String ruleDetail) {
@@ -108,6 +130,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    MultiplayerService.instance.latestInGameChatNotifier.addListener(_onInGameChatReceived);
     // Switch to landscape orientation and immersive full-screen for gameplay
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
@@ -121,14 +144,20 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
     final p1Char = CharacterRoster.getById(state.playerAvatarId);
     CharacterType p1Type = p1Char.type;
 
-    // AI bot opponents select among characters including male2, male3, and female2 (Chloe Frost)
+    // AI bot opponents select among characters including male2, male3, male4, female2, female3, and female4
     CharacterType p2Type;
     final oppLower = (widget.opponentName ?? '').toLowerCase();
-    if (oppLower.contains('frost') || oppLower.contains('chloe') || oppLower.contains('luna') || oppLower.contains('female2')) {
+    if (oppLower.contains('female4') || oppLower.contains('ashley')) {
+      p2Type = CharacterType.female4;
+    } else if (oppLower.contains('male4') || oppLower.contains('nard')) {
+      p2Type = CharacterType.male4;
+    } else if (oppLower.contains('female3') || oppLower.contains('surge') || oppLower.contains('disney')) {
+      p2Type = CharacterType.female3;
+    } else if (oppLower.contains('frost') || oppLower.contains('chloe') || oppLower.contains('luna') || oppLower.contains('female2') || oppLower.contains('joy')) {
       p2Type = CharacterType.female2;
-    } else if (oppLower.contains('smash') || oppLower.contains('sammy')) {
+    } else if (oppLower.contains('smash') || oppLower.contains('sammy') || oppLower.contains('jax')) {
       p2Type = CharacterType.male3;
-    } else if (oppLower.contains('blaze') || oppLower.contains('rocky') || oppLower.contains('iron') || oppLower.contains('viper')) {
+    } else if (oppLower.contains('blaze') || oppLower.contains('rocky') || oppLower.contains('iron') || oppLower.contains('viper') || oppLower.contains('marcus')) {
       p2Type = CharacterType.male2;
     } else if (oppLower.contains('sarah') || oppLower.contains('maya')) {
       p2Type = CharacterType.female1;
@@ -171,7 +200,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
       final oppChar = CharacterRoster.getById(oppCharId);
       p2Type = oppChar.type;
       _opponentAvatarId = oppChar.id;
-      _opponentPlayerName = oppSlot.playerName ?? widget.opponentName ?? 'Opponent';
+      _isOpponentBot = oppSlot.isBot || oppSlot.isEmpty;
+      _opponentPlayerName = oppSlot.playerName ?? widget.opponentName ?? (_isOpponentBot ? 'CPU Challenger' : 'Opponent');
 
       effectiveBallId = isHost ? mySlot.ballId : oppSlot.ballId;
 
@@ -223,7 +253,10 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
       targetScore: effectiveTargetScore,
       settings: state.settings,
       joystickOnLeft: state.settings.joystickOnLeft,
-      player1IsFemale: p1Type == CharacterType.female1 || p1Type == CharacterType.female2,
+      player1IsFemale: p1Type == CharacterType.female1 ||
+          p1Type == CharacterType.female2 ||
+          p1Type == CharacterType.female3 ||
+          p1Type == CharacterType.female4,
       player1CharacterType: p1Type,
       player2CharacterType: p2Type,
       partner1CharacterType: partner1Type,
@@ -233,6 +266,11 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
       ballId: effectiveBallId,
       isMultiplayer: isMultiplayer,
       isHost: isHost,
+      isOpponentAI: _isOpponentBot,
+      player1Name: state.playerName,
+      player2Name: _opponentPlayerName ?? widget.opponentName ?? (_isOpponentBot ? 'CPU Challenger' : 'Opponent'),
+      partner1Name: widget.isDoubles ? 'Partner' : null,
+      partner2Name: widget.isDoubles ? 'Opponent 2' : null,
       onViolation: (type, desc, ruleDetail) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
@@ -877,6 +915,67 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                               fontSize: 12,
                               letterSpacing: 0.5,
                             ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+          // Floating In-Game Multiplayer Chat Bubble
+          if (_activeFloatingChat != null)
+            Positioned(
+              top: 55,
+              left: 20,
+              right: 20,
+              child: Center(
+                child: TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 250),
+                  tween: Tween<double>(begin: 0.0, end: 1.0),
+                  builder: (context, val, child) {
+                    return Transform.scale(
+                      scale: 0.85 + 0.15 * val,
+                      child: Opacity(opacity: val, child: child),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xF00A0F1E),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _activeFloatingChat!.senderId == MultiplayerService.instance.myProfile.playerId
+                            ? AppTheme.neonLime
+                            : AppTheme.electricCyan,
+                        width: 1.5,
+                      ),
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black87, blurRadius: 10, offset: Offset(0, 3)),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        PlayerAvatarWidget(avatarId: _activeFloatingChat!.senderAvatar, size: 24),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${_activeFloatingChat!.senderName}: ',
+                          style: TextStyle(
+                            color: _activeFloatingChat!.senderId == MultiplayerService.instance.myProfile.playerId
+                                ? AppTheme.neonLime
+                                : AppTheme.electricCyan,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          _activeFloatingChat!.text,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
                           ),
                         ),
                       ],
@@ -1604,8 +1703,137 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
               ),
             ),
           ),
+          if (widget.matchType == 'multiplayer') ...[
+            Container(
+              width: 1,
+              height: 20,
+              color: Colors.white24,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+            ),
+            InkWell(
+              key: const ValueKey('ingame_chat_btn'),
+              onTap: () => _showInGameChatSheet(context),
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: const Icon(
+                  Icons.chat_bubble_rounded,
+                  color: AppTheme.electricCyan,
+                  size: 20,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  void _showInGameChatSheet(BuildContext context) {
+    final textController = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Container(
+          padding: EdgeInsets.fromLTRB(16, 14, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
+          decoration: const BoxDecoration(
+            color: Color(0xFF0F172A),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border(top: BorderSide(color: AppTheme.electricCyan, width: 2)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.chat_bubble_rounded, color: AppTheme.electricCyan, size: 18),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'IN-GAME TACTICAL CHAT',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: AppTheme.textMuted, size: 20),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: MultiplayerService.quickChatPresets.map((preset) {
+                  return ActionChip(
+                    backgroundColor: const Color(0xFF1E293B),
+                    side: const BorderSide(color: AppTheme.surfaceBorder),
+                    label: Text(
+                      preset,
+                      style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () {
+                      MultiplayerService.instance.sendChatMessage(preset, isQuickChat: true);
+                      Navigator.of(ctx).pop();
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: textController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Type custom message...',
+                        hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                        filled: true,
+                        fillColor: const Color(0xFF1E293B),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppTheme.surfaceBorder),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppTheme.surfaceBorder),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppTheme.electricCyan),
+                        ),
+                      ),
+                      onSubmitted: (txt) {
+                        if (txt.trim().isNotEmpty) {
+                          MultiplayerService.instance.sendChatMessage(txt.trim());
+                          Navigator.of(ctx).pop();
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Game2DButton(
+                    onPressed: () {
+                      final txt = textController.text.trim();
+                      if (txt.isNotEmpty) {
+                        MultiplayerService.instance.sendChatMessage(txt);
+                        Navigator.of(ctx).pop();
+                      }
+                    },
+                    icon: Icons.send_rounded,
+                    variant: GameButtonVariant.cyan,
+                    size: GameButtonSize.small,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1644,6 +1872,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    MultiplayerService.instance.latestInGameChatNotifier.removeListener(_onInGameChatReceived);
+    _chatBubbleTimer?.cancel();
     _autoRestartTimer?.cancel();
     _announcementTimer?.cancel();
     _violationTimer?.cancel();

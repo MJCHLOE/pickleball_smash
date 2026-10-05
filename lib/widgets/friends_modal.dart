@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/multiplayer_models.dart';
 import '../services/audio_service.dart';
+import '../services/game_state_manager.dart';
 import '../services/multiplayer_service.dart';
 import '../theme/app_theme.dart';
 import 'game_2d_button.dart';
@@ -536,26 +537,46 @@ class _FriendsModalState extends State<FriendsModal>
                           ),
                           child: Row(
                             children: [
-                              PlayerAvatarWidget(avatarId: target.avatarId, size: 42),
+                              GestureDetector(
+                                onTap: () {
+                                  AudioService.instance.playButtonTap();
+                                  PlayerProfileModal.show(context, playerId: target.playerId);
+                                },
+                                child: PlayerAvatarWidget(avatarId: target.avatarId, size: 42),
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      target.nickname,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    AudioService.instance.playButtonTap();
+                                    PlayerProfileModal.show(context, playerId: target.playerId);
+                                  },
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        target.nickname,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
                                       ),
-                                    ),
-                                    Text(
-                                      '${target.playerId} • ${target.rankTier.icon} ${target.rankTier.title}',
-                                      style: TextStyle(color: target.rankTier.color, fontSize: 11),
-                                    ),
-                                  ],
+                                      Text(
+                                        '${target.playerId} • ${target.rankTier.icon} ${target.rankTier.title}',
+                                        style: TextStyle(color: target.rankTier.color, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
                                 ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.account_box_outlined, color: AppTheme.electricCyan, size: 20),
+                                tooltip: 'View Profile',
+                                onPressed: () {
+                                  AudioService.instance.playButtonTap();
+                                  PlayerProfileModal.show(context, playerId: target.playerId);
+                                },
                               ),
                               if (isAlreadyFriend)
                                 const Chip(
@@ -573,6 +594,15 @@ class _FriendsModalState extends State<FriendsModal>
                                 Game2DButton(
                                   onPressed: () {
                                     AudioService.instance.playButtonTap();
+                                    if (GameStateManager.instance.isGuest) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Guest accounts cannot add friends. Please register or log in!'),
+                                          backgroundColor: Colors.redAccent,
+                                        ),
+                                      );
+                                      return;
+                                    }
                                     multi.sendFriendRequest(target);
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(

@@ -10,7 +10,6 @@ import 'animated_character_display.dart';
 import 'dashboard_character_card_feature.dart';
 import 'game_2d_button.dart';
 import 'game_2d_text.dart';
-import 'ready_to_serve_character_widget.dart';
 
 class ShopModal extends StatefulWidget {
   final int initialTabIndex;
@@ -492,119 +491,134 @@ class _ShopModalState extends State<ShopModal> with SingleTickerProviderStateMix
   }
 
   Widget _buildCharactersTab(GameStateManager state) {
-    final characters = CharacterRoster.allCharacters;
     final selectedChar = _resolveSelectedCharacter(state);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
       children: [
+        _buildCharacterSelectorBar(state, selectedChar),
+        const SizedBox(height: 10),
         _buildCharacterShowcase(selectedChar, state),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          child: Row(
-            children: [
-              const Icon(Icons.people_alt_rounded, color: AppTheme.textMuted, size: 14),
-              const SizedBox(width: 6),
-              Text(
-                'CHARACTER ROSTER (TAP TO PREVIEW)',
-                style: TextStyle(
-                  color: AppTheme.textMuted.withValues(alpha: 0.8),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 6),
-        for (final char in characters) ...[
-          _buildItemCard(
-            key: ValueKey('shop_char_${char.id}'),
-            badge: char.badge,
-            title: char.name,
-            subtitle: char.title,
-            description: char.description,
-            accentColor: char.borderColor,
-            previewWidget: _buildCharacterPreview(char),
-            isUnlocked: state.isCharacterUnlocked(char.id),
-            isEquipped: state.playerAvatarId == char.id,
-            isInspected: char.id == selectedChar.id,
-            price: char.price,
-            canAfford: state.coins >= char.price,
-            onTap: () {
-              AudioService.instance.playButtonTap();
-              setState(() {
-                _selectedCharacterId = char.id;
-              });
-            },
-            onEquip: () {
-              AudioService.instance.playButtonTap();
-              state.equipCharacter(char.id);
-              _showNotice('Equipped ${char.name}!');
-            },
-            onBuy: () {
-              if (state.purchaseCharacter(char.id)) {
-                AudioService.instance.playPointScored();
-                _showNotice('Unlocked & equipped ${char.name}!');
-              } else {
-                AudioService.instance.playButtonTap();
-                _showNotice(
-                  'Need ${char.price - state.coins} more coins to purchase ${char.name}!',
-                  isSuccess: false,
-                );
-              }
-            },
-          ),
-          const SizedBox(height: 10),
-        ],
       ],
     );
   }
 
-  Widget _buildCharacterPreview(CharacterInfo char) {
-    return Container(
-      width: 72,
-      height: 72,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: char.gradientColors,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: char.borderColor, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: char.borderColor.withValues(alpha: 0.35),
-            blurRadius: 8,
-          ),
+  Widget _buildCharacterSelectorBar(GameStateManager state, CharacterInfo selectedChar) {
+    final characters = CharacterRoster.allCharacters;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final char in characters) ...[
+            _buildCharacterChip(
+              key: ValueKey('shop_char_${char.id}'),
+              char: char,
+              isSelected: char.id == selectedChar.id,
+              isEquipped: state.playerAvatarId == char.id,
+              isUnlocked: state.isCharacterUnlocked(char.id),
+              onTap: () {
+                AudioService.instance.playButtonTap();
+                setState(() {
+                  _selectedCharacterId = char.id;
+                });
+              },
+              onEquip: () {
+                AudioService.instance.playButtonTap();
+                state.equipCharacter(char.id);
+                setState(() {
+                  _selectedCharacterId = char.id;
+                });
+                _showNotice('Equipped ${char.name}!');
+              },
+            ),
+            const SizedBox(width: 8),
+          ],
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Stack(
-          alignment: Alignment.center,
+    );
+  }
+
+  Widget _buildCharacterChip({
+    Key? key,
+    required CharacterInfo char,
+    required bool isSelected,
+    required bool isEquipped,
+    required bool isUnlocked,
+    required VoidCallback onTap,
+    required VoidCallback onEquip,
+  }) {
+    return InkWell(
+      key: key,
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? char.borderColor.withValues(alpha: 0.25) : const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? char.borderColor : AppTheme.surfaceBorder,
+            width: isSelected ? 2.0 : 1.2,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: char.borderColor.withValues(alpha: 0.35),
+                    blurRadius: 8,
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Character Ready-to-Serve Animated Pixel Sprite (front-facing with paddle)
-            ReadyToServeCharacterWidget(
-              character: char,
-              action: 'idle',
-              size: 58,
-            ),
-            // Badge in bottom-right corner
-            Positioned(
-              right: 4,
-              bottom: 4,
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.65),
-                  shape: BoxShape.circle,
+            Text(char.badge, style: const TextStyle(fontSize: 14)),
+            const SizedBox(width: 6),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  char.name,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.white70,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
                 ),
-                child: Text(char.badge, style: const TextStyle(fontSize: 11)),
-              ),
+                if (isEquipped)
+                  const Text(
+                    'EQUIPPED',
+                    style: TextStyle(
+                      color: AppTheme.neonLime,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 8.5,
+                    ),
+                  )
+                else if (isUnlocked)
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onEquip,
+                    child: const Text(
+                      'EQUIP',
+                      style: TextStyle(
+                        color: Color(0xFF38BDF8),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 8.5,
+                      ),
+                    ),
+                  )
+                else
+                  Text(
+                    '${char.price} 🪙',
+                    style: const TextStyle(
+                      color: AppTheme.goldCoin,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 8.5,
+                    ),
+                  ),
+              ],
             ),
           ],
         ),

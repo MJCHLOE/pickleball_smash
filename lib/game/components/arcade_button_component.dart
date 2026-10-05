@@ -26,11 +26,13 @@ class ArcadeButtonFaceComponent extends PositionComponent {
   final Paint _ripplePaint = Paint()..style = PaintingStyle.stroke;
   final Paint _sparkPaint = Paint()..style = PaintingStyle.fill;
   final Paint _casingPaint = Paint()..style = PaintingStyle.fill;
+  final Paint _goldRimPaint = Paint()..style = PaintingStyle.stroke..strokeWidth = 2.0;
   final Paint _bevelPaint = Paint()..style = PaintingStyle.fill;
   final Paint _facePaint = Paint()..style = PaintingStyle.fill;
   final Paint _rimPaint = Paint()..style = PaintingStyle.stroke..strokeWidth = 1.5;
   final Paint _flashPaint = Paint()..style = PaintingStyle.fill;
   final Paint _glossPaint = Paint()..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
+
   final Paint _spritePaint = Paint();
 
   ArcadeButtonFaceComponent({
@@ -44,7 +46,6 @@ class ArcadeButtonFaceComponent extends PositionComponent {
     this.game,
   }) : super(
           size: Vector2(radius * 2 + 8, radius * 2 + 16),
-          anchor: Anchor.center,
         );
 
   /// Mutates properties in-place without component recreation
@@ -124,14 +125,18 @@ class ArcadeButtonFaceComponent extends PositionComponent {
 
     // 1. Dark Arcade Housing Casing
     _casingPaint.color = casingColor.withAlpha((alphaVal * 0.95).round());
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(cx, cy + (bevelHeight / 2)),
-        width: (radius + 3.0) * 2,
-        height: (radius + 2.5) * 2 + bevelHeight,
-      ),
-      _casingPaint,
+    final casingRect = Rect.fromCenter(
+      center: Offset(cx, cy + (bevelHeight / 2)),
+      width: (radius + 3.0) * 2,
+      height: (radius + 2.5) * 2 + bevelHeight,
     );
+    canvas.drawOval(casingRect, _casingPaint);
+
+    // Gold Outer Rim (Matches HUD smash button gold border)
+    _goldRimPaint
+      ..color = const Color(0xFFFFD700).withAlpha((alphaVal * 0.95).round())
+      ..strokeWidth = (2.2 * (radius / 40.0)).clamp(1.5, 3.5);
+    canvas.drawOval(casingRect, _goldRimPaint);
 
     // 2. 3D Bottom Bevel Extrusion (Optimized 3-pass cylinder)
     final effectiveBevelColor = isPressed
@@ -160,13 +165,21 @@ class ArcadeButtonFaceComponent extends PositionComponent {
       _bevelPaint,
     );
 
-    // 3. Top Button Face
+    // 3. Top Button Face (Radial Gradient matching HUD)
     final faceY = cy - (bevelHeight / 2) + pressY;
-    final effectiveFaceColor = isPressed
-        ? Color.lerp(faceColor, Colors.black, 0.22)!
-        : faceColor;
-    _facePaint.color = effectiveFaceColor.withAlpha(alphaVal);
+    if (isPressed) {
+      _facePaint.shader = null;
+      _facePaint.color = const Color(0xFF880E0E).withAlpha(alphaVal);
+    } else {
+      final faceShader = const RadialGradient(
+        colors: [Color(0xFFFF3366), Color(0xFFB71C1C)],
+        radius: 0.85,
+      ).createShader(Rect.fromCircle(center: Offset(cx, faceY), radius: radius));
+      _facePaint.shader = faceShader;
+      _facePaint.color = Colors.white.withAlpha(alphaVal);
+    }
     canvas.drawCircle(Offset(cx, faceY), radius, _facePaint);
+    _facePaint.shader = null;
 
     // Subtle dark inner edge rim for 2D depth
     _rimPaint.color = Colors.black.withAlpha((alphaVal * 0.4).round());
@@ -191,9 +204,9 @@ class ArcadeButtonFaceComponent extends PositionComponent {
       canvas.drawArc(glossRect, -math.pi * 0.85, math.pi * 0.7, false, _glossPaint);
     }
 
-    // 5. Centered Pixelated 2D Arcade Paddle Sprite
-    final paddleSize = radius * 1.28;
-    final paddlePos = Vector2(cx - (paddleSize / 2), faceY - (paddleSize / 2));
+    // 5. Centered Pickleball Paddle Icon
+    final paddleSize = radius * 1.08;
+    final paddlePos = Vector2(cx - (paddleSize / 2), faceY - (paddleSize * 0.62));
 
     if (paddleSprite != null) {
       _spritePaint.color = Colors.white.withAlpha(alphaVal);
@@ -204,27 +217,27 @@ class ArcadeButtonFaceComponent extends PositionComponent {
         overridePaint: _spritePaint,
       );
     } else {
-      // Fallback 2D arcade pixelated paddle rendering (for unit tests / initial load)
-      _renderFallbackPaddle(canvas, Offset(cx, faceY), radius * 0.62, alphaVal);
+      _renderFallbackPaddle(canvas, Offset(cx, faceY - (radius * 0.12)), radius * 0.58, alphaVal);
     }
 
-    // 6. Action Tag: Always the authentic single SMASH button
-    const actionText = 'SMASH';
+    // 6. Authentic Arcade Push Button Text (Positioned cleanly below paddle)
+    final actionText = isServingPrompt ? 'SERVE' : 'SMASH';
+    final textColor = isServingPrompt
+        ? const Color(0xFFCCFF00).withAlpha(alphaVal)
+        : const Color(0xFFFFD700).withAlpha((alphaVal * 0.98).round());
     final textPainter = TextPainter(
       text: TextSpan(
         text: actionText,
         style: TextStyle(
-          color: isServingPrompt
-              ? const Color(0xFFCCFF00).withAlpha(alphaVal)
-              : Colors.white.withAlpha((alphaVal * 0.9).round()),
-          fontSize: (radius * 0.22).clamp(8.0, 13.0),
+          color: textColor,
+          fontSize: (radius * 0.28).clamp(9.0, 16.0),
           fontWeight: FontWeight.w900,
-          letterSpacing: 0.8,
+          letterSpacing: 1.0,
           shadows: [
             Shadow(
-              color: Colors.black.withAlpha((alphaVal * 0.8).round()),
-              offset: const Offset(1, 1),
-              blurRadius: 2,
+              color: Colors.black.withAlpha((alphaVal * 0.85).round()),
+              offset: const Offset(1.5, 1.5),
+              blurRadius: 3,
             ),
           ],
         ),
@@ -234,7 +247,7 @@ class ArcadeButtonFaceComponent extends PositionComponent {
 
     textPainter.paint(
       canvas,
-      Offset(cx - (textPainter.width / 2), faceY + (radius * 0.45)),
+      Offset(cx - (textPainter.width / 2), faceY + (radius * 0.38)),
     );
   }
 
@@ -243,7 +256,7 @@ class ArcadeButtonFaceComponent extends PositionComponent {
       ..color = const Color(0xFF10141E).withAlpha(alpha)
       ..style = PaintingStyle.fill;
     final highlightPaint = Paint()
-      ..color = const Color(0xFF00E5FF).withAlpha(alpha)
+      ..color = const Color(0xFFFFD700).withAlpha(alpha)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
     final gripPaint = Paint()
