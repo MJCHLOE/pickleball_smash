@@ -884,6 +884,9 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       final z = (packet.data['z'] as num?)?.toDouble();
       final zVelocity = (packet.data['zVelocity'] as num?)?.toDouble();
 
+      final rawCurve = (packet.data['curveStrength'] as num?)?.toDouble();
+      final techName = packet.data['technique'] as String?;
+
       final bx = rawX != null ? 1280.0 - rawX : null;
       final by = rawY != null ? 720.0 - rawY : null;
       final bvx = rawVx != null ? -rawVx : null;
@@ -894,9 +897,25 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
         ball.position.setValues(bx, by);
         if (bvx != null && bvy != null) ball.velocity.setValues(bvx, bvy);
         if (bspin != null) ball.spin = bspin;
+        if (rawCurve != null) ball.curveStrength = rawCurve;
         if (z != null) ball.z = z;
         if (zVelocity != null) ball.zVelocity = zVelocity;
         ball.speed = ball.velocity.length;
+
+        // Synchronize active skill technique on ball and trigger effects
+        if (techName != null && techName != 'none') {
+          final tech = BattleTechnique.values.firstWhere(
+            (t) => t.name == techName,
+            orElse: () => BattleTechnique.none,
+          );
+          if (tech != BattleTechnique.none) {
+            ball.activeTechniqueType = tech;
+            onTechniqueExecuted(tech, isLocalPlayer: false);
+          }
+        } else {
+          ball.activeTechniqueType = BattleTechnique.none;
+        }
+
         if (ball.isWaitingForServe || isWaitingForServe) {
           ball.isWaitingForServe = false;
           isWaitingForServe = false;
@@ -904,6 +923,19 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
         }
         if (packet.senderId != MultiplayerService.instance.myProfile.playerId) {
           AudioService.instance.playPaddleHit();
+        }
+      }
+    } else if (packet.type == PacketType.techniqueTrigger) {
+      final techStr = packet.data['technique'] as String?;
+      if (techStr == BattleTechnique.dash.name) {
+        player2.dash();
+      } else if (techStr != null && techStr != 'none') {
+        final tech = BattleTechnique.values.firstWhere(
+          (t) => t.name == techStr,
+          orElse: () => BattleTechnique.none,
+        );
+        if (tech != BattleTechnique.none) {
+          player2.queueTechnique(tech);
         }
       }
     } else if (packet.type == PacketType.ballSync) {
@@ -1409,6 +1441,16 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     rightSpinButton?.isPrimed = false;
     speedBoostButton?.isPrimed = false;
     AudioService.instance.playPaddleHit();
+    if (isMultiplayer) {
+      MultiplayerService.instance.broadcastPacket(
+        MultiplayerPacket(
+          type: PacketType.techniqueTrigger,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          senderId: MultiplayerService.instance.myProfile.playerId,
+          data: {'technique': BattleTechnique.leftSpin.name},
+        ),
+      );
+    }
   }
 
   /// Triggers the Spin Right battle technique (Hotkey L)
@@ -1420,6 +1462,16 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     leftSpinButton?.isPrimed = false;
     speedBoostButton?.isPrimed = false;
     AudioService.instance.playPaddleHit();
+    if (isMultiplayer) {
+      MultiplayerService.instance.broadcastPacket(
+        MultiplayerPacket(
+          type: PacketType.techniqueTrigger,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          senderId: MultiplayerService.instance.myProfile.playerId,
+          data: {'technique': BattleTechnique.rightSpin.name},
+        ),
+      );
+    }
   }
 
   /// Triggers the Dash skill technique (Hotkey Shift / I / Dash Button)
@@ -1429,6 +1481,16 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     if (didDash) {
       dashButton?.triggerTapEffect();
       dashButton?.startCooldown();
+      if (isMultiplayer) {
+        MultiplayerService.instance.broadcastPacket(
+          MultiplayerPacket(
+            type: PacketType.techniqueTrigger,
+            timestamp: DateTime.now().millisecondsSinceEpoch,
+            senderId: MultiplayerService.instance.myProfile.playerId,
+            data: {'technique': BattleTechnique.dash.name},
+          ),
+        );
+      }
     }
   }
 
@@ -1441,6 +1503,16 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     leftSpinButton?.isPrimed = false;
     rightSpinButton?.isPrimed = false;
     AudioService.instance.playPaddleHit();
+    if (isMultiplayer) {
+      MultiplayerService.instance.broadcastPacket(
+        MultiplayerPacket(
+          type: PacketType.techniqueTrigger,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          senderId: MultiplayerService.instance.myProfile.playerId,
+          data: {'technique': BattleTechnique.speedBoost.name},
+        ),
+      );
+    }
   }
 
   // Backward compatibility trigger methods

@@ -965,7 +965,6 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       velocity = Vector2(v0X, v0Y);
       speed = velocity.length;
       position += velocity.normalized() * 10;
-      return;
     } else if (executedTechnique == BattleTechnique.rightSpin) {
       // ⚡ VORTEX HOOK (Spin to the Right):
       // Ball arcs wide across the court, curving dramatically to the RIGHT!
@@ -996,7 +995,6 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       velocity = Vector2(v0X, v0Y);
       speed = velocity.length;
       position += velocity.normalized() * 10;
-      return;
     } else if (executedTechnique == BattleTechnique.speedBoost) {
       // 🚀 SPEED BOOST STRIKE:
       // Controlled, brisk line-drive power shot that lands and bounces cleanly inside the enemy court!
@@ -1032,7 +1030,6 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       velocity = Vector2(v0X, v0Y);
       speed = velocity.length;
       position += velocity.normalized() * 10;
-      return;
     } else {
       // Standard return trajectory - apply natural paddle slice spin based on contact offset
       final diff = position - player.position;
@@ -1088,15 +1085,17 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
       }
     }
 
-    // Derive precise velocity so the ball lands and bounces at (targetX, targetY) inside the court
-    final double lateralAcc = spin * curveStrength;
-    final double v0X = (targetX - position.x - 0.5 * lateralAcc * tBounce * tBounce) / tBounce;
-    final double v0Y = (targetY - position.y) / tBounce;
-    velocity = Vector2(v0X, v0Y);
-    speed = velocity.length;
+    if (executedTechnique == BattleTechnique.none) {
+      // Derive precise velocity so the ball lands and bounces at (targetX, targetY) inside the court
+      final double lateralAcc = spin * curveStrength;
+      final double v0X = (targetX - position.x - 0.5 * lateralAcc * tBounce * tBounce) / tBounce;
+      final double v0Y = (targetY - position.y) / tBounce;
+      velocity = Vector2(v0X, v0Y);
+      speed = velocity.length;
 
-    // Displace slightly forward along velocity to prevent immediate re-collision
-    position += velocity.normalized() * 10;
+      // Displace slightly forward along velocity to prevent immediate re-collision
+      position += velocity.normalized() * 10;
+    }
 
     if (currentGame.isMultiplayer) {
       MultiplayerService.instance.broadcastPacket(
@@ -1112,6 +1111,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
             'z': z,
             'zVelocity': zVelocity,
             'spin': spin,
+            'curveStrength': curveStrength,
             'technique': activeTechniqueType.name,
             'hitterId': MultiplayerService.instance.myProfile.playerId,
             'hitCount': currentGame.rallyHitCount,

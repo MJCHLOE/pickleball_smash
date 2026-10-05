@@ -718,15 +718,18 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       position.setValues(remoteInterpolator!.currentX, remoteInterpolator!.currentY);
       final vx = remoteInterpolator!.velocityX;
       final vy = remoteInterpolator!.velocityY;
-      if (vx.abs() > 15 || vy.abs() > 15) {
+      if (vx.abs() > 8 || vy.abs() > 8) {
         if (vx.abs() > vy.abs()) {
           changeDirection(vx > 0 ? PlayerDirection.right : PlayerDirection.left);
         } else {
-          changeDirection(vy > 0 ? PlayerDirection.behind : PlayerDirection.front);
+          changeDirection(vy > 0 ? PlayerDirection.front : PlayerDirection.behind);
         }
       } else {
         stopRunning();
       }
+      _clampToCourt();
+      final pScale = 1.45 * Background.perspectiveScaleAt(position.y);
+      scale.setValues(pScale, pScale);
       return;
     }
 

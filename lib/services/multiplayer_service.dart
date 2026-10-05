@@ -1721,8 +1721,8 @@ class RemotePlayerInterpolator {
   /// Computes smoothed dead-reckoned position on each 60 FPS tick (dt in seconds)
   void update(double dt) {
     extrapolationTime += dt;
-    // Dead-reckoning: predict ahead along velocity (capped at 120ms to prevent overshoot)
-    final clampedTime = extrapolationTime.clamp(0.0, 0.12);
+    // Dead-reckoning: predict ahead along velocity (capped at 140ms for snappy responsiveness)
+    final clampedTime = extrapolationTime.clamp(0.0, 0.14);
     final extX = targetX + (velocityX * clampedTime);
     final extY = targetY + (velocityY * clampedTime);
 
@@ -1730,13 +1730,13 @@ class RemotePlayerInterpolator {
     final dy = extY - currentY;
     final distSq = dx * dx + dy * dy;
 
-    // If large teleport/desync (> 220px), snap directly to avoid rubber-banding
-    if (distSq > 48400.0) {
+    // If large teleport/desync (> 180px), snap directly to avoid rubber-banding
+    if (distSq > 32400.0) {
       currentX = extX;
       currentY = extY;
     } else {
-      // Exponential convergence (adaptive smoothing rate)
-      final factor = (22.0 * dt).clamp(0.0, 1.0);
+      // Snappy exponential convergence (adaptive smoothing rate ~28 Hz)
+      final factor = (28.0 * dt).clamp(0.0, 1.0);
       currentX += dx * factor;
       currentY += dy * factor;
     }
