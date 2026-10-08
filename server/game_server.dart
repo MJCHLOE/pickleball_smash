@@ -97,8 +97,8 @@ class GameRoomManager {
               room.cachedRoomState = packetData;
             }
 
-            // Relay packet to all other sockets in this room
-            final raw = jsonEncode(jsonMap);
+            // Relay raw string packet directly to save CPU (No re-encoding needed)
+            final raw = data as String;
             if (room.hostSocket != null && room.hostSocket != socket) {
               if (room.hostSocket!.readyState == WebSocket.open) {
                 room.hostSocket!.add(raw);

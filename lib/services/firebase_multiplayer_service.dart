@@ -347,72 +347,61 @@ class FirebaseMultiplayerService extends ChangeNotifier {
     return true;
   }
 
-  /// Streams real-time live match packets across Firebase with zero queuing lag:
-  /// - Movement packets are coalesced so only the freshest coordinates are sent
-  /// - Critical events (ball strike, skills, scores) fire immediately in parallel
+  // ---------------------------------------------------------------------------
+  // 10Hz Batched Network Dispatch (Achieves 100ms latency without Native SDKs)
+  // ---------------------------------------------------------------------------
+  final Map<String, dynamic> _pendingPatchPayload = {};
+  Timer? _batchTimer;
+  bool _isBatchInFlight = false;
+
   void broadcastLivePacket(String roomCode, MultiplayerPacket packet) {
     // 1. Deliver locally immediately for zero-lag local responsiveness
     _packetStreamController.add(packet);
 
-    // 2. Dispatch based on packet type
-    final isMovement = packet.type == PacketType.playerState;
-
-    if (isMovement) {
-      _latestPendingMovement = packet;
-      _triggerMovementDispatch(roomCode);
-    } else {
-      _dispatchCriticalPacket(roomCode, packet);
+    // 2. Queue for 100ms batched network dispatch
+    if (_batchTimer == null || !_batchTimer!.isActive) {
+      _batchTimer = Timer.periodic(const Duration(milliseconds: 100), (_) => _flushBatch(roomCode));
     }
-  }
 
-  void _triggerMovementDispatch(String roomCode) async {
-    if (_isMovementInFlight) return;
-    if (_latestPendingMovement == null) return;
-
-    final toSend = _latestPendingMovement!;
-    _latestPendingMovement = null;
-    _isMovementInFlight = true;
-
-    // Distinct player slot key prevents players from overwriting each other's live coordinates
-    final senderKey = (_cachedRoom?.hostId == _myPlayerId) ? 'p1' : 'p2';
-    final uri = Uri.parse('$databaseUrl/rooms/$roomCode/players/$senderKey.json');
-
-    try {
-      await _httpClient.put(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(toSend.toJson()),
-      ).timeout(const Duration(seconds: 4));
-    } catch (_) {
-    } finally {
-      _isMovementInFlight = false;
-      if (_latestPendingMovement != null) {
-        _triggerMovementDispatch(roomCode);
+    final isMovement = packet.type == PacketType.playerState;
+    if (isMovement) {
+      final senderKey = (_cachedRoom?.hostId == _myPlayerId) ? 'p1' : 'p2';
+      _pendingPatchPayload['players/$senderKey'] = packet.toJson();
+    } else {
+      if (packet.type == PacketType.ballStrike || packet.type == PacketType.ballSync) {
+        _pendingPatchPayload['ball'] = packet.toJson();
+      } else if (packet.type == PacketType.scoreSync) {
+        _pendingPatchPayload['score'] = packet.toJson();
+      } else {
+        _pendingPatchPayload['action'] = packet.toJson();
       }
     }
   }
 
-  void _dispatchCriticalPacket(String roomCode, MultiplayerPacket packet) async {
-    final String subPath;
-    if (packet.type == PacketType.ballStrike || packet.type == PacketType.ballSync) {
-      subPath = 'ball';
-    } else if (packet.type == PacketType.scoreSync) {
-      subPath = 'score';
-    } else {
-      subPath = 'action';
-    }
+  void _flushBatch(String roomCode) async {
+    if (_isBatchInFlight || _pendingPatchPayload.isEmpty) return;
+    
+    // Copy and clear the queue immediately
+    final Map<String, dynamic> payloadToSend = Map.from(_pendingPatchPayload);
+    _pendingPatchPayload.clear();
+    _isBatchInFlight = true;
 
     try {
-      final uri = Uri.parse('$databaseUrl/rooms/$roomCode/$subPath.json');
-      await _httpClient.put(
+      // Use PATCH to update multiple root keys in a single rapid request
+      final uri = Uri.parse('$databaseUrl/rooms/$roomCode.json');
+      await _httpClient.patch(
         uri,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(packet.toJson()),
-      ).timeout(const Duration(seconds: 4));
-    } catch (e) {
-      debugPrint('Critical packet dispatch notice: $e');
+        body: jsonEncode(payloadToSend),
+      ).timeout(const Duration(seconds: 3));
+    } catch (_) {
+    } finally {
+      _isBatchInFlight = false;
     }
   }
+
+  void _triggerMovementDispatch(String roomCode) {} // Deprecated
+  void _dispatchCriticalPacket(String roomCode, MultiplayerPacket packet) {} // Deprecated
 
   // ---------------------------------------------------------------------------
   // Real-Time Server-Sent Events (SSE) Streaming & Low-Frequency Fallback Polling
