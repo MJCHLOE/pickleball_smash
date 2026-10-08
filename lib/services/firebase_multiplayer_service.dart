@@ -67,9 +67,9 @@ class FirebaseMultiplayerService extends ChangeNotifier {
   int _lastSseEventTime = 0;
   int _lastHostPacketTimestamp = 0;
 
-  // Ultra-responsive decoupled network dispatch
-  MultiplayerPacket? _latestPendingMovement;
-  bool _isMovementInFlight = false;
+  // Ultra-responsive latest-state coalescing movement dispatch per player
+  final Map<String, MultiplayerPacket> _latestPendingMovements = {};
+  final Map<String, bool> _isMovementInFlight = {};
   bool _isPollingRoomState = false;
 
   // ---------------------------------------------------------------------------
@@ -348,63 +348,76 @@ class FirebaseMultiplayerService extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
-  // 10Hz Batched Network Dispatch (Achieves 100ms latency without Native SDKs)
+  // Ultra-Responsive Decoupled Network Dispatch
   // ---------------------------------------------------------------------------
-  final Map<String, dynamic> _pendingPatchPayload = {};
-  Timer? _batchTimer;
-  bool _isBatchInFlight = false;
 
   void broadcastLivePacket(String roomCode, MultiplayerPacket packet) {
-    // 1. Deliver locally immediately for zero-lag local responsiveness
-    _packetStreamController.add(packet);
-
-    // 2. Queue for 100ms batched network dispatch
-    if (_batchTimer == null || !_batchTimer!.isActive) {
-      _batchTimer = Timer.periodic(const Duration(milliseconds: 100), (_) => _flushBatch(roomCode));
-    }
-
-    final isMovement = packet.type == PacketType.playerState;
-    if (isMovement) {
+    if (packet.type == PacketType.playerState) {
+      // High-frequency coalesced movement dispatch (up to 20-30 Hz without queue backlogs)
       final senderKey = (_cachedRoom?.hostId == _myPlayerId) ? 'p1' : 'p2';
-      _pendingPatchPayload['players/$senderKey'] = packet.toJson();
+      _latestPendingMovements[senderKey] = packet;
+      _triggerMovementDispatch(roomCode, senderKey);
     } else {
-      if (packet.type == PacketType.ballStrike || packet.type == PacketType.ballSync) {
-        _pendingPatchPayload['ball'] = packet.toJson();
-      } else if (packet.type == PacketType.scoreSync) {
-        _pendingPatchPayload['score'] = packet.toJson();
-      } else {
-        _pendingPatchPayload['action'] = packet.toJson();
-      }
+      // Immediate parallel dispatch for critical events (ball strikes, techniques, scores, chats)
+      _dispatchPriorityPacket(roomCode, packet);
     }
   }
 
-  void _flushBatch(String roomCode) async {
-    if (_isBatchInFlight || _pendingPatchPayload.isEmpty) return;
-    
-    // Copy and clear the queue immediately
-    final Map<String, dynamic> payloadToSend = Map.from(_pendingPatchPayload);
-    _pendingPatchPayload.clear();
-    _isBatchInFlight = true;
+  void _triggerMovementDispatch(String roomCode, String senderKey) async {
+    if (_isMovementInFlight[senderKey] == true) return;
+    _isMovementInFlight[senderKey] = true;
 
     try {
-      // Use PATCH to update multiple root keys in a single rapid request
-      final uri = Uri.parse('$databaseUrl/rooms/$roomCode.json');
-      await _httpClient.patch(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(payloadToSend),
-      ).timeout(const Duration(seconds: 3));
+      while (_latestPendingMovements[senderKey] != null && _activeRoomCode == roomCode) {
+        final packetToSend = _latestPendingMovements.remove(senderKey);
+        if (packetToSend == null) break;
+
+        final uri = Uri.parse('$databaseUrl/rooms/$roomCode/players/$senderKey.json');
+        await _httpClient.put(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(packetToSend.toJson()),
+        ).timeout(const Duration(milliseconds: 1500));
+      }
     } catch (_) {
     } finally {
-      _isBatchInFlight = false;
+      _isMovementInFlight[senderKey] = false;
     }
   }
 
-  void _triggerMovementDispatch(String roomCode) {} // Deprecated
-  void _dispatchCriticalPacket(String roomCode, MultiplayerPacket packet) {} // Deprecated
+  void _dispatchPriorityPacket(String roomCode, MultiplayerPacket packet) async {
+    try {
+      final jsonStr = jsonEncode(packet.toJson());
+      final String endpoint;
+      if (packet.type == PacketType.ballStrike) {
+        endpoint = 'ball';
+        // Also write to dedicated ballStrike endpoint to guarantee no ballSync overwrites it
+        final strikeUri = Uri.parse('$databaseUrl/rooms/$roomCode/ballStrike.json');
+        _httpClient.put(strikeUri, headers: {'Content-Type': 'application/json'}, body: jsonStr).timeout(const Duration(seconds: 3));
+      } else if (packet.type == PacketType.ballSync) {
+        endpoint = 'ball';
+      } else if (packet.type == PacketType.scoreSync) {
+        endpoint = 'score';
+      } else if (packet.type == PacketType.chatMessage) {
+        endpoint = 'chat';
+      } else if (packet.type == PacketType.ping) {
+        final senderKey = (_cachedRoom?.hostId == _myPlayerId) ? 'p1' : 'p2';
+        endpoint = 'heartbeat/$senderKey';
+      } else {
+        endpoint = 'action';
+      }
+
+      final uri = Uri.parse('$databaseUrl/rooms/$roomCode/$endpoint.json');
+      await _httpClient.put(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonStr,
+      ).timeout(const Duration(seconds: 4));
+    } catch (_) {}
+  }
 
   // ---------------------------------------------------------------------------
-  // Real-Time Server-Sent Events (SSE) Streaming & Low-Frequency Fallback Polling
+  // Real-Time Server-Sent Events (SSE) Streaming & Resilient Fallback Polling
   // ---------------------------------------------------------------------------
 
   void _startListeningToRoom(String roomCode) {
@@ -413,32 +426,62 @@ class FirebaseMultiplayerService extends ChangeNotifier {
     // 1. Establish persistent real-time SSE stream connection
     _connectSseStream(roomCode);
 
-    // 2. Lightweight fallback health check / timeout monitor (2.5s interval)
-    _syncPollTimer = Timer.periodic(const Duration(milliseconds: 2500), (_) async {
+    // 2. Resilient fallback health check / timeout monitor (3.0s interval)
+    _syncPollTimer = Timer.periodic(const Duration(milliseconds: 3000), (_) async {
       final now = DateTime.now().millisecondsSinceEpoch;
 
       // Check host connection timeout if guest in active match
       if (_cachedRoom != null && _cachedRoom!.hostId != _myPlayerId && _cachedRoom!.status == 'inMatch') {
-        if (_lastHostPacketTimestamp > 0 && (now - _lastHostPacketTimestamp) > 7000) {
-          _packetStreamController.add(
-            MultiplayerPacket(
-              type: PacketType.leaveRoom,
-              timestamp: now,
-              senderId: _cachedRoom?.hostId ?? 'host',
-              data: {'isHost': true, 'reason': 'Host has disconnected. The match has ended.'},
-            ),
-          );
-          _cachedRoom = null;
-          notifyListeners();
-          return;
+        // If quiet for > 12s, proactively poll to verify match status
+        if (_lastHostPacketTimestamp > 0 && (now - _lastHostPacketTimestamp) > 12000) {
+          await _pollRoomState(roomCode);
+        }
+
+        // Only declare host disconnect if silence exceeds 28s and room is confirmed closed/gone
+        if (_lastHostPacketTimestamp > 0 && (now - _lastHostPacketTimestamp) > 28000) {
+          final isStillValid = await _verifyRoomStillActive(roomCode);
+          if (!isStillValid) {
+            _packetStreamController.add(
+              MultiplayerPacket(
+                type: PacketType.leaveRoom,
+                timestamp: now,
+                senderId: _cachedRoom?.hostId ?? 'host',
+                data: {'isHost': true, 'reason': 'Host has disconnected. The match has ended.'},
+              ),
+            );
+            _cachedRoom = null;
+            notifyListeners();
+            return;
+          } else {
+            // Room is still active on Firebase! Reconnect SSE stream and continue battle
+            _lastHostPacketTimestamp = DateTime.now().millisecondsSinceEpoch;
+            _connectSseStream(roomCode);
+          }
         }
       }
 
-      // If SSE stream has been quiet for > 3.5 seconds, poll as safety net
-      if (now - _lastSseEventTime > 3500) {
+      // If SSE stream has been quiet for > 5.0 seconds, poll as safety net
+      if (now - _lastSseEventTime > 5000) {
         await _pollRoomState(roomCode);
       }
     });
+  }
+
+  Future<bool> _verifyRoomStillActive(String roomCode) async {
+    try {
+      final uri = Uri.parse('$databaseUrl/rooms/$roomCode/status.json');
+      final res = await _httpClient.get(uri).timeout(const Duration(seconds: 4));
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final body = res.body.trim();
+        if (body == 'null' || body.isEmpty || body == '"closed"') {
+          return false;
+        }
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
 
   void _connectSseStream(String roomCode) {
@@ -512,6 +555,7 @@ class FirebaseMultiplayerService extends ChangeNotifier {
 
     if (eventType == 'keep-alive') {
       _lastSseEventTime = DateTime.now().millisecondsSinceEpoch;
+      _lastHostPacketTimestamp = _lastSseEventTime;
       return;
     }
 
@@ -537,22 +581,6 @@ class FirebaseMultiplayerService extends ChangeNotifier {
               notifyListeners();
             }
             return;
-          }
-
-          // Real-time decoupled channels: players (p1/p2), ball, action, score, and legacy liveState
-          if (path.contains('players') || path.contains('p1') || path.contains('p2') ||
-              path.contains('ball') || path.contains('action') || path.contains('score') ||
-              path.contains('liveState')) {
-            if (data is Map<String, dynamic>) {
-              _deliverIncomingPacket(data);
-            }
-          }
-
-          if (path == '/' && data is Map<String, dynamic>) {
-            if (data['ball'] is Map<String, dynamic>) _deliverIncomingPacket(data['ball'] as Map<String, dynamic>);
-            if (data['action'] is Map<String, dynamic>) _deliverIncomingPacket(data['action'] as Map<String, dynamic>);
-            if (data['score'] is Map<String, dynamic>) _deliverIncomingPacket(data['score'] as Map<String, dynamic>);
-            if (data['liveState'] is Map<String, dynamic>) _deliverIncomingPacket(data['liveState'] as Map<String, dynamic>);
           }
 
           if (path.endsWith('status') || (data is Map && data.containsKey('status'))) {
@@ -608,16 +636,45 @@ class FirebaseMultiplayerService extends ChangeNotifier {
               notifyListeners();
             }
           }
+
+          // Deliver all game packets across multi-channels
+          _processIncomingFirebasePayload(path, data);
         }
       } catch (_) {}
     }
+  }
+
+  void _processIncomingFirebasePayload(String path, dynamic data) {
+    if (data == null) return;
+    if (data is! Map<String, dynamic>) return;
+
+    // 1. Direct packet structure
+    if (data.containsKey('type') && data.containsKey('senderId')) {
+      _deliverIncomingPacket(data);
+      return;
+    }
+
+    // 2. Sub-channel extraction across all game events
+    if (data['players'] is Map<String, dynamic>) {
+      final players = data['players'] as Map<String, dynamic>;
+      if (players['p1'] is Map<String, dynamic>) _processIncomingFirebasePayload('$path/players/p1', players['p1']);
+      if (players['p2'] is Map<String, dynamic>) _processIncomingFirebasePayload('$path/players/p2', players['p2']);
+    }
+    if (data['p1'] is Map<String, dynamic>) _processIncomingFirebasePayload('$path/p1', data['p1']);
+    if (data['p2'] is Map<String, dynamic>) _processIncomingFirebasePayload('$path/p2', data['p2']);
+    if (data['ball'] is Map<String, dynamic>) _processIncomingFirebasePayload('$path/ball', data['ball']);
+    if (data['ballStrike'] is Map<String, dynamic>) _processIncomingFirebasePayload('$path/ballStrike', data['ballStrike']);
+    if (data['action'] is Map<String, dynamic>) _processIncomingFirebasePayload('$path/action', data['action']);
+    if (data['score'] is Map<String, dynamic>) _processIncomingFirebasePayload('$path/score', data['score']);
+    if (data['chat'] is Map<String, dynamic>) _processIncomingFirebasePayload('$path/chat', data['chat']);
+    if (data['liveState'] is Map<String, dynamic>) _processIncomingFirebasePayload('$path/liveState', data['liveState']);
   }
 
   void _deliverIncomingPacket(Map<String, dynamic> packetMap) {
     try {
       final sender = packetMap['senderId'] as String? ?? '';
       // Filter out self-sent packets so local responsiveness is never interrupted
-      if (sender == _myPlayerId && _myPlayerId != null) return;
+      if (sender == _myPlayerId && _myPlayerId != null && _myPlayerId!.isNotEmpty) return;
 
       final ts = packetMap['timestamp'] as int? ?? 0;
       final typeStr = packetMap['type'] as String? ?? '';
@@ -626,12 +683,15 @@ class FirebaseMultiplayerService extends ChangeNotifier {
           typeStr == 'scoreSync' ||
           typeStr == 'leaveRoom' ||
           typeStr == 'matchStart' ||
-          typeStr == 'techniqueTrigger';
+          typeStr == 'techniqueTrigger' ||
+          typeStr == 'chatMessage' ||
+          typeStr == 'ping';
 
       final lastTs = _lastTimestampBySender[sender] ?? 0;
       if (isCritical || ts >= lastTs) {
         _lastTimestampBySender[sender] = ts;
         _lastHostPacketTimestamp = DateTime.now().millisecondsSinceEpoch;
+        _lastSseEventTime = _lastHostPacketTimestamp;
         final pkt = MultiplayerPacket.fromJson(packetMap);
         _packetStreamController.add(pkt);
       }
@@ -643,7 +703,7 @@ class FirebaseMultiplayerService extends ChangeNotifier {
     _isPollingRoomState = true;
     try {
       final uri = Uri.parse('$databaseUrl/rooms/$roomCode.json');
-      final response = await _httpClient.get(uri).timeout(const Duration(milliseconds: 1200));
+      final response = await _httpClient.get(uri).timeout(const Duration(seconds: 4));
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final body = response.body;
@@ -699,11 +759,8 @@ class FirebaseMultiplayerService extends ChangeNotifier {
           );
         }
 
-        // Check for live packet updates across multi-channels
-        if (data['ball'] is Map<String, dynamic>) _deliverIncomingPacket(data['ball'] as Map<String, dynamic>);
-        if (data['action'] is Map<String, dynamic>) _deliverIncomingPacket(data['action'] as Map<String, dynamic>);
-        if (data['score'] is Map<String, dynamic>) _deliverIncomingPacket(data['score'] as Map<String, dynamic>);
-        if (data['liveState'] is Map<String, dynamic>) _deliverIncomingPacket(data['liveState'] as Map<String, dynamic>);
+        // Check for live packet updates across all multi-channels
+        _processIncomingFirebasePayload('/', data);
 
         _cachedRoom = parsed;
         _roomUpdatesController.add(parsed);
@@ -754,8 +811,8 @@ class FirebaseMultiplayerService extends ChangeNotifier {
 
     _cachedRoom = null;
     _activeRoomCode = null;
-    _latestPendingMovement = null;
-    _isMovementInFlight = false;
+    _latestPendingMovements.clear();
+    _isMovementInFlight.clear();
     _lastTimestampBySender.clear();
     notifyListeners();
   }

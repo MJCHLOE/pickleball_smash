@@ -98,7 +98,7 @@ class GameRoomManager {
             }
 
             // Relay raw string packet directly to save CPU (No re-encoding needed)
-            final raw = data as String;
+            final raw = data;
             if (room.hostSocket != null && room.hostSocket != socket) {
               if (room.hostSocket!.readyState == WebSocket.open) {
                 room.hostSocket!.add(raw);

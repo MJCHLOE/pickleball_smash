@@ -98,7 +98,6 @@ class MultiplayerService extends ChangeNotifier {
     _firebasePacketSub?.cancel();
     _firebasePacketSub = FirebaseMultiplayerService.instance.onPacketReceived.listen((pkt) {
       _handleIncomingPacket(pkt);
-      _packetStreamController.add(pkt);
     });
   }
 
@@ -1162,16 +1161,22 @@ class MultiplayerService extends ChangeNotifier {
           } catch (_) {}
         },
         onDone: () {
-          if (!_isHost && _currentRoom != null) {
-            hostDisconnectedNotifier.value = 'Host has disconnected. The match has ended.';
+          // If in Online Cloud mode, Firebase is the primary transport.
+          // Dropping this auxiliary WebSocket relay must NOT disconnect the match!
+          if (_currentRoom?.connectionMode != MultiplayerConnectionMode.onlineCloud) {
+            if (!_isHost && _currentRoom != null) {
+              hostDisconnectedNotifier.value = 'Host has disconnected. The match has ended.';
+            }
+            leaveRoom();
           }
-          leaveRoom();
         },
         onError: (_) {
-          if (!_isHost && _currentRoom != null) {
-            hostDisconnectedNotifier.value = 'Lost connection to host.';
+          if (_currentRoom?.connectionMode != MultiplayerConnectionMode.onlineCloud) {
+            if (!_isHost && _currentRoom != null) {
+              hostDisconnectedNotifier.value = 'Lost connection to host.';
+            }
+            leaveRoom();
           }
-          leaveRoom();
         },
       );
     } catch (e) {

@@ -727,6 +727,17 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       } else {
         stopRunning();
       }
+      if (isDashing) {
+        dashTimer -= dt;
+        _afterimageSpawnTimer += dt;
+        if (_afterimageSpawnTimer >= 0.04) {
+          _afterimageSpawnTimer = 0.0;
+          _captureAfterimage();
+        }
+        if (dashTimer <= 0) {
+          isDashing = false;
+        }
+      }
       _clampToCourt();
       final pScale = 1.45 * Background.perspectiveScaleAt(position.y);
       scale.setValues(pScale, pScale);

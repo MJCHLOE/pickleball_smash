@@ -1049,6 +1049,10 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
         onAnnouncement?.call('HOST DISCONNECTED', 'The host left the match.');
         final reason = packet.data['reason'] as String? ?? 'Host left the match';
         MultiplayerService.instance.hostDisconnectedNotifier.value = reason;
+      } else if (isHost) {
+        pauseEngine();
+        onAnnouncement?.call('OPPONENT LEFT', 'Opponent forfeited the match.');
+        onMatchFinished?.call(true);
       }
     }
   }
