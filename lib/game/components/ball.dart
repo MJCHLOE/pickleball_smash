@@ -83,6 +83,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
   double spin = 0.0; // -1.0 = Left Spin (curves left, kicks left), +1.0 = Right Spin (curves right, kicks right)
   double curveStrength = 0.0; // Lateral acceleration px/s^2 (Magnus effect)
   double ballRotationAngle = 0.0; // Perforation visual rotation angle in radians
+  bool lastHitByLocalPlayer = false; // Tracks whether local client performed the last paddle strike
 
   // Reusable cached paints for zero-allocation 60 FPS rendering on low-end devices
   Paint? _cachedBallPaint;
@@ -253,6 +254,7 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     } catch (_) {}
 
     currentGame.onServeStateChanged?.call(false, currentGame.serverPlayer, currentGame.servingSide);
+    lastHitByLocalPlayer = isPlayerOne;
 
     if (currentGame.isMultiplayer) {
       MultiplayerService.instance.broadcastPacket(
@@ -816,6 +818,10 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     super.onCollisionStart(intersectionPoints, other);
 
     if (other is PlayerComponent) {
+      // In multiplayer, remote opponent hits are driven exclusively by incoming network packets (prevents double-hit ricochet)
+      if (currentGame.isMultiplayer && !other.isPlayerOne && !other.isAI) {
+        return;
+      }
       if (other.currentState == PlayerState.slash) {
         final distY = (position.y - other.position.y).abs();
         final distX = (position.x - other.position.x).abs();
@@ -831,6 +837,12 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
   /// Evaluates official Pickleball strike rules (Two-Bounce Rule, Kitchen Volley, Legal Hit)
   void processPlayerHit(PlayerComponent player) {
     final bool isPlayerOne = player.isPlayerOne;
+
+    // In multiplayer, each client is authoritative only for its own player hits!
+    if (currentGame.isMultiplayer && !isPlayerOne && !player.isAI) {
+      return;
+    }
+    lastHitByLocalPlayer = isPlayerOne && !player.isAI;
 
     // Ensure ball is moving towards the player who is hitting
     if (isPlayerOne && velocity.y <= 0) return;

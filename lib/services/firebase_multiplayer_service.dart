@@ -388,13 +388,21 @@ class FirebaseMultiplayerService extends ChangeNotifier {
   void _dispatchPriorityPacket(String roomCode, MultiplayerPacket packet) async {
     try {
       final jsonStr = jsonEncode(packet.toJson());
-      final String endpoint;
+      final headers = {'Content-Type': 'application/json'};
+
       if (packet.type == PacketType.ballStrike) {
-        endpoint = 'ball';
-        // Also write to dedicated ballStrike endpoint to guarantee no ballSync overwrites it
+        // Parallel non-blocking write to ballStrike and ball for maximum speed
         final strikeUri = Uri.parse('$databaseUrl/rooms/$roomCode/ballStrike.json');
-        _httpClient.put(strikeUri, headers: {'Content-Type': 'application/json'}, body: jsonStr).timeout(const Duration(seconds: 3));
-      } else if (packet.type == PacketType.ballSync) {
+        final ballUri = Uri.parse('$databaseUrl/rooms/$roomCode/ball.json');
+        await Future.wait([
+          _httpClient.put(strikeUri, headers: headers, body: jsonStr).timeout(const Duration(seconds: 3)),
+          _httpClient.put(ballUri, headers: headers, body: jsonStr).timeout(const Duration(seconds: 3)),
+        ]);
+        return;
+      }
+
+      final String endpoint;
+      if (packet.type == PacketType.ballSync) {
         endpoint = 'ball';
       } else if (packet.type == PacketType.scoreSync) {
         endpoint = 'score';
@@ -403,6 +411,8 @@ class FirebaseMultiplayerService extends ChangeNotifier {
       } else if (packet.type == PacketType.ping) {
         final senderKey = (_cachedRoom?.hostId == _myPlayerId) ? 'p1' : 'p2';
         endpoint = 'heartbeat/$senderKey';
+      } else if (packet.type == PacketType.pong) {
+        endpoint = 'action';
       } else {
         endpoint = 'action';
       }
@@ -410,9 +420,9 @@ class FirebaseMultiplayerService extends ChangeNotifier {
       final uri = Uri.parse('$databaseUrl/rooms/$roomCode/$endpoint.json');
       await _httpClient.put(
         uri,
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonStr,
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 3));
     } catch (_) {}
   }
 

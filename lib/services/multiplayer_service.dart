@@ -805,6 +805,7 @@ class MultiplayerService extends ChangeNotifier {
       server.listen((HttpRequest request) {
         if (WebSocketTransformer.isUpgradeRequest(request)) {
           WebSocketTransformer.upgrade(request).then((socket) {
+            socket.pingInterval = const Duration(seconds: 2);
             _connectedClientSockets.add(socket);
             socket.listen(
               (data) {
@@ -846,6 +847,16 @@ class MultiplayerService extends ChangeNotifier {
         senderId: _myProfile.playerId,
         data: {'echo': packet.timestamp},
       ).toJson()));
+      return;
+    }
+
+    if (packet.type == PacketType.pong) {
+      final sentTime = (packet.data['echo'] as num?)?.toInt() ?? 0;
+      if (sentTime > 0) {
+        final roundTrip = DateTime.now().millisecondsSinceEpoch - sentTime;
+        final ping = roundTrip.clamp(5, 120);
+        _currentPingMs = (_currentPingMs * 0.7 + ping * 0.3).round();
+      }
       return;
     }
 
@@ -1037,6 +1048,7 @@ class MultiplayerService extends ChangeNotifier {
       }
 
       final socket = await WebSocket.connect(uri.toString()).timeout(const Duration(seconds: 4));
+      socket.pingInterval = const Duration(seconds: 2);
       _clientSocket = socket;
 
       // Send join room packet with real profile
@@ -1557,6 +1569,26 @@ class MultiplayerService extends ChangeNotifier {
         leaveRoom();
         return;
       }
+    }
+    if (packet.type == PacketType.ping) {
+      if (packet.senderId != _myProfile.playerId) {
+        broadcastPacket(MultiplayerPacket(
+          type: PacketType.pong,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          senderId: _myProfile.playerId,
+          data: {'echo': packet.timestamp},
+        ));
+      }
+      return;
+    }
+    if (packet.type == PacketType.pong) {
+      final sentTime = (packet.data['echo'] as num?)?.toInt() ?? 0;
+      if (sentTime > 0) {
+        final roundTrip = DateTime.now().millisecondsSinceEpoch - sentTime;
+        final ping = roundTrip.clamp(5, 120);
+        _currentPingMs = (_currentPingMs * 0.7 + ping * 0.3).round();
+      }
+      return;
     }
     if (packet.type == PacketType.chatMessage) {
       try {

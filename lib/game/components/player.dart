@@ -1260,6 +1260,11 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       currentGame.triggerSmashButtonEffect();
     }
 
+    // In multiplayer, remote opponent hits are driven exclusively by incoming network ballStrike packets
+    if (currentGame.isMultiplayer && !isPlayerOne && !isAI) {
+      return;
+    }
+
     // Check if player is serving
     if (currentGame.isWaitingForServe) {
       final activeServer = currentGame.activeServerComponent;

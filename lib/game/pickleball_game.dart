@@ -810,27 +810,32 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       }
 
       // Host periodically synchronizes authoritative ball state (~3.3 Hz) during active rallies
+      // Paused when ball is in Guest's hitting pocket (y <= 240) to prevent race conditions & ricochet
       if (isHost && !ball.isWaitingForServe) {
-        _ballSyncTimer += dt;
-        if (_ballSyncTimer >= 0.3) {
-          _ballSyncTimer = 0.0;
-          final myId = MultiplayerService.instance.myProfile.playerId;
-          MultiplayerService.instance.broadcastPacket(
-            MultiplayerPacket(
-              type: PacketType.ballSync,
-              timestamp: DateTime.now().millisecondsSinceEpoch,
-              senderId: myId,
-              data: {
-                'x': ball.position.x,
-                'y': ball.position.y,
-                'vx': ball.velocity.x,
-                'vy': ball.velocity.y,
-                'z': ball.z,
-                'zVelocity': ball.zVelocity,
-                'spin': ball.spin,
-              },
-            ),
-          );
+        final bool inGuestPocket = ball.position.y <= 240.0;
+        if (!inGuestPocket) {
+          _ballSyncTimer += dt;
+          if (_ballSyncTimer >= 0.25) {
+            _ballSyncTimer = 0.0;
+            final myId = MultiplayerService.instance.myProfile.playerId;
+            MultiplayerService.instance.broadcastPacket(
+              MultiplayerPacket(
+                type: PacketType.ballSync,
+                timestamp: DateTime.now().millisecondsSinceEpoch,
+                senderId: myId,
+                data: {
+                  'x': ball.position.x,
+                  'y': ball.position.y,
+                  'vx': ball.velocity.x,
+                  'vy': ball.velocity.y,
+                  'z': ball.z,
+                  'zVelocity': ball.zVelocity,
+                  'spin': ball.spin,
+                  'hitCount': rallyHitCount,
+                },
+              ),
+            );
+          }
         }
       }
     }
@@ -886,6 +891,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
 
       final rawCurve = (packet.data['curveStrength'] as num?)?.toDouble();
       final techName = packet.data['technique'] as String?;
+      final hitCount = (packet.data['hitCount'] as num?)?.toInt();
 
       final bx = rawX != null ? 1280.0 - rawX : null;
       final by = rawY != null ? 720.0 - rawY : null;
@@ -894,11 +900,23 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       final bspin = rawSpin != null ? -rawSpin : null;
 
       if (bx != null && by != null) {
-        ball.position.setValues(bx, by);
+        ball.lastHitByLocalPlayer = false;
+        if (hitCount != null) {
+          rallyHitCount = hitCount;
+        }
+
+        // Extrapolate ahead based on packet transit latency to eliminate lag hitch
+        final now = DateTime.now().millisecondsSinceEpoch;
+        final transitSec = ((now - packet.timestamp) / 1000.0).clamp(0.0, 0.12);
+        final extX = bvx != null ? bx + bvx * transitSec : bx;
+        final extY = bvy != null ? by + bvy * transitSec : by;
+        final extZ = (z != null && zVelocity != null) ? (z + zVelocity * transitSec).clamp(0.0, 250.0) : (z ?? 0.0);
+
+        ball.position.setValues(extX, extY);
         if (bvx != null && bvy != null) ball.velocity.setValues(bvx, bvy);
         if (bspin != null) ball.spin = bspin;
         if (rawCurve != null) ball.curveStrength = rawCurve;
-        if (z != null) ball.z = z;
+        ball.z = extZ;
         if (zVelocity != null) ball.zVelocity = zVelocity;
         ball.speed = ball.velocity.length;
 
@@ -941,6 +959,18 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     } else if (packet.type == PacketType.ballSync) {
       // Authoritative ball position reconciliation from Host to Guest
       if (!isHost && !ball.isWaitingForServe) {
+        final syncHitCount = (packet.data['hitCount'] as num?)?.toInt() ?? -1;
+
+        // If Guest has struck the ball and local hit count is ahead of this sync,
+        // or if the ball was struck by Guest and is travelling toward Host (velocity.y < 0):
+        // DISCARD this sync to completely eliminate ricochet / rubber-banding!
+        if (syncHitCount != -1 && syncHitCount < rallyHitCount) {
+          return;
+        }
+        if (ball.lastHitByLocalPlayer && ball.velocity.y < 0) {
+          return;
+        }
+
         final rawX = (packet.data['x'] as num?)?.toDouble();
         final rawY = (packet.data['y'] as num?)?.toDouble();
         final rawVx = (packet.data['vx'] as num?)?.toDouble();
@@ -956,23 +986,29 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
           final diffY = targetY - ball.position.y;
           final distSq = diffX * diffX + diffY * diffY;
 
-          // Gentle lerp if drift is small to prevent snapping, faster if moderate, snap if huge
-          if (distSq < 14400) {
-            ball.position.x += diffX * 0.28;
-            ball.position.y += diffY * 0.28;
-          } else if (distSq < 90000) {
-            ball.position.x += diffX * 0.55;
-            ball.position.y += diffY * 0.55;
+          // Smooth gentle convergence without sudden snapping
+          if (distSq < 10000) {
+            ball.position.x += diffX * 0.20;
+            ball.position.y += diffY * 0.20;
+          } else if (distSq < 60000) {
+            ball.position.x += diffX * 0.40;
+            ball.position.y += diffY * 0.40;
           } else {
             ball.position.setValues(targetX, targetY);
           }
 
+          // Only adjust velocity if both clients agree on the general direction of travel!
+          // NEVER invert velocity from ballSync (prevents mid-air ricochet reversals)
           if (rawVx != null && rawVy != null) {
-            ball.velocity.setValues(-rawVx, -rawVy);
-            ball.speed = ball.velocity.length;
+            final expectedVy = -rawVy;
+            if (ball.velocity.y * expectedVy > 0) {
+              ball.velocity.x += (-rawVx - ball.velocity.x) * 0.25;
+              ball.velocity.y += (expectedVy - ball.velocity.y) * 0.25;
+              ball.speed = ball.velocity.length;
+            }
           }
           if (rawSpin != null) ball.spin = -rawSpin;
-          if (z != null) ball.z += (z - ball.z) * 0.35;
+          if (z != null) ball.z += (z - ball.z) * 0.30;
           if (zVelocity != null) ball.zVelocity = zVelocity;
         }
       }
