@@ -17,6 +17,7 @@ import 'package:pickleball_smash/screens/auth/login_screen.dart';
 import 'package:pickleball_smash/screens/auth/register_screen.dart';
 import 'package:pickleball_smash/screens/dashboard_screen.dart';
 import 'package:pickleball_smash/screens/game_play_screen.dart';
+import 'package:pickleball_smash/screens/splash_loading_screen.dart';
 import 'package:flame/components.dart';
 import 'package:flame/input.dart';
 import 'package:pickleball_smash/game/pickleball_game.dart';
@@ -3717,6 +3718,94 @@ void main() {
       cpu.update(0.016); // CPU detects target distance > 140 and dashes!
       expect(cpu.isDashing, true);
       expect(cpu.dashCooldown > 0, true);
+    });
+  });
+
+  group('Serving Court Half Restriction & Splash Screen Tests', () {
+    test('Players are strictly restricted to designated court half and cannot cross centerline extension during serve', () {
+      final game = PickleballGame(joystickOnLeft: true, targetScore: 11, isDoubles: false);
+      final p1 = PlayerComponent(isPlayerOne: true, isFemale: false)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false, isFemale: false, isAI: true)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+
+      game.player1 = p1;
+      game.player2 = p2;
+      game.ball = ball;
+      game.prepareServicePositions();
+
+      expect(game.isWaitingForServe, true);
+      expect(game.servingSide, 'right');
+
+      // Player 1 designated half is 'right' (viewer X >= 640)
+      expect(game.designatedViewerCourtHalfFor(p1), 'right');
+      // Player 2 designated half is 'left' (viewer X <= 640)
+      expect(game.designatedViewerCourtHalfFor(p2), 'left');
+
+      // 1. Human player (P1) attempts to run across the centerline to the left side
+      p1.position = Vector2(500, 695); // Attempting to be on the left half
+      p1.update(0.016);
+      // Must be clamped to >= 642.0 (cannot cross imaginary centerline extension, even in apron)
+      expect(p1.position.x >= 640.0, true);
+
+      // 2. Player 2 attempts to run across centerline to the right side
+      p2.position = Vector2(780, 140);
+      p2.update(0.016);
+      // Must be clamped to <= 638.0
+      expect(p2.position.x <= 640.0, true);
+
+      // 3. Once serve is executed, restrictions are released for open rally
+      ball.executeServe(isPlayerOne: true);
+      expect(game.isWaitingForServe, false);
+
+      p1.position = Vector2(400, 600);
+      p1.update(0.016);
+      // In open play, players can freely cross court center to retrieve balls
+      expect(p1.position.x, 400.0);
+    });
+
+    test('Serving while crossing centerline extension triggers Service Foot Fault', () {
+      String? reportedViolation;
+      final game = PickleballGame(
+        joystickOnLeft: true,
+        targetScore: 11,
+        isDoubles: false,
+        onViolation: (type, desc, rule) {
+          reportedViolation = type;
+        },
+      );
+      final p1 = PlayerComponent(isPlayerOne: true, isFemale: false)..customGame = game;
+      final p2 = PlayerComponent(isPlayerOne: false, isFemale: false, isAI: true)..customGame = game;
+      final ball = BallComponent()..customGame = game;
+
+      game.player1 = p1;
+      game.player2 = p2;
+      game.ball = ball;
+      game.prepareServicePositions();
+
+      // Server forcefully placed across centerline on serve execution
+      p1.position = Vector2(500.0, 695.0); // Wrong side!
+      ball.executeServe(isPlayerOne: true);
+
+      expect(reportedViolation, 'SERVICE FOOT FAULT');
+      expect(game.p2Score, 0); // Side-out fault
+    });
+
+    testWidgets('SplashLoadingScreen renders logo, progress bar, and arcade status', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SplashLoadingScreen(
+            minimumDuration: Duration(milliseconds: 100),
+          ),
+        ),
+      );
+
+      expect(find.text('PICKL SMASH'), findsOneWidget);
+      expect(find.text('ARCADE PICKLEBALL BATTLE'), findsOneWidget);
+      expect(find.textContaining('INITIALIZING'), findsOneWidget);
+      expect(find.textContaining('INSERT COIN'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 150));
+      await tester.pumpAndSettle();
     });
   });
 }

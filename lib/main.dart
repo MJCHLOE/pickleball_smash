@@ -2,12 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flame/flame.dart';
-import 'screens/auth/login_screen.dart';
-import 'screens/dashboard_screen.dart';
+import 'screens/splash_loading_screen.dart';
 import 'services/audio_service.dart';
-import 'services/database_service.dart';
 import 'services/firebase_multiplayer_service.dart';
-import 'services/game_state_manager.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -38,40 +35,7 @@ void main() async {
     debugPrint('Orientation lock skipped: $e');
   }
 
-  // Pre-initialize Database Service safely with timeout
-  try {
-    await DatabaseService.instance.initialize().timeout(
-      const Duration(milliseconds: 1000),
-      onTimeout: () => debugPrint('DatabaseService init timeout - continuing with fallback store'),
-    );
-  } catch (e) {
-    debugPrint('DatabaseService init error: $e');
-  }
-
-  // Check for existing session in SQLite
-  Widget initialScreen = const LoginScreen();
-  try {
-    final session = await DatabaseService.instance.getActiveSession().timeout(
-      const Duration(milliseconds: 500),
-      onTimeout: () => null,
-    );
-    if (session != null) {
-      final userId = session['userId'] as int;
-      final username = session['username'] as String;
-      await GameStateManager.instance.loginWithUser(userId, username).timeout(
-        const Duration(milliseconds: 1000),
-        onTimeout: () => GameStateManager.instance.loginAsGuest(),
-      );
-      initialScreen = const DashboardScreen();
-    } else {
-      GameStateManager.instance.loginAsGuest();
-    }
-  } catch (e) {
-    debugPrint('Session check error: $e');
-                    GameStateManager.instance.loginAsGuest();
-  }
-
-  runApp(PickleballApp(initialScreen: initialScreen));
+  runApp(const PickleballApp());
 }
 
 class PickleballApp extends StatelessWidget {
@@ -88,7 +52,7 @@ class PickleballApp extends StatelessWidget {
       scrollBehavior: const MaterialScrollBehavior().copyWith(
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
       ),
-      home: initialScreen ?? const DashboardScreen(),
+      home: initialScreen ?? const SplashLoadingScreen(),
     );
   }
 }

@@ -155,6 +155,44 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     }
   }
 
+  /// Returns whether [player] is designated to the right half (viewer X >= 640)
+  /// or left half (viewer X <= 640) of the court when waiting for serve.
+  /// Enforces that players cannot cross the imaginary extension of the centerline during serve.
+  String designatedViewerCourtHalfFor(PlayerComponent player) {
+    try {
+      if (isDoubles) {
+        if (player == _player1) {
+          return p1CourtSide;
+        } else if (player == player1Partner) {
+          return p1PartnerCourtSide;
+        } else if (player == _player2) {
+          // From P2 perspective looking down, right court is viewer left
+          return (p2CourtSide == 'right') ? 'left' : 'right';
+        } else if (player == player2Partner) {
+          return (p2PartnerCourtSide == 'right') ? 'left' : 'right';
+        }
+        return player.isPlayerOne ? 'right' : 'left';
+      } else {
+        if (serverPlayer == 1) {
+          if (player.isPlayerOne) {
+            return servingSide;
+          } else {
+            return (servingSide == 'right') ? 'left' : 'right';
+          }
+        } else {
+          final p2ViewerHalf = (servingSide == 'right') ? 'left' : 'right';
+          if (!player.isPlayerOne) {
+            return p2ViewerHalf;
+          } else {
+            return (p2ViewerHalf == 'right') ? 'left' : 'right';
+          }
+        }
+      }
+    } catch (_) {
+      return player.isPlayerOne ? 'right' : 'left';
+    }
+  }
+
   PlayerComponent? get activeServerComponentOrNull {
     try {
       if (isDoubles) {
@@ -471,8 +509,10 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       ruleDetail = 'Rule 4: Ball landed outside boundary lines!';
     } else if (cleanReason.contains('Service Foot Fault')) {
       violationType = 'SERVICE FOOT FAULT';
-      description = 'Server stepped on or inside baseline before serve';
-      ruleDetail = 'Rule 5: Server must stand completely behind the baseline when serving!';
+      description = cleanReason.contains('centerline')
+          ? 'Server crossed imaginary centerline extension'
+          : 'Server stepped on or inside baseline before serve';
+      ruleDetail = 'Rule 5: Server must stand completely within designated service court behind baseline!';
     } else if (cleanReason.contains('Double Bounce')) {
       violationType = 'DOUBLE BOUNCE';
       description = cleanReason;

@@ -1049,7 +1049,8 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     if (currentGame.isWaitingForServe) {
       final activeServer = currentGame.activeServerComponent;
       final bool isServer = (this == activeServer);
-      final targetX = (mySide == 'right') ? 520.0 : 760.0;
+      final designatedHalf = currentGame.designatedViewerCourtHalfFor(this);
+      final targetX = (designatedHalf == 'right') ? 760.0 : 520.0;
       final targetY = isServer ? 25.0 : 140.0;
       final dx = targetX - position.x;
       final dy = targetY - position.y;
@@ -1195,6 +1196,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     const p2NetLimitY = 330.0;
     const minPlayableX = 320.0;
     const maxPlayableX = 960.0;
+    const courtCenterX = 640.0;
 
     if (isPlayerOne) {
       position.y = position.y.clamp(p1NetLimitY, bottomApronLimitY);
@@ -1202,7 +1204,20 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       position.y = position.y.clamp(topApronLimitY, p2NetLimitY);
     }
 
-    position.x = position.x.clamp(minPlayableX, maxPlayableX);
+    if (currentGame.isWaitingForServe) {
+      // Official Rule: While waiting for serve, every player (server, receiver, and partner)
+      // is strictly restricted to their designated half of the court.
+      // They are not allowed to cross the imaginary extension of the centerline (X = 640.0)
+      // to the opposite side, even when standing in the apron outside boundary lines.
+      final designatedHalf = currentGame.designatedViewerCourtHalfFor(this);
+      if (designatedHalf == 'right') {
+        position.x = position.x.clamp(courtCenterX + 2.0, maxPlayableX);
+      } else {
+        position.x = position.x.clamp(minPlayableX, courtCenterX - 2.0);
+      }
+    } else {
+      position.x = position.x.clamp(minPlayableX, maxPlayableX);
+    }
   }
 
   /// Returns true if the player is currently standing outside the white boundary lines.

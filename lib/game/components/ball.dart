@@ -182,11 +182,25 @@ class BallComponent extends CircleComponent with HasGameReference<PickleballGame
     squashFactor = 1.0;
 
     // Rule 5: Service Foot Fault Check
-    // Server must stand completely behind the baseline when making the serve.
-    // Stepping on or inside the baseline before contacting the ball is an immediate fault.
+    // Server must stand completely behind the baseline and within their designated court half.
+    // Stepping on/inside the baseline or crossing the imaginary extension of the centerline is a fault!
     try {
       final serverComp = currentGame.activeServerComponentOrNull;
       if (serverComp != null && serverComp.position != Vector2.zero()) {
+        final designatedHalf = currentGame.designatedViewerCourtHalfFor(serverComp);
+        final bool crossedCenterline = (designatedHalf == 'right' && serverComp.position.x < courtCenterX) ||
+            (designatedHalf == 'left' && serverComp.position.x > courtCenterX);
+
+        if (crossedCenterline) {
+          isWaitingForServe = false;
+          currentGame.isWaitingForServe = false;
+          currentGame.handleRallyWon(
+            winnerIsPlayerOne: !serverComp.isPlayerOne,
+            faultReason: 'FAULT: Service Foot Fault (Server crossed centerline extension)',
+          );
+          return;
+        }
+
         if (serverComp.isPlayerOne && serverComp.position.y <= bottomBaselineY && serverComp.position.y >= netY) {
           isWaitingForServe = false;
           currentGame.isWaitingForServe = false;
