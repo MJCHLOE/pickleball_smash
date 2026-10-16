@@ -580,24 +580,25 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                   final bool isWideScreen = availableWidth >= 660;
 
                   if (isWideScreen) {
-                    final scoreboardWidth = math.min(320.0, availableWidth * 0.38);
-                    final centerMaxWidth = math.min(440.0, availableWidth - scoreboardWidth - 145.0);
+                    final scoreboardWidth = math.min(270.0, availableWidth * 0.35);
                     return Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        // 1. Top-Left: Score Board
+                        // 1. Top-Left: Score Board with Status Display & Serve Prompt directly underneath
                         Align(
                           alignment: Alignment.topLeft,
-                          child: _buildTopLeftScoreBoard(context, state, opponent, title, maxWidth: scoreboardWidth),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildTopLeftScoreBoard(context, state, opponent, title, maxWidth: scoreboardWidth),
+                              const SizedBox(height: 3),
+                              _buildTopCenterStatusDisplay(context, maxWidth: math.max(scoreboardWidth, 260.0)),
+                            ],
+                          ),
                         ),
 
-                        // 2. Top-Center: Status Display & Serve Prompt
-                        Align(
-                          alignment: Alignment.topCenter,
-                          child: _buildTopCenterStatusDisplay(context, maxWidth: centerMaxWidth),
-                        ),
-
-                        // 3. Top-Right: Settings, Rules, and Pause, with Violation Display underneath
+                        // 2. Top-Right: Settings, Rules, and Pause, with Violation Display underneath
                         Align(
                           alignment: Alignment.topRight,
                           child: Column(
@@ -613,7 +614,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                       ],
                     );
                   } else {
-                    // Compact / Portrait Screen Layout: Scoreboard & Controls on top, Center HUD cleanly below
+                    // Compact / Portrait Screen Layout: Scoreboard & Controls on top, Status cleanly underneath scoreboard
                     return Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -621,7 +622,15 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Flexible(
-                              child: _buildTopLeftScoreBoard(context, state, opponent, title, maxWidth: availableWidth - 140.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildTopLeftScoreBoard(context, state, opponent, title, maxWidth: availableWidth - 140.0),
+                                  const SizedBox(height: 3),
+                                  _buildTopCenterStatusDisplay(context, maxWidth: availableWidth - 140.0),
+                                ],
+                              ),
                             ),
                             const SizedBox(width: 6),
                             Column(
@@ -635,8 +644,6 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        _buildTopCenterStatusDisplay(context, maxWidth: availableWidth - 12.0),
                       ],
                     );
                   }
@@ -999,17 +1006,17 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
   }) {
     return Container(
       constraints: BoxConstraints(
-        maxWidth: maxWidth ?? math.min(320.0, MediaQuery.of(context).size.width * 0.42),
+        maxWidth: maxWidth ?? math.min(270.0, MediaQuery.of(context).size.width * 0.35),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 7.5, vertical: 3.5),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.surfaceBorder, width: 1.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.surfaceBorder, width: 1.1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.4),
-            blurRadius: 6,
+            blurRadius: 5,
             offset: const Offset(0, 2),
           ),
         ],
@@ -1025,36 +1032,36 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
                   decoration: BoxDecoration(
                     color: AppTheme.neonLime.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(5),
                   ),
                   child: Text(
                     (_game.isDoubles ? '2V2 DOUBLES' : title).toUpperCase(),
                     style: const TextStyle(
                       color: AppTheme.neonLime,
-                      fontSize: 8.5,
+                      fontSize: 7.5,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5,
+                      letterSpacing: 0.4,
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 5),
                 Text(
                   _game.isDoubles
                       ? 'CALL: ${_game.doublesScoreCallout} • FIRST TO 11'
                       : 'FIRST TO 11 • WIN BY 2',
                   style: const TextStyle(
                     color: AppTheme.textMuted,
-                    fontSize: 8.5,
+                    fontSize: 7.5,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 if (widget.matchType == 'multiplayer') ...[
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 5),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                     decoration: BoxDecoration(
                       color: AppTheme.neonLime.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(4),
@@ -1062,13 +1069,13 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.wifi_rounded, color: AppTheme.neonLime, size: 9),
-                        const SizedBox(width: 3),
+                        const Icon(Icons.wifi_rounded, color: AppTheme.neonLime, size: 8),
+                        const SizedBox(width: 2.5),
                         Text(
                           '${MultiplayerService.instance.currentPingMs} ms',
                           style: const TextStyle(
                             color: AppTheme.neonLime,
-                            fontSize: 8,
+                            fontSize: 7,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -1078,13 +1085,13 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                 ],
               ],
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2.5),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 InkWell(
                   onTap: () => AvatarPickerDialog.show(context),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(6),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -1092,7 +1099,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                         avatarId: (widget.matchType == 'multiplayer' && _myAvatarId != null)
                             ? _myAvatarId!
                             : state.playerAvatarId,
-                        size: 24,
+                        size: 20,
                       ),
                       if (_game.isDoubles) ...[
                         const SizedBox(width: 2),
@@ -1100,74 +1107,74 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                           avatarId: (widget.matchType == 'multiplayer' && _partnerAvatarId != null)
                               ? _partnerAvatarId!
                               : 'kai',
-                          size: 20,
+                          size: 16,
                         ),
                       ],
                       _buildServerBadge(_serverPlayer == 1),
-                      const SizedBox(width: 5),
+                      const SizedBox(width: 4),
                       Text(
                         _game.isDoubles ? '${state.playerName} & Partner' : state.playerName,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 13,
+                          fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 5),
                       Game2DText.score(
                         '$_p1Score',
-                        fontSize: 17,
+                        fontSize: 14.5,
                         textColor: AppTheme.neonLime,
-                        strokeWidth: 2.2,
-                        shadowOffset: const Offset(0, 1.5),
+                        strokeWidth: 1.8,
+                        shadowOffset: const Offset(0, 1.2),
                       ),
                     ],
                   ),
                 ),
                 const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 6.0),
-                  child: Text('-', style: TextStyle(color: AppTheme.textMuted, fontSize: 16)),
+                  padding: EdgeInsets.symmetric(horizontal: 4.5),
+                  child: Text('-', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
                 ),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Game2DText.score(
                       '$_p2Score',
-                      fontSize: 17,
+                      fontSize: 14.5,
                       textColor: AppTheme.electricCyan,
-                      strokeWidth: 2.2,
-                      shadowOffset: const Offset(0, 1.5),
+                      strokeWidth: 1.8,
+                      shadowOffset: const Offset(0, 1.2),
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 5),
                     _buildServerBadge(_serverPlayer == 2),
                     Text(
                       _game.isDoubles ? '$opponent & Bot' : opponent,
                       style: const TextStyle(
                         color: Colors.white70,
-                        fontSize: 13,
+                        fontSize: 11,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(width: 5),
+                    const SizedBox(width: 4),
                     (widget.matchType == 'multiplayer' && _opponentAvatarId != null)
                         ? PlayerAvatarWidget(
                             avatarId: _opponentAvatarId!,
-                            size: 24,
+                            size: 20,
                           )
                         : PlayerAvatarWidget(
                             avatar: PlayerAvatar.getForOpponent(opponent),
-                            size: 24,
+                            size: 20,
                           ),
                     if (_game.isDoubles) ...[
                       const SizedBox(width: 2),
                       (widget.matchType == 'multiplayer' && _opponentPartnerAvatarId != null)
                           ? PlayerAvatarWidget(
                               avatarId: _opponentPartnerAvatarId!,
-                              size: 20,
+                              size: 16,
                             )
                           : PlayerAvatarWidget(
                               avatar: PlayerAvatar.getForOpponent('CPU 2'),
-                              size: 20,
+                              size: 16,
                             ),
                     ],
                   ],
@@ -1284,10 +1291,11 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
   }
 
   Widget _buildTopCenterStatusDisplay(BuildContext context, {double? maxWidth}) {
-    final double defaultMaxWidth = maxWidth ?? math.min(360.0, MediaQuery.of(context).size.width * 0.46);
+    final double defaultMaxWidth = maxWidth ?? math.min(270.0, MediaQuery.of(context).size.width * 0.35);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 1. Rally & Side-out Announcements (when in play)
         if (_announcementTitle != null && !_isWaitingForServe)
@@ -1295,29 +1303,31 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
             constraints: BoxConstraints(
               maxWidth: defaultMaxWidth,
             ),
-            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+            margin: const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.90),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: (_announcementTitle!.contains('FAULT') || _announcementTitle!.contains('VIOLATION'))
                     ? AppTheme.fireOrange
                     : AppTheme.neonLime,
-                width: 1.5,
+                width: 1.2,
               ),
               boxShadow: [
                 BoxShadow(
                   color: (_announcementTitle!.contains('FAULT') || _announcementTitle!.contains('VIOLATION'))
                     ? AppTheme.fireOrange.withValues(alpha: 0.4)
                     : AppTheme.neonLime.withValues(alpha: 0.4),
-                  blurRadius: 10,
+                  blurRadius: 8,
                 ),
               ],
             ),
             child: FittedBox(
               fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
@@ -1327,27 +1337,27 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                           ? AppTheme.fireOrange
                           : AppTheme.neonLime,
                       fontWeight: FontWeight.w900,
-                      fontSize: 12.5,
-                      letterSpacing: 0.6,
+                      fontSize: 10.5,
+                      letterSpacing: 0.5,
                     ),
                   ),
                   if (_announcementSubtitle != null && _announcementSubtitle!.isNotEmpty)
                     Text(
                       _announcementSubtitle!,
-                      style: const TextStyle(color: Colors.white70, fontSize: 10),
+                      style: const TextStyle(color: Colors.white70, fontSize: 8.5),
                     ),
                 ],
               ),
             ),
           )
-        // 3. Continuous Rally Streak Banner (Active during continuous rallies)
+        // 2. Continuous Rally Streak Banner (Active during continuous rallies)
         else if (!_isWaitingForServe && !_isPaused && !_matchFinished && _currentRallyStreak >= 2)
           Container(
             constraints: BoxConstraints(
               maxWidth: defaultMaxWidth,
             ),
-            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            margin: const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
@@ -1356,71 +1366,76 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                 ],
               ),
               color: Colors.black.withValues(alpha: 0.90),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppTheme.neonLime, width: 1.6),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.neonLime, width: 1.2),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.neonLime.withValues(alpha: 0.40),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.bolt_rounded, color: AppTheme.goldCoin, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  'RALLY STREAK: $_currentRallyStreak HITS',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 11.5,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                if (_longestRally > _currentRallyStreak) ...[
-                  const SizedBox(width: 5),
-                  Text(
-                    '(BEST: $_longestRally)',
-                    style: const TextStyle(
-                      color: AppTheme.textMuted,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 9.5,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          )
-        // 4. Live Kitchen NVZ Caution (when Player 1 enters Kitchen during active rally)
-        else if (!_isWaitingForServe && !_isPaused && !_matchFinished && _game.player1.isInKitchen)
-          Container(
-            constraints: BoxConstraints(
-              maxWidth: defaultMaxWidth,
-            ),
-            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.88),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: (_game.ball.bounceCountCurrentSide == 0)
-                    ? AppTheme.fireOrange
-                    : AppTheme.neonLime,
-                width: 1.4,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: (_game.ball.bounceCountCurrentSide == 0)
-                      ? AppTheme.fireOrange.withValues(alpha: 0.4)
-                      : AppTheme.neonLime.withValues(alpha: 0.3),
+                  color: AppTheme.neonLime.withValues(alpha: 0.35),
                   blurRadius: 8,
                 ),
               ],
             ),
             child: FittedBox(
               fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.bolt_rounded, color: AppTheme.goldCoin, size: 12),
+                  const SizedBox(width: 4),
+                  Text(
+                    'RALLY STREAK: $_currentRallyStreak HITS',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 9.5,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                  if (_longestRally > _currentRallyStreak) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      '(BEST: $_longestRally)',
+                      style: const TextStyle(
+                        color: AppTheme.textMuted,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 8,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          )
+        // 3. Live Kitchen NVZ Caution (when Player 1 enters Kitchen during active rally)
+        else if (!_isWaitingForServe && !_isPaused && !_matchFinished && _game.player1.isInKitchen)
+          Container(
+            constraints: BoxConstraints(
+              maxWidth: defaultMaxWidth,
+            ),
+            margin: const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.88),
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(
+                color: (_game.ball.bounceCountCurrentSide == 0)
+                    ? AppTheme.fireOrange
+                    : AppTheme.neonLime,
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: (_game.ball.bounceCountCurrentSide == 0)
+                      ? AppTheme.fireOrange.withValues(alpha: 0.35)
+                      : AppTheme.neonLime.withValues(alpha: 0.25),
+                  blurRadius: 6,
+                ),
+              ],
+            ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1431,9 +1446,9 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                     color: (_game.ball.bounceCountCurrentSide == 0)
                         ? AppTheme.fireOrange
                         : AppTheme.neonLime,
-                    size: 13,
+                    size: 11,
                   ),
-                  const SizedBox(width: 5),
+                  const SizedBox(width: 4),
                   Text(
                     (_game.ball.bounceCountCurrentSide == 0)
                         ? 'IN KITCHEN (NVZ) • DINK ONLY (WAIT FOR BOUNCE!)'
@@ -1443,8 +1458,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                           ? AppTheme.fireOrange
                           : AppTheme.neonLime,
                       fontWeight: FontWeight.w900,
-                      fontSize: 10,
-                      letterSpacing: 0.4,
+                      fontSize: 8.5,
+                      letterSpacing: 0.3,
                     ),
                   ),
                 ],
@@ -1457,20 +1472,21 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
             constraints: BoxConstraints(
               maxWidth: defaultMaxWidth,
             ),
-            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            margin: const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.85),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(9),
               border: Border.all(
                 color: (_game.ball.bounceCountCurrentSide == 0)
                     ? AppTheme.trophyAmber
                     : AppTheme.neonLime,
-                width: 1.2,
+                width: 1.1,
               ),
             ),
             child: FittedBox(
               fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1481,9 +1497,9 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                     color: (_game.ball.bounceCountCurrentSide == 0)
                         ? AppTheme.trophyAmber
                         : AppTheme.neonLime,
-                    size: 13,
+                    size: 11,
                   ),
-                  const SizedBox(width: 5),
+                  const SizedBox(width: 4),
                   Text(
                     (_game.ball.bounceCountCurrentSide == 0)
                         ? 'LET IT BOUNCE! (Two-Bounce Rule)'
@@ -1493,8 +1509,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                           ? AppTheme.trophyAmber
                           : AppTheme.neonLime,
                       fontWeight: FontWeight.w900,
-                      fontSize: 10,
-                      letterSpacing: 0.4,
+                      fontSize: 8.5,
+                      letterSpacing: 0.3,
                     ),
                   ),
                 ],
@@ -1512,34 +1528,35 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
                 constraints: BoxConstraints(
                   maxWidth: defaultMaxWidth,
                 ),
-                margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                margin: const EdgeInsets.only(top: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
                 decoration: BoxDecoration(
                   gradient: AppTheme.playButtonGradient,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white, width: 1.5),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white, width: 1.2),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.neonLime.withValues(alpha: 0.5),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
+                      color: AppTheme.neonLime.withValues(alpha: 0.45),
+                      blurRadius: 6,
+                      offset: const Offset(0, 1.5),
                     ),
                   ],
                 ),
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.sports_tennis_rounded, color: Colors.black, size: 16),
-                      const SizedBox(width: 6),
+                      const Icon(Icons.sports_tennis_rounded, color: Colors.black, size: 12),
+                      const SizedBox(width: 4),
                       Text(
                         'YOUR SERVE (${_servingSide.toUpperCase()}) • TAP SMASH TO SERVE',
                         style: const TextStyle(
                           color: Colors.black,
                           fontWeight: FontWeight.w900,
-                          fontSize: 11,
-                          letterSpacing: 0.5,
+                          fontSize: 9.5,
+                          letterSpacing: 0.4,
                         ),
                       ),
                     ],
@@ -1552,27 +1569,28 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
               constraints: BoxConstraints(
                 maxWidth: defaultMaxWidth,
               ),
-              margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              margin: const EdgeInsets.only(top: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.85),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppTheme.neonLime.withValues(alpha: 0.6), width: 1.2),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.neonLime.withValues(alpha: 0.6), width: 1.1),
               ),
               child: FittedBox(
                 fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.sports_tennis_rounded, color: AppTheme.neonLime, size: 14),
-                    const SizedBox(width: 5),
+                    const Icon(Icons.sports_tennis_rounded, color: AppTheme.neonLime, size: 12),
+                    const SizedBox(width: 4),
                     Text(
                       'PARTNER SERVING (${_servingSide.toUpperCase()}) • GET READY',
                       style: const TextStyle(
                         color: AppTheme.neonLime,
                         fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                        letterSpacing: 0.4,
+                        fontSize: 9.5,
+                        letterSpacing: 0.3,
                       ),
                     ),
                   ],
@@ -1584,27 +1602,28 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
               constraints: BoxConstraints(
                 maxWidth: defaultMaxWidth,
               ),
-              margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              margin: const EdgeInsets.only(top: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.85),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppTheme.electricCyan.withValues(alpha: 0.6), width: 1.2),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.electricCyan.withValues(alpha: 0.6), width: 1.1),
               ),
               child: FittedBox(
                 fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.sports_tennis_rounded, color: AppTheme.electricCyan, size: 14),
-                    const SizedBox(width: 5),
+                    const Icon(Icons.sports_tennis_rounded, color: AppTheme.electricCyan, size: 12),
+                    const SizedBox(width: 4),
                     Text(
                       '${widget.matchType == 'multiplayer' ? 'OPPONENT' : 'CPU'} SERVING (${_servingSide.toUpperCase()}) • GET READY',
                       style: const TextStyle(
                         color: AppTheme.electricCyan,
                         fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                        letterSpacing: 0.4,
+                        fontSize: 9.5,
+                        letterSpacing: 0.3,
                       ),
                     ),
                   ],
@@ -1843,26 +1862,26 @@ class _GamePlayScreenState extends State<GamePlayScreen> with WidgetsBindingObse
         ? '${_servingSide == 'right' ? 'R' : 'L'}-${_game.serverNumber}'
         : (_servingSide == 'right' ? 'R' : 'L');
     return Container(
-      margin: const EdgeInsets.only(left: 4, right: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      margin: const EdgeInsets.only(left: 3, right: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
       decoration: BoxDecoration(
         color: const Color(0xFFCCFF00),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(5),
         boxShadow: const [
           BoxShadow(
             color: Color(0xFFCCFF00),
-            blurRadius: 4,
+            blurRadius: 3,
           ),
         ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.sports_tennis_rounded, color: Colors.black, size: 10),
+          const Icon(Icons.sports_tennis_rounded, color: Colors.black, size: 8.5),
           const SizedBox(width: 2),
           Text(
             badgeText,
-            style: const TextStyle(color: Colors.black, fontSize: 8, fontWeight: FontWeight.w900),
+            style: const TextStyle(color: Colors.black, fontSize: 7.5, fontWeight: FontWeight.w900),
           ),
         ],
       ),
