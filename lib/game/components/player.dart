@@ -1299,24 +1299,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       currentGame.onPlayerSmash();
 
       // Immediately broadcast strike to remote peer so they see the swing with zero delay
-      if (currentGame.isMultiplayer) {
-        MultiplayerService.instance.broadcastPacket(
-          MultiplayerPacket(
-            type: PacketType.playerState,
-            timestamp: DateTime.now().millisecondsSinceEpoch,
-            senderId: MultiplayerService.instance.myProfile.playerId,
-            data: {
-              'x': position.x,
-              'y': position.y,
-              'vx': currentVelocity.x,
-              'vy': currentVelocity.y,
-              'isStriking': true,
-              'technique': activeTechnique.name,
-              'isDashing': isDashing,
-            },
-          ),
-        );
-      }
+      currentGame.broadcastLocalPlayerStrike();
     }
 
     // In multiplayer, remote opponent ball physics are driven exclusively by incoming network ballStrike packets

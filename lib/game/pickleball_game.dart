@@ -881,6 +881,28 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
     }
   }
 
+  /// Instantly broadcasts player1 strike to the remote peer so the opponent sees the paddle swing with zero delay
+  void broadcastLocalPlayerStrike() {
+    if (!isMultiplayer) return;
+    final myId = MultiplayerService.instance.myProfile.playerId;
+    MultiplayerService.instance.broadcastPacket(
+      MultiplayerPacket(
+        type: PacketType.playerState,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        senderId: myId,
+        data: {
+          'x': player1.position.x,
+          'y': player1.position.y,
+          'vx': player1.currentVelocity.x,
+          'vy': player1.currentVelocity.y,
+          'isStriking': true,
+          'technique': player1.activeTechnique.name,
+          'isDashing': player1.isDashing,
+        },
+      ),
+    );
+  }
+
   @override
   void onRemove() {
     _networkPacketSub?.cancel();

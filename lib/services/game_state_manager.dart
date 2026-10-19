@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/ball_catalog.dart';
 import '../models/challenge_model.dart';
@@ -6,6 +7,7 @@ import '../models/court_catalog.dart';
 import '../models/tournament_model.dart';
 import '../models/game_settings.dart';
 import 'audio_service.dart';
+import 'cloud_sync_service.dart';
 import 'database_service.dart';
 import 'multiplayer_service.dart';
 
@@ -676,9 +678,47 @@ class GameStateManager extends ChangeNotifier {
       }
       equippedBallId = saved['equippedBall'] as String? ?? 'ball_elite';
     } else {
-      // New registered user!
-      // If user played as guest and wanted to save their progress, preserve it!
-      if (!preserveCurrentDataIfNew) {
+      // Check if user has an existing cloud profile in Firebase to restore (e.g. new phone or reinstalled app)
+      Map<String, dynamic>? cloudBackup;
+      try {
+        cloudBackup = await CloudSyncService.instance.fetchCloudProfile(username);
+      } catch (_) {}
+
+      if (cloudBackup != null) {
+        playerAvatarId = cloudBackup['avatarId'] as String? ?? 'alex_classic';
+        playerLevel = (cloudBackup['playerLevel'] as num?)?.toInt() ?? 1;
+        playerXp = (cloudBackup['playerXp'] as num?)?.toInt() ?? 0;
+        xpToNextLevel = (cloudBackup['xpToNextLevel'] as num?)?.toInt() ?? 500;
+        coins = (cloudBackup['coins'] as num?)?.toInt() ?? 500;
+        trophies = (cloudBackup['trophies'] as num?)?.toInt() ?? 0;
+        matchesPlayed = (cloudBackup['matchesPlayed'] as num?)?.toInt() ?? 0;
+        matchesWon = (cloudBackup['matchesWon'] as num?)?.toInt() ?? 0;
+        totalSmashes = (cloudBackup['totalSmashes'] as num?)?.toInt() ?? 0;
+        bestStreak = (cloudBackup['bestStreak'] as num?)?.toInt() ?? 0;
+        currentStreak = (cloudBackup['currentStreak'] as num?)?.toInt() ?? 0;
+
+        final cloudChars = cloudBackup['unlockedCharacters'] as List<dynamic>?;
+        if (cloudChars != null && cloudChars.isNotEmpty) {
+          unlockedCharacterIds
+            ..clear()
+            ..addAll(cloudChars.map((e) => e.toString()));
+        }
+        final cloudCourts = cloudBackup['unlockedCourts'] as List<dynamic>?;
+        if (cloudCourts != null && cloudCourts.isNotEmpty) {
+          unlockedCourtIds
+            ..clear()
+            ..addAll(cloudCourts.map((e) => e.toString()));
+        }
+        equippedCourtId = cloudBackup['equippedCourt'] as String? ?? 'court_pro_stadium';
+
+        final cloudBalls = cloudBackup['unlockedBalls'] as List<dynamic>?;
+        if (cloudBalls != null && cloudBalls.isNotEmpty) {
+          unlockedBallIds
+            ..clear()
+            ..addAll(cloudBalls.map((e) => e.toString()));
+        }
+        equippedBallId = cloudBackup['equippedBall'] as String? ?? 'ball_elite';
+      } else if (!preserveCurrentDataIfNew) {
         playerAvatarId = 'alex_classic';
         _initDefaultData();
         _guestMatchHistory.clear();
@@ -730,6 +770,7 @@ class GameStateManager extends ChangeNotifier {
 
   Future<void> saveCurrentProgress() async {
     if (!isGuest && currentUserId != null) {
+      // 1. Instant local SQLite save (primary, 100% offline-capable)
       await DatabaseService.instance.savePlayerData(
         userId: currentUserId!,
         avatarId: playerAvatarId,
@@ -752,6 +793,27 @@ class GameStateManager extends ChangeNotifier {
         unlockedBalls: unlockedBallIds.toList(),
         equippedBall: equippedBallId,
       );
+
+      // 2. Non-blocking cloud backup & leaderboard sync to Firebase in the background
+      unawaited(CloudSyncService.instance.syncPlayerToCloud(
+        username: currentUsername,
+        avatarId: playerAvatarId,
+        playerLevel: playerLevel,
+        playerXp: playerXp,
+        xpToNextLevel: xpToNextLevel,
+        coins: coins,
+        trophies: trophies,
+        matchesPlayed: matchesPlayed,
+        matchesWon: matchesWon,
+        totalSmashes: totalSmashes,
+        bestStreak: bestStreak,
+        currentStreak: currentStreak,
+        unlockedCharacters: unlockedCharacterIds.toList(),
+        unlockedCourts: unlockedCourtIds.toList(),
+        equippedCourt: equippedCourtId,
+        unlockedBalls: unlockedBallIds.toList(),
+        equippedBall: equippedBallId,
+      ));
     }
   }
 
