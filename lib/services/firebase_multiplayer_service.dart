@@ -13,8 +13,8 @@ class FirebaseMultiplayerService extends ChangeNotifier {
   FirebaseMultiplayerService._internal();
 
   // Active Firebase Project ID and Custom Database URL
-  String _projectId = 'pickl-6d440';
-  String? _customDatabaseUrl = 'https://pickl-6d440-default-rtdb.firebaseio.com';
+  String _projectId = 'pickl-bfc3f';
+  String? _customDatabaseUrl = 'https://pickl-bfc3f-default-rtdb.asia-southeast1.firebasedatabase.app';
   String get projectId => _projectId;
 
   void configureProject(String projectIdOrUrl) {
@@ -23,7 +23,7 @@ class FirebaseMultiplayerService extends ChangeNotifier {
 
     if (clean.startsWith('http://') || clean.startsWith('https://')) {
       _customDatabaseUrl = clean.replaceAll(RegExp(r'/+$'), '');
-      final match = RegExp(r'https?://([^.-]+)').firstMatch(clean);
+      final match = RegExp(r'https?://([^.]+)\.').firstMatch(clean);
       if (match != null) {
         _projectId = match.group(1)!;
       }

@@ -45,6 +45,7 @@ dependencies:
   file_picker: ^13.1.0
   audioplayers: ^6.8.1
   http: ^1.6.0
+  flutter_webrtc: ^1.6.2+hotfix.4
 
 dev_dependencies:
   flutter_test:

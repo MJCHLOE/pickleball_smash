@@ -9,6 +9,7 @@ import 'connectivity_service.dart';
 import 'database_service.dart';
 import 'firebase_multiplayer_service.dart';
 import 'game_state_manager.dart';
+import 'webrtc_service.dart';
 
 /// Service managing Real Player Friends, Profiles, Match History, Battle Rooms,
 /// and live authoritative network synchronization over WebSocket and Offline Hotspot/Wi-Fi.
@@ -82,14 +83,19 @@ class MultiplayerService extends ChangeNotifier {
 
   StreamSubscription<BattleRoomModel>? _firebaseRoomSub;
   StreamSubscription<MultiplayerPacket>? _firebasePacketSub;
+  StreamSubscription<MultiplayerPacket>? _webrtcPacketSub;
 
   void _listenToFirebaseRoom(String roomCode) {
     _firebaseRoomSub?.cancel();
     _firebaseRoomSub = FirebaseMultiplayerService.instance.onRoomUpdated.listen((updatedRoom) {
       if (updatedRoom.roomCode == roomCode) {
+        final wasInMatch = _currentRoom?.status == 'inMatch';
         _currentRoom = updatedRoom;
         if (updatedRoom.status == 'inMatch') {
           updatePresenceStatus(PlayerPresenceStatus.inMatch);
+          if (!_isHost && !wasInMatch) {
+            WebRTCService.instance.startAsGuest(roomCode);
+          }
         }
         notifyListeners();
       }
@@ -97,6 +103,11 @@ class MultiplayerService extends ChangeNotifier {
 
     _firebasePacketSub?.cancel();
     _firebasePacketSub = FirebaseMultiplayerService.instance.onPacketReceived.listen((pkt) {
+      _handleIncomingPacket(pkt);
+    });
+
+    _webrtcPacketSub?.cancel();
+    _webrtcPacketSub = WebRTCService.instance.onPacketReceived.listen((pkt) {
       _handleIncomingPacket(pkt);
     });
   }
@@ -1236,6 +1247,9 @@ class MultiplayerService extends ChangeNotifier {
     _firebaseRoomSub = null;
     _firebasePacketSub?.cancel();
     _firebasePacketSub = null;
+    _webrtcPacketSub?.cancel();
+    _webrtcPacketSub = null;
+    WebRTCService.instance.close();
 
     _isHost = false;
     _pingTimer?.cancel();
@@ -1520,6 +1534,7 @@ class MultiplayerService extends ChangeNotifier {
 
     if (_currentRoom!.connectionMode == MultiplayerConnectionMode.onlineCloud) {
       FirebaseMultiplayerService.instance.launchMatch(_currentRoom!.roomCode);
+      WebRTCService.instance.startAsHost(_currentRoom!.roomCode);
     }
 
     // Send match start packet across all network sockets
@@ -1544,7 +1559,13 @@ class MultiplayerService extends ChangeNotifier {
   void broadcastPacket(MultiplayerPacket packet) {
     _packetStreamController.add(packet);
     if (_currentRoom != null && _currentRoom!.connectionMode == MultiplayerConnectionMode.onlineCloud) {
-      FirebaseMultiplayerService.instance.broadcastLivePacket(_currentRoom!.roomCode, packet);
+      // Prioritize direct peer-to-peer data channel via WebRTC for low latency
+      final sentP2P = WebRTCService.instance.sendPacket(packet);
+
+      // Fallback or broadcast via Firebase if WebRTC is still negotiating or for critical state transitions
+      if (!sentP2P || packet.type == PacketType.matchStart || packet.type == PacketType.leaveRoom) {
+        FirebaseMultiplayerService.instance.broadcastLivePacket(_currentRoom!.roomCode, packet);
+      }
     }
     if (!kIsWeb) {
       try {

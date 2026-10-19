@@ -14,7 +14,7 @@ void main() async {
   AudioService.instance.initialize();
 
   // Configure Firebase Online Multiplayer with user's Realtime Database
-  FirebaseMultiplayerService.instance.configureProject('https://pickl-6d440-default-rtdb.firebaseio.com/');
+  FirebaseMultiplayerService.instance.configureProject('https://pickl-bfc3f-default-rtdb.asia-southeast1.firebasedatabase.app/');
 
   // Make full screen safely without crashing on web or unsupported platforms
   try {
