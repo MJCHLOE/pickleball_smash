@@ -940,6 +940,7 @@ class PickleballGame extends FlameGame with HasCollisionDetection, HasKeyboardHa
       final bspin = rawSpin != null ? -rawSpin : null;
 
       if (bx != null && by != null) {
+        player2.playSlashAnimation();
         ball.lastHitByLocalPlayer = false;
         if (hitCount != null) {
           rallyHitCount = hitCount;

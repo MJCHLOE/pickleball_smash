@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../models/battle_technique.dart';
 import '../../models/character_roster.dart';
 import '../../models/game_settings.dart';
+import '../../models/multiplayer_models.dart';
 import '../../services/audio_service.dart';
 import '../../services/multiplayer_service.dart';
 import '../pickleball_game.dart';
@@ -722,7 +723,7 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
         if (vx.abs() > vy.abs()) {
           changeDirection(vx > 0 ? PlayerDirection.right : PlayerDirection.left);
         } else {
-          changeDirection(vy > 0 ? PlayerDirection.front : PlayerDirection.behind);
+          changeDirection(vy > 0 ? PlayerDirection.behind : PlayerDirection.front);
         }
       } else {
         stopRunning();
@@ -1256,6 +1257,25 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
     throw StateError('Failed to load animation from candidate paths: $candidatePaths');
   }
 
+  void playSlashAnimation() {
+    if (!_animationsLoaded) return;
+    if (currentState == PlayerState.slash) return; // Already striking
+
+    currentState = PlayerState.slash;
+
+    // Switch to the slash animation (frontSlash for P1, behindSlash for P2)
+    animation = isPlayerOne ? frontSlash : behindSlash;
+
+    // Reset the ticker so the animation plays from the beginning
+    animationTicker?.reset();
+
+    // Wait for the animation to complete, then return to idle
+    animationTicker?.onComplete = () {
+      currentState = PlayerState.idle;
+      _updateAnimation();
+    };
+  }
+
   void strike() {
     if (isDashing) {
       isDashing = false;
@@ -1271,11 +1291,35 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
       }
     }
 
+    // Always play the visual slash/swing animation on this player component
+    playSlashAnimation();
+
     if (isPlayerOne && !isAI) {
       currentGame.triggerSmashButtonEffect();
+      currentGame.onPlayerSmash();
+
+      // Immediately broadcast strike to remote peer so they see the swing with zero delay
+      if (currentGame.isMultiplayer) {
+        MultiplayerService.instance.broadcastPacket(
+          MultiplayerPacket(
+            type: PacketType.playerState,
+            timestamp: DateTime.now().millisecondsSinceEpoch,
+            senderId: MultiplayerService.instance.myProfile.playerId,
+            data: {
+              'x': position.x,
+              'y': position.y,
+              'vx': currentVelocity.x,
+              'vy': currentVelocity.y,
+              'isStriking': true,
+              'technique': activeTechnique.name,
+              'isDashing': isDashing,
+            },
+          ),
+        );
+      }
     }
 
-    // In multiplayer, remote opponent hits are driven exclusively by incoming network ballStrike packets
+    // In multiplayer, remote opponent ball physics are driven exclusively by incoming network ballStrike packets
     if (currentGame.isMultiplayer && !isPlayerOne && !isAI) {
       return;
     }
@@ -1302,27 +1346,6 @@ class PlayerComponent extends SpriteAnimationComponent with HasGameReference<Pic
         }
         ball.processPlayerHit(this);
       }
-    }
-
-    if (!_animationsLoaded) return;
-    if (currentState == PlayerState.slash) return; // Already striking
-
-    currentState = PlayerState.slash;
-    
-    // Switch to the slash animation
-    animation = isPlayerOne ? frontSlash : behindSlash;
-    
-    // Reset the ticker so the animation plays from the beginning
-    animationTicker?.reset();
-    
-    // Wait for the animation to complete, then return to idle
-    animationTicker?.onComplete = () {
-      currentState = PlayerState.idle;
-      _updateAnimation();
-    };
-    
-    if (isPlayerOne) {
-      currentGame.onPlayerSmash();
     }
   }
 
